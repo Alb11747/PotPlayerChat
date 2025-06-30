@@ -1,8 +1,23 @@
 {
-  "files": [],
   "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }],
   "compilerOptions": {
     "forceConsistentCasingInFileNames": true,
-    "strict": true
-  }
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "typeRoots": [
+      "./node_modules/@types",
+      "src/types",
+      "src/renderer/types"
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "build",
+    "out"
+  ]
 }

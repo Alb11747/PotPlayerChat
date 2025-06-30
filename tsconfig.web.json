@@ -4,7 +4,10 @@
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.svelte",
-    "src/preload/*.d.ts"
+    "src/preload/types/**/*",
+    "src/chat/**/*",
+    "src/utils/**/*",
+    "src/types/**/*",
   ],
   "compilerOptions": {
     "verbatimModuleSyntax": true,
@@ -12,6 +15,17 @@
     "strict": true,
     "allowJs": true,
     "checkJs": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"]
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "composite": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    }
   }
 }

@@ -1,0 +1,24 @@
+{
+  "extends": [
+    "development"
+  ],
+  "hints": {
+    "compat-api/css": [
+      "default",
+      {
+        "ignore": [
+          "scrollbar-width"
+        ]
+      }
+    ]
+  },
+  "browserslist": [
+    "defaults",
+    "not ie 11",
+    "not chrome <= 120",
+    "not ios_saf <= 17.4",
+    "not opera <= 106",
+    "not safari <= 17.4",
+    "not samsung <= 23"
+  ]
+}

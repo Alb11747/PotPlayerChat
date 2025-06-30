@@ -1,14 +1,24 @@
 @import './base.css';
 
 body {
-  display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  background-image: url('./wavy-lines.svg');
   background-size: cover;
   -webkit-user-select: none;
   user-select: none;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  background: #23232b;
+}
+*::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 6px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #4e8cff;
 }
 
 code {
@@ -28,11 +38,9 @@ code {
 }
 
 #app {
-  display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  margin-bottom: 80px;
+  min-height: 100vh;
 }
 
 .logo {

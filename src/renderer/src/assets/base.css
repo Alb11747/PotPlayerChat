@@ -61,7 +61,7 @@ body {
     'Droid Sans',
     'Helvetica Neue',
     sans-serif;
-  text-rendering: optimizeLegibility;
+  text-rendering: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

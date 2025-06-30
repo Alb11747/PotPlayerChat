@@ -1,74 +1,162 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
+import { app, BrowserWindow, ipcMain } from 'electron/main'
+
 import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
+import { getCurrentTime, getStreamsHistory, getTotalTime } from './potplayer'
+import { getForegroundWindow, getHwndByPidAndTitle, getWindowsByExe } from './windows'
+import { removeSuffix } from '@/utils/strings'
 
 function createWindow(): void {
-  // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 600,
+    height: 800,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
 
+  let potplayerHwnd: HWND | null = null
+  let lastPotplayerHwnd: HWND | null = null
+
+  ipcMain.handle('get-potplayer-hwnd', async () => {
+    return potplayerHwnd || lastPotplayerHwnd
+  })
+
+  ipcMain.handle('set-potplayer-hwnd', async (_event, hwnd: HWND) => {
+    if (potplayerHwnd !== null) lastPotplayerHwnd = potplayerHwnd
+    potplayerHwnd = hwnd
+  })
+
+  let potplayerInstances: { hwnd: HWND; title: string }[] = []
+
+  async function updatePotplayerInstances(): Promise<void> {
+    const windows = await getWindowsByExe('PotPlayerMini64.exe')
+    const windowsWithTitles = windows.map((win) => ({
+      pid: win.pid,
+      title: removeSuffix(win.windowTitle, ' - PotPlayer')
+    }))
+    const instances: { hwnd: HWND; title: string }[] = []
+    for (const win of windowsWithTitles) {
+      const hwnd = await getHwndByPidAndTitle(win.pid, win.title)
+      if (hwnd) {
+        instances.push({ hwnd, title: win.title })
+      } else {
+        console.warn(
+          `Could not find hwnd for PotPlayer instance with PID ${win.pid} and title "${win.title}"`
+        )
+      }
+    }
+    if (potplayerInstances !== instances) {
+      potplayerInstances = instances
+      mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
+    }
+    console.debug(`Found ${potplayerInstances.length} PotPlayer instances`)
+
+    if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
+    potplayerIntervalId = setTimeout(updatePotplayerInstances, 5 * 60 * 1000) // Update every 5 minutes
+  }
+
+  let currentTimeIntervalId: NodeJS.Timeout | null = null
+  let potplayerIntervalId: NodeJS.Timeout | null = null
+  let activePotplayerIntervalId: NodeJS.Timeout | null = null
+
+  function startInterval(): void {
+    if (!currentTimeIntervalId) {
+      currentTimeIntervalId = setInterval(async () => {
+        if (potplayerHwnd) {
+          const currentTime = await getCurrentTime(potplayerHwnd)
+          mainWindow.webContents.send('set-current-time', currentTime)
+        }
+      }, 1000)
+    }
+    if (!potplayerIntervalId) {
+      updatePotplayerInstances()
+    }
+    if (!activePotplayerIntervalId) {
+      activePotplayerIntervalId = setInterval(async () => {
+        const focusedWindow = await getForegroundWindow()
+        if (!focusedWindow) return
+        for (const instance of potplayerInstances) {
+          if (focusedWindow === instance.hwnd) {
+            if (potplayerHwnd !== instance.hwnd) {
+              potplayerHwnd = instance.hwnd
+              if (potplayerHwnd === null) {
+                mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
+              }
+            }
+          }
+        }
+      }, 1000)
+    }
+  }
+
+  function stopInterval(): void {
+    if (currentTimeIntervalId) {
+      clearInterval(currentTimeIntervalId)
+      currentTimeIntervalId = null
+    }
+    if (potplayerIntervalId) {
+      clearInterval(potplayerIntervalId)
+      potplayerIntervalId = null
+    }
+    if (activePotplayerIntervalId) {
+      clearInterval(activePotplayerIntervalId)
+      activePotplayerIntervalId = null
+    }
+  }
+
+  mainWindow.on('show', startInterval)
+  mainWindow.on('restore', startInterval)
+  mainWindow.on('hide', stopInterval)
+  mainWindow.on('minimize', stopInterval)
+
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  ipcMain.handle('get-potplayers', async () => {
+    await updatePotplayerInstances()
+    return potplayerInstances
+  })
+
+  ipcMain.handle('get-current-time', async (_event, hwnd: HWND) => {
+    return getCurrentTime(hwnd)
+  })
+
+  ipcMain.handle('get-total-time', async (_event, hwnd: HWND) => {
+    return getTotalTime(hwnd)
+  })
+
+  ipcMain.handle('get-stream-history', async () => {
+    return await getStreamsHistory()
+  })
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
-
   createWindow()
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
