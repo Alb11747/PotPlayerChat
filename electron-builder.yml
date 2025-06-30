@@ -12,6 +12,11 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+extraFiles:
+  - from: node_modules/regedit/vbs
+    to: resources/regedit/vbs
+    filter:
+      - '**/*'
 win:
   executableName: PotPlayerChat
 nsis:
