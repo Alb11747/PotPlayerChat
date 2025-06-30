@@ -21,13 +21,21 @@ const settings: ChatSettings = {
   getChatMessageLimit: () => 25
 }
 
+export interface PotPlayerInfo {
+  hwnd: HWND
+  channel: string
+  videoName: string
+  videoStartTime: number
+}
+
+export interface LoadingState {
+  state: 'idle' | 'loading' | 'loaded' | 'error' | 'channel-not-found'
+  errorMessage: string
+}
+
 export class ChatService {
   private api: WindowApi
-
-  private hwnd: HWND | null = null
-  private channel: string | null = null
-  private videoName: string | null = null
-  private videoStartTime: number | null = null
+  private lastPotPlayerInfo: PotPlayerInfo | null = null
 
   private currentChatData: TwitchChatMessage[] = []
 
@@ -35,59 +43,38 @@ export class ChatService {
   private chatCache: Record<string, { messages: TwitchChatMessage[]; complete: boolean }> = {}
 
   // state for UI
-  public state: 'idle' | 'loading' | 'loaded' | 'error' | 'channel-not-found' = 'idle'
-  public errorMessage: string = ''
+  public state: LoadingState
 
-  constructor(api: WindowApi) {
+  constructor(api: WindowApi, state: LoadingState) {
     this.api = api
+    this.state = state
   }
 
-  public updateVideoInfo(
-    hwnd: HWND,
-    channel: string,
-    videoName: string,
-    videoStartTime: number
-  ): void {
-    if (
-      this.hwnd === hwnd &&
-      this.channel === channel &&
-      this.videoName === videoName &&
-      this.videoStartTime === videoStartTime
-    )
-      return
+  public updateVideoInfo(newPotPlayerInfo: PotPlayerInfo): void {
+    if (this.lastPotPlayerInfo === newPotPlayerInfo) return
 
-    this.hwnd = hwnd
-    this.channel = channel
-    this.videoName = videoName
-    this.videoStartTime = videoStartTime
+    this.lastPotPlayerInfo = { ...newPotPlayerInfo }
     this.currentChatData = []
-    this.state = 'idle'
-    this.errorMessage = ''
+    this.state.state = 'idle'
+    this.state.errorMessage = ''
 
     this.loadChat()
   }
 
   async loadChat(): Promise<void> {
-    if (!this.hwnd) {
-      console.error('No hwnd available for chat loading.')
-      this.state = 'error'
-      this.errorMessage = 'No hwnd available for chat loading.'
-      return
-    }
-    const videoStartTime = this.videoStartTime
-    if (!videoStartTime) {
-      console.error('No video start time available for chat loading.')
-      this.state = 'error'
-      this.errorMessage = 'No video start time available for chat loading.'
+    if (!this.lastPotPlayerInfo) {
+      this.state.state = 'idle'
+      this.state.errorMessage = 'No PotPlayer info available for chat loading.'
+      console.warn('No PotPlayer info available for chat loading.')
       return
     }
 
     try {
+      const { hwnd, channel, videoStartTime } = this.lastPotPlayerInfo
+
       const datePadding = 8 * 60 * 60 * 1000 // 8 hours in milliseconds
       const startDate = new Date(videoStartTime - datePadding)
-      const endDate = new Date(
-        videoStartTime + (await this.api.getTotalTime(this.hwnd)) + datePadding
-      )
+      const endDate = new Date(videoStartTime + (await this.api.getTotalTime(hwnd)) + datePadding)
 
       const datesToFetch: Date[] = []
       const currentDate = new Date(startDate)
@@ -99,7 +86,6 @@ export class ChatService {
         datesToFetch.push(new Date(currentDate))
       }
 
-      const channel = this.channel!
       const baseJustlogUrl = settings.getJustlogUrl()
 
       const today = new Date()
@@ -179,23 +165,23 @@ export class ChatService {
         }
       })
 
-      this.state = 'loading'
-      console.debug(`Loading chat for ${this.channel} starting from ${new Date(videoStartTime)}`)
+      this.state.state = 'loading'
+      console.debug(`Loading chat for ${channel} starting from ${new Date(videoStartTime)}`)
       const chatDataArrays = await Promise.all(fetchPromises)
       const allMessages = chatDataArrays.flat().sort((a, b) => a.timestamp - b.timestamp)
 
       this.currentChatData = allMessages
-      this.state = 'loaded'
+      this.state.state = 'loaded'
       console.debug(
-        `Loaded ${this.currentChatData.length} chat messages for ${this.channel} across ${datesToFetch.length} day(s)`
+        `Loaded ${this.currentChatData.length} chat messages for ${channel} across ${datesToFetch.length} day(s)`
       )
     } catch (error: unknown) {
       console.error('Error loading chat:', error)
-      this.state = 'error'
+      this.state.state = 'error'
       if (error && typeof error === 'object' && 'message' in error) {
-        this.errorMessage = `Failed to load chat: ${(error as { message: string }).message}`
+        this.state.errorMessage = `Failed to load chat: ${(error as { message: string }).message}`
       } else {
-        this.errorMessage = 'Failed to load chat: Unknown error'
+        this.state.errorMessage = 'Failed to load chat: Unknown error'
       }
     }
   }
@@ -242,13 +228,13 @@ export class ChatService {
   }
 
   public async getMessagesForTime(currentVideoTime: number): Promise<TwitchChatMessage[]> {
-    if (this.videoStartTime === null) {
+    if (this.lastPotPlayerInfo === null) {
       return []
     }
 
     return getMessagesForTime(
       this.currentChatData,
-      this.videoStartTime + currentVideoTime,
+      this.lastPotPlayerInfo.videoStartTime + currentVideoTime,
       settings.getChatMessageLimit()
     )
   }

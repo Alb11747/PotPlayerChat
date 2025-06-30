@@ -1,18 +1,15 @@
 <script lang="ts">
   import {
-    chatService,
-    initChatService,
     messages,
     potplayerInstances,
-    setPotPlayerHwnd
+    setPotPlayerHwnd,
+    loadingState,
+    selectedPotplayerInfo
   } from '@/renderer/src/stores/chat-state.svelte'
   import { escapeHtml } from '@/utils/dom'
   import { formatRelativeTime } from '@/utils/strings'
 
-  $effect(initChatService)
-
   let isMainPotPlayer = $state(true)
-  let potplayerHwnd = $derived(chatService.hwnd)
 </script>
 
 <div class="topbar">
@@ -21,7 +18,7 @@
       class:main={isMainPotPlayer}
       onclick={() => {
         isMainPotPlayer = true
-        setPotPlayerHwnd(0)
+        setPotPlayerHwnd(null)
       }}
       aria-pressed={isMainPotPlayer}
       style="cursor: pointer;"
@@ -31,12 +28,12 @@
 
     {#each potplayerInstances as inst (inst.hwnd)}
       <button
-        class:main={inst.hwnd === potplayerHwnd}
+        class:main={inst.hwnd === selectedPotplayerInfo.hwnd}
         onclick={() => {
           isMainPotPlayer = false
           setPotPlayerHwnd(inst.hwnd)
         }}
-        aria-pressed={inst.hwnd === potplayerHwnd}
+        aria-pressed={inst.hwnd === selectedPotplayerInfo.hwnd}
         style="cursor: pointer;"
       >
         {inst.title}
@@ -51,18 +48,18 @@
       {#each messages as msg (msg.id)}
         <div class="chat-message">
           <span class="chat-time"
-            >[{formatRelativeTime(msg.timestamp, chatService.videoStartTime)}]</span
+            >[{formatRelativeTime(msg.timestamp, selectedPotplayerInfo.videoStartTime)}]</span
           >
           <span class="chat-username" style="color: {msg.userColor}">{msg.username}:</span>
           <span class="chat-text">{escapeHtml(msg.message)}</span>
         </div>
       {/each}
     </div>
-  {:else if chatService?.state === 'loading'}
+  {:else if loadingState?.state === 'loading'}
     <div class="chat-message system">Loading chat...</div>
-  {:else if chatService?.state === 'error'}
-    <div class="chat-message error">{chatService.errorMessage}</div>
-  {:else if chatService?.state === 'channel-not-found'}
+  {:else if loadingState?.state === 'error'}
+    <div class="chat-message error">{loadingState.errorMessage}</div>
+  {:else if loadingState?.state === 'channel-not-found'}
     <div class="chat-message system">Channel not found.</div>
   {:else}
     <div class="chat-message system">Unknown error occurred.</div>

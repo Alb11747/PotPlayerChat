@@ -18,19 +18,29 @@ function createWindow(): void {
     }
   })
 
-  let potplayerHwnd: HWND | null = null
-  let lastPotplayerHwnd: HWND | null = null
+  let selectedPotplayerHwnd: HWND | null = null
+  let lastActivePotplayerHwnd: HWND | null = null
+
+  async function sendPotplayerInstancesChanged(): Promise<void> {
+    for (const instance of potplayerInstances) {
+      instance.selected = selectedPotplayerHwnd
+        ? instance.hwnd === selectedPotplayerHwnd
+        : instance.hwnd === lastActivePotplayerHwnd
+    }
+    await mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
+  }
 
   ipcMain.handle('get-potplayer-hwnd', async () => {
-    return potplayerHwnd || lastPotplayerHwnd
+    return selectedPotplayerHwnd || lastActivePotplayerHwnd
   })
 
   ipcMain.handle('set-potplayer-hwnd', async (_event, hwnd: HWND) => {
-    if (potplayerHwnd !== null) lastPotplayerHwnd = potplayerHwnd
-    potplayerHwnd = hwnd
+    if (selectedPotplayerHwnd !== null) lastActivePotplayerHwnd = selectedPotplayerHwnd
+    selectedPotplayerHwnd = hwnd
+    await sendPotplayerInstancesChanged()
   })
 
-  let potplayerInstances: { hwnd: HWND; title: string }[] = []
+  let potplayerInstances: { hwnd: HWND; title: string; selected?: boolean }[] = []
 
   async function updatePotplayerInstances(): Promise<void> {
     const windows = await getWindowsByExe('PotPlayerMini64.exe')
@@ -51,7 +61,7 @@ function createWindow(): void {
     }
     if (potplayerInstances !== instances) {
       potplayerInstances = instances
-      mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
+      await sendPotplayerInstancesChanged()
     }
     console.debug(`Found ${potplayerInstances.length} PotPlayer instances`)
 
@@ -66,8 +76,8 @@ function createWindow(): void {
   function startInterval(): void {
     if (!currentTimeIntervalId) {
       currentTimeIntervalId = setInterval(async () => {
-        if (potplayerHwnd) {
-          const currentTime = await getCurrentTime(potplayerHwnd)
+        if (selectedPotplayerHwnd) {
+          const currentTime = await getCurrentTime(selectedPotplayerHwnd)
           mainWindow.webContents.send('set-current-time', currentTime)
         }
       }, 1000)
@@ -81,10 +91,10 @@ function createWindow(): void {
         if (!focusedWindow) return
         for (const instance of potplayerInstances) {
           if (focusedWindow === instance.hwnd) {
-            if (potplayerHwnd !== instance.hwnd) {
-              potplayerHwnd = instance.hwnd
-              if (potplayerHwnd === null) {
-                mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
+            if (lastActivePotplayerHwnd !== instance.hwnd) {
+              lastActivePotplayerHwnd = instance.hwnd
+              if (selectedPotplayerHwnd === null) {
+                await sendPotplayerInstancesChanged()
               }
             }
           }

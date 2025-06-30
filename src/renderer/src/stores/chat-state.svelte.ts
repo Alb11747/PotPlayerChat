@@ -1,4 +1,9 @@
-import { ChatService, type TwitchChatMessage } from '@/chat/twitch-chat'
+import {
+  ChatService,
+  type LoadingState,
+  type PotPlayerInfo,
+  type TwitchChatMessage
+} from '@/chat/twitch-chat'
 import { updateArray } from '@/utils/state'
 import { findStreamByTitle, getStartTimeFromTitle, getStreamerFromUrl } from '@/utils/stream'
 import { CurrentVideoTimeHistory } from '@/utils/time'
@@ -10,25 +15,30 @@ window.api.onSetCurrentTime((_: Event, time: number) => {
 
 export const messages: TwitchChatMessage[] = $state([])
 export const potplayerInstances: { hwnd: HWND; title: string }[] = $state([])
-export const chatService: ChatService = $state(new ChatService(window.api))
+export const selectedPotplayerInfo: Partial<PotPlayerInfo> = $state({})
+export const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
 
-function getInstanceWithHwnd<T extends { hwnd: HWND }>(hwnd: HWND, instances: T[]): T | null {
-  return instances.find((instance) => instance.hwnd === hwnd) || null
-}
+const chatService = new ChatService(window.api, loadingState)
 
 async function onPotPlayerInstancesChanged(
-  instances: { hwnd: HWND; title: string }[]
+  instances: { hwnd: HWND; title: string; selected?: boolean }[]
 ): Promise<void> {
   if (instances.length === 0) {
     potplayerInstances.length = 0
     return
   }
 
-  const selectedHwnd = await window.api.getSelectedPotPlayer()
-  let currentMainInstance = selectedHwnd && getInstanceWithHwnd(selectedHwnd, instances)
+  let currentMainInstance: { hwnd: HWND; title: string } | null = null
+  for (const instance of instances) {
+    if (instance.selected) {
+      currentMainInstance = { hwnd: instance.hwnd, title: instance.title }
+      break
+    }
+  }
   if (!currentMainInstance) {
     currentMainInstance = instances[0]
   }
+
   updateArray(potplayerInstances, instances)
 
   const title = currentMainInstance.title
@@ -36,6 +46,7 @@ async function onPotPlayerInstancesChanged(
   const stream = findStreamByTitle(title, streamHistory)
   if (!stream) {
     console.warn('No stream found for title:', title)
+    console.debug('Available streams:', streamHistory)
     return
   }
   const streamer = getStreamerFromUrl(stream.url)
@@ -48,8 +59,30 @@ async function onPotPlayerInstancesChanged(
     console.warn('No start time found for title:', title)
     return
   }
-  chatService.updateVideoInfo(currentMainInstance.hwnd, streamer, title, startTime)
+
+  let changed = false
+
+  const pi = selectedPotplayerInfo
+  if (pi.hwnd !== currentMainInstance.hwnd) {
+    pi.hwnd = currentMainInstance.hwnd
+    changed = true
+  }
+  if (pi.channel !== streamer) {
+    pi.channel = streamer
+    changed = true
+  }
+  if (pi.videoName !== stream.title) {
+    pi.videoName = stream.title
+    changed = true
+  }
+  if (pi.videoStartTime !== startTime) {
+    pi.videoStartTime = startTime
+    changed = true
+  }
+
+  if (changed) chatService.updateVideoInfo(pi as PotPlayerInfo)
 }
+
 window.api.onPotPlayerInstancesChanged((_: Event, instances) => {
   onPotPlayerInstancesChanged(instances)
 })
@@ -67,7 +100,8 @@ export function initChatService(): () => void {
   }
 }
 
+initChatService()
+
 export async function setPotPlayerHwnd(hwnd: HWND): Promise<void> {
-  window.api.setSelectedPotPlayer(hwnd)
-  onPotPlayerInstancesChanged(await window.api.getPotPlayers())
+  await window.api.setSelectedPotPlayer(hwnd)
 }
