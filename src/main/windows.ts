@@ -5,17 +5,23 @@ import { promisify } from 'util'
 
 const user32 = koffi.load('user32.dll')
 
-// koffi.alias('HWND', koffi.pointer('HANDLE', koffi.opaque()))
-koffi.alias('HWND', 'uint64_t') // Opaque pointers can't be used with ipc, so we use uint64_t instead
+// Fixes bug where generated code is duplicated in the output
+const initializedBoxed = koffi as unknown as { initialized: boolean }
+if (!initializedBoxed.initialized) {
+  initializedBoxed.initialized = true
 
-koffi.alias('DWORD', 'uint32_t')
-koffi.alias('UINT', 'uint32_t')
-koffi.alias('BOOL', 'int32_t')
-koffi.alias('LRESULT', 'int')
-koffi.alias('WPARAM', 'uint32_t')
-koffi.alias('LPARAM', 'int32_t')
-koffi.alias('LPCSTR', 'string')
-koffi.alias('LPSTR', 'string')
+  // koffi.alias('HWND', koffi.pointer('HANDLE', koffi.opaque()))
+  koffi.alias('HWND', 'uint64_t') // Opaque pointers can't be used with ipc, so we use uint64_t instead
+
+  koffi.alias('DWORD', 'uint32_t')
+  koffi.alias('UINT', 'uint32_t')
+  koffi.alias('BOOL', 'int32_t')
+  koffi.alias('LRESULT', 'int')
+  koffi.alias('WPARAM', 'uint32_t')
+  koffi.alias('LPARAM', 'int32_t')
+  koffi.alias('LPCSTR', 'string')
+  koffi.alias('LPSTR', 'string')
+}
 
 const SendMessageW = promisify(
   user32.func('LRESULT __stdcall SendMessageW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)')
