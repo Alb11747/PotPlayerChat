@@ -1,32 +1,75 @@
 <script lang="ts">
+  import type { TwitchChatMessage } from '@/chat/twitch-chat'
   import {
+    chatService,
     loadingState,
-    messages,
     potplayerInstances,
     selectedPotplayerInfo,
-    setPotPlayerHwnd
+    setPotPlayerHwnd,
+    videoTimeHistory
   } from '@/renderer/src/stores/chat-state.svelte'
   import { parseMessage } from '@/utils/dom'
   import { formatRelativeTime } from '@/utils/strings'
   import { UrlTracker } from '@/utils/url-tracker'
   import { VList } from 'virtua/svelte'
 
+  let messages: TwitchChatMessage[] = $state([])
   let isMainPotPlayer = $state(true)
-  let scrolledToBottom = $state(false)
   let vlistRef: VList | null = $state(null)
+  let scrollToBottom = $state(true)
+  let lastScrollOffset: number | null = $state(null)
 
   // Create URL tracker with bloom filter
   let urlTracker = $state(new UrlTracker())
 
+  $effect(() => {
+    const chatIntervalId = setInterval(async () => {
+      const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
+      if (predictedTime === null) return
+      messages = await chatService.getMessagesForTime(predictedTime)
+    }, 200)
+
+    return () => {
+      clearInterval(chatIntervalId)
+    }
+  })
+
   // Scroll to bottom when messages change
   $effect(() => {
-    if (!messages || messages.length === 0) {
-      scrolledToBottom = false
-    } else if (!scrolledToBottom && vlistRef) {
-      scrolledToBottom = true
+    if (!vlistRef || !messages || messages.length === 0) return
+
+    if (scrollToBottom) {
       vlistRef.scrollToIndex(messages.length - 1, { align: 'end', smooth: false })
     }
   })
+
+  // Handle user scroll detection
+  function handleScroll(currentScrollOffset: number): void {
+    const scrolledUp = lastScrollOffset !== null ? currentScrollOffset < lastScrollOffset : false
+    lastScrollOffset = currentScrollOffset
+
+    // If the user scrolls up
+    if (scrolledUp) {
+      if (scrollToBottom) {
+        // console.debug('User scrolled away from bottom, disabling auto-scroll')
+        scrollToBottom = false
+        return
+      }
+    }
+
+    if (!vlistRef || !messages || messages.length === 0 || lastScrollOffset === null) return
+
+    // Check if user is at the bottom
+    const isAtBottom =
+      vlistRef.getScrollOffset() + vlistRef.getViewportSize() >= vlistRef.getScrollSize()
+
+    if (isAtBottom) {
+      if (!scrollToBottom) {
+        // console.debug('User scrolled to bottom, enabling auto-scroll')
+        scrollToBottom = true
+      }
+    }
+  }
 </script>
 
 <div class="topbar">
@@ -66,6 +109,7 @@
       data={messages}
       getKey={(_, i) => i}
       initialTopMostItemIndex={messages.length - 1}
+      onscroll={handleScroll}
     >
       {#snippet children(msg)}
         <div class="chat-message">

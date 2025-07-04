@@ -1,24 +1,18 @@
-import {
-  ChatService,
-  type LoadingState,
-  type PotPlayerInfo,
-  type TwitchChatMessage
-} from '@/chat/twitch-chat'
+import { ChatService, type LoadingState, type PotPlayerInfo } from '@/chat/twitch-chat'
 import { updateArray } from '@/utils/state'
 import { findStreamByTitle, getStartTimeFromTitle, getStreamerFromUrl } from '@/utils/stream'
 import { CurrentVideoTimeHistory } from '@/utils/time'
 
-const videoTimeHistory = new CurrentVideoTimeHistory()
+export const videoTimeHistory = new CurrentVideoTimeHistory()
 window.api.onSetCurrentTime((_: Event, time: number) => {
   videoTimeHistory.addSample(time)
 })
 
-export const messages: TwitchChatMessage[] = $state([])
 export const potplayerInstances: { hwnd: HWND; title: string }[] = $state([])
 export const selectedPotplayerInfo: Partial<PotPlayerInfo> = $state({})
 export const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
 
-const chatService = new ChatService(window.api, loadingState)
+export const chatService = new ChatService(window.api, loadingState)
 
 async function onPotPlayerInstancesChanged(
   instances: { hwnd: HWND; title: string; selected?: boolean }[]
@@ -77,21 +71,6 @@ async function onPotPlayerInstancesChanged(
 window.api.onPotPlayerInstancesChanged((_: Event, instances) => {
   onPotPlayerInstancesChanged(instances)
 })
-
-export function initChatService(): () => void {
-  const chatIntervalId = setInterval(async () => {
-    const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
-    if (predictedTime === null) return
-    const newMessages = await chatService.getMessagesForTime(predictedTime)
-    updateArray(messages, newMessages)
-  }, 200)
-
-  return () => {
-    clearInterval(chatIntervalId)
-  }
-}
-
-initChatService()
 
 export async function setPotPlayerHwnd(hwnd: HWND): Promise<void> {
   await window.api.setSelectedPotPlayer(hwnd)
