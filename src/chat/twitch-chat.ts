@@ -18,7 +18,7 @@ export interface ChatSettings {
 // A placeholder for settings
 const settings: ChatSettings = {
   getJustlogUrl: () => 'https://justlog.alb11747.com',
-  getChatMessageLimit: () => 25
+  getChatMessageLimit: () => 200
 }
 
 export interface PotPlayerInfo {

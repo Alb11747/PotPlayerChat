@@ -28,7 +28,8 @@
     "koffi": "^2.12.0",
     "node-cache": "^5.1.2",
     "regedit": "^5.1.4",
-    "tasklist": "^5.0.0"
+    "tasklist": "^5.0.0",
+    "virtua": "^0.41.5"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

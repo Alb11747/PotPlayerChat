@@ -1,15 +1,28 @@
 <script lang="ts">
   import {
+    loadingState,
     messages,
     potplayerInstances,
-    setPotPlayerHwnd,
-    loadingState,
-    selectedPotplayerInfo
+    selectedPotplayerInfo,
+    setPotPlayerHwnd
   } from '@/renderer/src/stores/chat-state.svelte'
   import { escapeHtml } from '@/utils/dom'
   import { formatRelativeTime } from '@/utils/strings'
+  import { VList } from 'virtua/svelte'
 
   let isMainPotPlayer = $state(true)
+  let scrolledToBottom = $state(false)
+  let vlistRef: VList | null = $state(null)
+
+  // Scroll to bottom when messages change
+  $effect(() => {
+    if (!messages || messages.length === 0) {
+      scrolledToBottom = false
+    } else if (!scrolledToBottom && vlistRef) {
+      scrolledToBottom = true
+      vlistRef.scrollToIndex(messages.length - 1, { align: 'end', smooth: false })
+    }
+  })
 </script>
 
 <div class="topbar">
@@ -44,8 +57,13 @@
 
 <div class="chat-container">
   {#if messages}
-    <div class="chat-messages">
-      {#each messages as msg (msg.id)}
+    <VList
+      bind:this={vlistRef}
+      data={messages}
+      getKey={(_, i) => i}
+      initialTopMostItemIndex={messages.length - 1}
+    >
+      {#snippet children(msg)}
         <div class="chat-message">
           <span class="chat-time"
             >[{formatRelativeTime(msg.timestamp, selectedPotplayerInfo.videoStartTime)}]</span
@@ -53,8 +71,8 @@
           <span class="chat-username" style="color: {msg.userColor}">{msg.username}:</span>
           <span class="chat-text">{escapeHtml(msg.message)}</span>
         </div>
-      {/each}
-    </div>
+      {/snippet}
+    </VList>
   {:else if loadingState?.state === 'loading'}
     <div class="chat-message system">Loading chat...</div>
   {:else if loadingState?.state === 'error'}
@@ -68,11 +86,14 @@
 
 <style>
   .topbar {
-    display: flex;
+    flex: 0 1 content;
+    max-height: 5rem;
+    width: 100%;
+    contain: content;
     align-items: center;
     background: #23232b;
     color: #fff;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.5rem;
     border-bottom: 1px solid #333;
     font-size: 1rem;
   }
@@ -80,9 +101,11 @@
   .instances {
     display: flex;
     gap: 1rem;
+    max-height: 4.5rem;
+    scrollbar-width: thin;
   }
   .instances button {
-    padding: 0 0.75rem;
+    padding: 0 0.5rem;
     border: 1px solid #444;
     border-radius: 4px;
     background: none;
@@ -91,8 +114,7 @@
     cursor: pointer;
     transition: none;
     outline: none;
-    min-width: 5rem;
-    min-height: 0;
+    min-width: 4.5rem;
     max-height: 4rem;
     overflow: auto;
     scrollbar-color: #333 #23232b;
@@ -110,20 +132,20 @@
   }
 
   .chat-container {
+    flex: 1 1 auto;
+    width: 100%;
+    height: calc(100vh - 5rem);
     background-color: #18181b;
     color: #efeff1;
-    min-height: 80vh;
+    overflow: auto;
   }
-  .chat-messages {
-    min-height: 80vh;
-    padding: 0.5rem;
+
+  .chat-message {
+    padding: 0.25rem 0.5rem;
     line-height: 1.7;
     font-size: 108%;
-    scrollbar-color: #333 #23232b;
-    scrollbar-width: thin;
-    height: 40%;
     box-sizing: border-box;
-    overflow: auto;
+    user-select: text;
   }
 
   .chat-time {
@@ -144,17 +166,5 @@
   .error {
     color: #ff4d4d;
     font-weight: bold;
-  }
-
-  *::-webkit-scrollbar {
-    width: 10px;
-    background: #23232b;
-  }
-  *::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 6px;
-  }
-  *::-webkit-scrollbar-thumb:hover {
-    background: #4e8cff;
   }
 </style>

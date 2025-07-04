@@ -6,12 +6,16 @@ body {
   background-size: cover;
   -webkit-user-select: none;
   user-select: none;
+
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-width: thin;
 }
 
 *::-webkit-scrollbar {
   width: 10px;
   background: #23232b;
+  scrollbar-width: thin;
 }
 *::-webkit-scrollbar-thumb {
   background: #333;
@@ -19,6 +23,10 @@ body {
 }
 *::-webkit-scrollbar-thumb:hover {
   background: #4e8cff;
+}
+*::-webkit-scrollbar-corner {
+  background: #23232b;
+  background-color: #23232b;
 }
 
 code {
@@ -38,9 +46,12 @@ code {
 }
 
 #app {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-flow: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
 }
 
 .logo {

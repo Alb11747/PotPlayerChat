@@ -2,15 +2,9 @@
   import Chat from './components/Chat.svelte'
 </script>
 
-<main>
-  <Chat />
-</main>
+<Chat />
 
 <style>
-  main {
-    min-height: 100vh;
-  }
-
   :root {
     font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
     font-size: 16px;

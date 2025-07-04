@@ -1,10 +1,10 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain } from 'electron/main'
 
+import { removeSuffix } from '@/utils/strings'
 import { join } from 'path'
 import { getCurrentTime, getStreamsHistory, getTotalTime } from './potplayer'
 import { getForegroundWindow, getHwndByPidAndTitle, getWindowsByExe } from './windows'
-import { removeSuffix } from '@/utils/strings'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -30,8 +30,12 @@ function createWindow(): void {
     await mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
   }
 
-  ipcMain.handle('get-potplayer-hwnd', async () => {
+  function getPotplayerHwnd(): HWND | null {
     return selectedPotplayerHwnd || lastActivePotplayerHwnd
+  }
+
+  ipcMain.handle('get-potplayer-hwnd', async () => {
+    return getPotplayerHwnd()
   })
 
   ipcMain.handle('set-potplayer-hwnd', async (_event, hwnd: HWND) => {
@@ -59,10 +63,38 @@ function createWindow(): void {
         )
       }
     }
-    if (potplayerInstances !== instances) {
+
+    function normalize(
+      instances: { hwnd: HWND; title: string; selected?: boolean }[]
+    ): { hwnd: HWND; title: string; selected?: boolean }[] {
+      return instances.map((instance) => ({
+        hwnd: instance.hwnd,
+        title: instance.title
+      }))
+    }
+
+    if (normalize(potplayerInstances) !== normalize(instances)) {
       potplayerInstances = instances
+
+      // If the selected PotPlayer instance is not in the list, set it to null
+      if (selectedPotplayerHwnd) {
+        const exists = potplayerInstances.some((i) => i.hwnd === selectedPotplayerHwnd)
+        if (!exists) selectedPotplayerHwnd = null
+      }
+
+      // If the last active instance is not in the list, set it to null
+      if (lastActivePotplayerHwnd) {
+        const exists = potplayerInstances.some((i) => i.hwnd === lastActivePotplayerHwnd)
+        if (!exists) lastActivePotplayerHwnd = null
+      }
+
+      // If there is only one instance, select it automatically
+      if (potplayerInstances.length === 1 && selectedPotplayerHwnd === null)
+        selectedPotplayerHwnd = potplayerInstances[0].hwnd
+
       await sendPotplayerInstancesChanged()
     }
+
     console.debug(`Found ${potplayerInstances.length} PotPlayer instances`)
 
     if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
@@ -76,8 +108,9 @@ function createWindow(): void {
   function startInterval(): void {
     if (!currentTimeIntervalId) {
       currentTimeIntervalId = setInterval(async () => {
-        if (selectedPotplayerHwnd) {
-          const currentTime = await getCurrentTime(selectedPotplayerHwnd)
+        const potplayerHwnd = getPotplayerHwnd()
+        if (potplayerHwnd) {
+          const currentTime = await getCurrentTime(potplayerHwnd)
           mainWindow.webContents.send('set-current-time', currentTime)
         }
       }, 1000)
@@ -118,6 +151,7 @@ function createWindow(): void {
     }
   }
 
+  mainWindow.on('ready-to-show', startInterval)
   mainWindow.on('show', startInterval)
   mainWindow.on('restore', startInterval)
   mainWindow.on('hide', stopInterval)

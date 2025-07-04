@@ -8,7 +8,7 @@ import { updateArray } from '@/utils/state'
 import { findStreamByTitle, getStartTimeFromTitle, getStreamerFromUrl } from '@/utils/stream'
 import { CurrentVideoTimeHistory } from '@/utils/time'
 
-const videoTimeHistory = $state(new CurrentVideoTimeHistory())
+const videoTimeHistory = new CurrentVideoTimeHistory()
 window.api.onSetCurrentTime((_: Event, time: number) => {
   videoTimeHistory.addSample(time)
 })
@@ -28,17 +28,8 @@ async function onPotPlayerInstancesChanged(
     return
   }
 
-  let currentMainInstance: { hwnd: HWND; title: string } | null = null
-  for (const instance of instances) {
-    if (instance.selected) {
-      currentMainInstance = { hwnd: instance.hwnd, title: instance.title }
-      break
-    }
-  }
-  if (!currentMainInstance) {
-    currentMainInstance = instances[0]
-  }
-
+  const currentMainInstance = instances.find((i) => i.selected)
+  if (!currentMainInstance) return
   updateArray(potplayerInstances, instances)
 
   const title = currentMainInstance.title
