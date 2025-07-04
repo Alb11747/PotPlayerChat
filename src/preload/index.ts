@@ -11,6 +11,7 @@ const api: WindowApi = {
   getTotalTime: (hwnd) => ipcRenderer.invoke('get-total-time', hwnd),
   getStreamHistory: () => ipcRenderer.invoke('get-stream-history'),
   openUrl: (url: string) => ipcRenderer.invoke('open-url', url),
+  getLinkPreview: (url: string) => ipcRenderer.invoke('get-link-preview', url),
   onSetCurrentTime: (callback) => ipcRenderer.on('set-current-time', callback as never),
   offSetCurrentTime: (callback) => ipcRenderer.off('set-current-time', callback as never),
   onPotPlayerInstancesChanged: (callback) => {

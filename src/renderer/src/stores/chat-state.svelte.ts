@@ -22,9 +22,10 @@ async function onPotPlayerInstancesChanged(
     return
   }
 
+  updateArray(potplayerInstances, instances)
+
   const currentMainInstance = instances.find((i) => i.selected)
   if (!currentMainInstance) return
-  updateArray(potplayerInstances, instances)
 
   const title = currentMainInstance.title
   const streamHistory = await window.api.getStreamHistory()

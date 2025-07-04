@@ -195,6 +195,41 @@ function createWindow(): void {
       console.warn('Invalid URL provided to open-url handler:', url)
     }
   })
+
+  ipcMain.handle('get-link-preview', async (_event, url: string) => {
+    try {
+      if (
+        !url ||
+        typeof url !== 'string' ||
+        (!url.startsWith('http://') && !url.startsWith('https://'))
+      ) {
+        return null
+      }
+
+      const encodedUrl = encodeURIComponent(url)
+      console.debug(`Fetching link preview for: ${url}`)
+      const response = await fetch(`https://chatterino.alb11747.com/link_resolver/${encodedUrl}`)
+
+      if (!response.ok) {
+        console.warn(`Link preview failed for ${url}: HTTP ${response.status}`)
+        return null
+      }
+
+      const data = await response.json()
+
+      console.debug(`Link preview fetched for: ${url}`)
+
+      return {
+        status: data.status || 200,
+        thumbnail: data.thumbnail,
+        tooltip: decodeURIComponent(data.tooltip || ''),
+        link: data.link || url
+      }
+    } catch (error) {
+      console.warn('Failed to fetch link preview:', error)
+      return null
+    }
+  })
 }
 
 app.whenReady().then(() => {
