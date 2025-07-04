@@ -16,6 +16,7 @@ export interface WindowApi {
   getCurrentTime: (hwnd: HWND) => Promise<number>
   getTotalTime: (hwnd: HWND) => Promise<number>
   getStreamHistory: () => Promise<({ url: string; title: string } | null)[]>
+  openUrl: (url: string) => Promise<void>
   onSetCurrentTime: (callback: (event: Event, time: number) => void) => void
   offSetCurrentTime: (callback: (event: Event, time: number) => void) => void
   onPotPlayerInstancesChanged: (

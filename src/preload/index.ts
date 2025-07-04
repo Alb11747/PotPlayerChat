@@ -10,6 +10,7 @@ const api: WindowApi = {
   getCurrentTime: (hwnd) => ipcRenderer.invoke('get-current-time', hwnd),
   getTotalTime: (hwnd) => ipcRenderer.invoke('get-total-time', hwnd),
   getStreamHistory: () => ipcRenderer.invoke('get-stream-history'),
+  openUrl: (url: string) => ipcRenderer.invoke('open-url', url),
   onSetCurrentTime: (callback) => ipcRenderer.on('set-current-time', callback as never),
   offSetCurrentTime: (callback) => ipcRenderer.off('set-current-time', callback as never),
   onPotPlayerInstancesChanged: (callback) => {
@@ -24,6 +25,7 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('Buffer', Buffer)
   } catch (error) {
     console.error(error)
   }
@@ -32,4 +34,6 @@ if (process.contextIsolated) {
   window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.api = api
+  // @ts-ignore (define in dts)
+  window.Buffer = Buffer
 }

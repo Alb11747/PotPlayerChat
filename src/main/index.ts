@@ -1,5 +1,5 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, ipcMain } from 'electron/main'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
 import { removeSuffix } from '@/utils/strings'
 import { join } from 'path'
@@ -182,6 +182,18 @@ function createWindow(): void {
 
   ipcMain.handle('get-stream-history', async () => {
     return await getStreamsHistory()
+  })
+
+  ipcMain.handle('open-url', async (_event, url: string) => {
+    if (
+      url &&
+      typeof url === 'string' &&
+      (url.startsWith('http://') || url.startsWith('https://'))
+    ) {
+      await shell.openExternal(url)
+    } else {
+      console.warn('Invalid URL provided to open-url handler:', url)
+    }
   })
 }
 

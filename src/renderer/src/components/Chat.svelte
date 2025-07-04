@@ -6,13 +6,17 @@
     selectedPotplayerInfo,
     setPotPlayerHwnd
   } from '@/renderer/src/stores/chat-state.svelte'
-  import { escapeHtml } from '@/utils/dom'
+  import { parseMessage } from '@/utils/dom'
   import { formatRelativeTime } from '@/utils/strings'
+  import { UrlTracker } from '@/utils/url-tracker'
   import { VList } from 'virtua/svelte'
 
   let isMainPotPlayer = $state(true)
   let scrolledToBottom = $state(false)
   let vlistRef: VList | null = $state(null)
+
+  // Create URL tracker with bloom filter
+  let urlTracker = $state(new UrlTracker())
 
   // Scroll to bottom when messages change
   $effect(() => {
@@ -69,7 +73,25 @@
             >[{formatRelativeTime(msg.timestamp, selectedPotplayerInfo.videoStartTime)}]</span
           >
           <span class="chat-username" style="color: {msg.userColor}">{msg.username}:</span>
-          <span class="chat-text">{escapeHtml(msg.message)}</span>
+          <span class="chat-text">
+            {#each parseMessage(msg.message).entries() as [index, segment] ((msg.id, index))}
+              {#if segment.type === 'url'}
+                <button
+                  class="chat-url"
+                  class:visited={urlTracker.hasUrl(segment.content)}
+                  onclick={() => {
+                    urlTracker.addUrl(segment.content)
+                    window.api.openUrl(segment.content)
+                  }}
+                  type="button"
+                >
+                  {segment.content}
+                </button>
+              {:else}
+                {segment.content}
+              {/if}
+            {/each}
+          </span>
         </div>
       {/snippet}
     </VList>
@@ -137,6 +159,7 @@
     height: calc(100vh - 5rem);
     background-color: #18181b;
     color: #efeff1;
+    padding-bottom: 0.5rem;
     overflow: auto;
   }
 
@@ -157,6 +180,28 @@
   }
   .chat-text {
     white-space: pre-wrap;
+  }
+
+  .chat-url {
+    color: #4e8cff;
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    display: inline;
+  }
+
+  .chat-url:hover {
+    color: #6b9eff;
+    text-decoration: none;
+  }
+
+  .chat-url.visited,
+  .chat-url:focus-visible {
+    color: #a855f7;
   }
 
   .system {
