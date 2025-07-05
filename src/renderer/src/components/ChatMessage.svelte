@@ -30,6 +30,8 @@
   let linkPreviews = new SvelteMap<string, LinkPreview>()
   let failedPreviews = new SvelteSet<string>()
   let showPreviewForUrl = $state<string | null>(null)
+  let previewElement: HTMLDivElement | null = $state(null)
+  let mousePosition = $state({ x: 0, y: 0 })
 
   // Handle URL click
   function handleUrlClick(url: string): void {
@@ -79,6 +81,11 @@
               handleUrlHover(segment.url)
             }
           }}
+          onmousemove={(e) => {
+            if (enablePreviews) {
+              mousePosition = { x: e.clientX, y: e.clientY }
+            }
+          }}
           onmouseleave={() => {
             if (enablePreviews) {
               showPreviewForUrl = null
@@ -93,7 +100,14 @@
           {#if linkPreviews.has(segment.url)}
             {#each [linkPreviews.get(segment.url)] as preview ((message.id, index, preview?.link))}
               {#if preview && preview.status === 200}
-                <div class="link-preview" role="dialog" tabindex="0" aria-modal="true">
+                <div
+                  class="link-preview"
+                  role="dialog"
+                  tabindex="0"
+                  aria-modal="true"
+                  bind:this={previewElement}
+                  style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
+                >
                   {#if preview.thumbnail}
                     {#if !failedPreviews.has(preview.link)}
                       <img
@@ -124,6 +138,8 @@
                   role="dialog"
                   tabindex="0"
                   aria-modal="true"
+                  bind:this={previewElement}
+                  style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
                 >
                   <div class="preview-error-content">
                     <div class="preview-error-icon">⚠️</div>
@@ -139,6 +155,8 @@
               role="dialog"
               tabindex="0"
               aria-modal="true"
+              bind:this={previewElement}
+              style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
             >
               <div class="preview-loading-content">
                 <div class="preview-loading-spinner">⏳</div>
@@ -208,14 +226,15 @@
   }
 
   .link-preview {
-    position: absolute;
+    width: max-content;
+    height: max-content;
+    position: fixed;
     z-index: 1000;
     background: #2d2d35;
     border: 1px solid #444;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     max-width: 400px;
-    margin-top: 4px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
