@@ -64,10 +64,11 @@
     if (!searchQuery.trim()) return undefined
     if (useRegex || !caseSensitive) {
       try {
-        if (!useRegex) searchQuery = RegExp.escape(searchQuery)
-        return new RegExp(searchQuery, caseSensitive ? 'g' : 'gi')
-      } catch {
+        const escapedQuery = useRegex ? searchQuery : RegExp.escape(searchQuery)
+        return new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi')
+      } catch (error) {
         // Invalid regex, fall back to string search
+        console.warn('Invalid regex pattern:', searchQuery, error)
         return searchQuery
       }
     }
@@ -86,8 +87,9 @@
         try {
           const regex = new RegExp(searchQuery, caseSensitive ? 'g' : 'gi')
           return regex.test(msg.formattedMessage)
-        } catch {
+        } catch (error) {
           // Invalid regex, fall back to string search
+          console.warn('Invalid regex pattern:', searchQuery, error)
         }
       }
       if (caseSensitive) {
