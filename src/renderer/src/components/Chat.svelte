@@ -42,7 +42,8 @@
 
     if (messages !== newMessages) {
       messages = newMessages
-      if (scrollToBottom) vlistRef?.scrollTo(vlistRef.getScrollSize())
+      if (scrollToBottom)
+        vlistRef?.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
     }
 
     if (nextMessage) {
@@ -54,6 +55,7 @@
 
   onMount(() => {
     updateChatMessages()
+    vlistRef?.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
     return () => {
       if (chatIntervalId) clearTimeout(chatIntervalId)
     }
@@ -141,7 +143,6 @@
       data={messages}
       getKey={(_, i) => messages[i].id}
       initialTopMostItemIndex={messages.length - 1}
-      shift={true}
       onscroll={handleScroll}
       ssrCount={20}
     >
