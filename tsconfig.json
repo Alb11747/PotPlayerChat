@@ -11,6 +11,12 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "alwaysStrict": true,
+    "noUncheckedIndexedAccess": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
     "strict": true,
     "baseUrl": ".",
     "paths": {
