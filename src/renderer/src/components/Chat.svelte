@@ -16,7 +16,7 @@
 
   let messages: TwitchChatMessage[] = $state([])
   let isMainPotPlayer = $state(true)
-  let vlistRef: VListType<ChatMessage> = $state(null)
+  let vlistRef: VListType<unknown> = $state(null)
   let scrollToBottom = $state(true)
 
   // Create URL tracker with bloom filter
@@ -139,10 +139,11 @@
     <VList
       bind:this={vlistRef}
       data={messages}
-      getKey={(_, i) => i}
+      getKey={(_, i) => messages[i].id}
       initialTopMostItemIndex={messages.length - 1}
       shift={true}
       onscroll={handleScroll}
+      ssrCount={20}
     >
       {#snippet children(msg)}
         <ChatMessage

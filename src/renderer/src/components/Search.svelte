@@ -151,7 +151,12 @@
 
   <div class="search-results">
     {#if filteredMessages.length > 0}
-      <VList bind:this={vlistRef} data={filteredMessages} getKey={(_, i) => i} itemSize={80}>
+      <VList
+        bind:this={vlistRef}
+        data={filteredMessages}
+        getKey={(_, i) => messages[i].id}
+        itemSize={80}
+      >
         {#snippet children(msg)}
           <button
             type="button"
