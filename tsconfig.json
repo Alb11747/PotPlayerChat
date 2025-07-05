@@ -1,5 +1,12 @@
 {
-  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    },
+    {
+      "path": "./tsconfig.web.json"
+    }
+  ],
   "compilerOptions": {
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
@@ -7,7 +14,9 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ],
     },
     "typeRoots": [
       "./node_modules/@types",

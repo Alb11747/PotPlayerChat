@@ -3,6 +3,7 @@
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import { UrlTracker } from '@/utils/url-tracker'
   import { onMount } from 'svelte'
+  import type { VList as VListType } from 'virtua/lib/svelte'
   import { VList } from 'virtua/svelte'
   import {
     chatService,
@@ -15,7 +16,7 @@
 
   let messages: TwitchChatMessage[] = $state([])
   let isMainPotPlayer = $state(true)
-  let vlistRef: VList | null = $state(null)
+  let vlistRef: VListType<ChatMessage> = $state(null)
   let scrollToBottom = $state(true)
   let lastScrollOffset: number | null = $state(null)
 
