@@ -52,9 +52,10 @@
   }
 
   // Highlight search terms in the message
-  const { escapedUsername, parsedMessageSegments } = $derived(
-    parseFullMessage(message.username, message.message, searchQuery)
-  )
+  const { escapedUsername, parsedMessageSegments } = $derived.by(() => {
+    if (!message) return { escapedUsername: '', parsedMessageSegments: [] }
+    return parseFullMessage(message.username, message.message, searchQuery)
+  })
 </script>
 
 <div class="chat-message">
@@ -66,7 +67,7 @@
     {@html escapedUsername + ': '}
   </span>
   <span class="chat-text">
-    {#each parsedMessageSegments.entries() as [index, segment] ((message.id, index))}
+    {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.id, index))}
       {#if segment.type === 'url'}
         <button
           class="chat-url"
@@ -74,8 +75,8 @@
           onclick={() => handleUrlClick(segment.url)}
           onmouseenter={() => {
             if (enablePreviews) {
-              handleUrlHover(segment.url)
               showPreviewForUrl = segment.url
+              handleUrlHover(segment.url)
             }
           }}
           onmouseleave={() => {
@@ -88,9 +89,9 @@
           <!-- eslint-disable-next-line svelte/no-at-html-tags -->
           {@html segment.escaped}
         </button>
-        {#if enablePreviews && showPreviewForUrl === segment.escaped}
-          {#if linkPreviews.has(segment.escaped)}
-            {#each [linkPreviews.get(segment.escaped)] as preview ((message.id, index, preview?.link))}
+        {#if enablePreviews && showPreviewForUrl === segment.url}
+          {#if linkPreviews.has(segment.url)}
+            {#each [linkPreviews.get(segment.url)] as preview ((message.id, index, preview?.link))}
               {#if preview && preview.status === 200}
                 <div class="link-preview" role="dialog" tabindex="0" aria-modal="true">
                   {#if preview.thumbnail}

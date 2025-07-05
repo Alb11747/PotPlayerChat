@@ -13,16 +13,36 @@ export function escapeHtml(text: string): string {
 }
 
 /**
- * URL regex pattern that matches HTTP/HTTPS URLs
+ * Unescapes HTML special characters in a string.
+ * @param text The string to unescape.
+ * @returns The unescaped string.
  */
-const URL_REGEX = /https?:\/\/(?:[-\w.])+(?::[0-9]+)?(?:\/(?:[\w._~:/?#[\]@!$&'()*+,;=-])*)?/gi
+export function unescapeHtml(text: string): string {
+  return text
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#039;', "'")
+}
+
+const p = '[\u{E000}-\u{F8FF}]*'
+const PUI_UNICODE_REGEX = new RegExp(p, 'gu')
+// /https?:\/\/(?:[-\w.])+(?::[0-9]+)?(?:\/(?:[\w._~:/?#[\]@!$&'()*+,;=-])*)?/gi
+const URL_REGEX_STR = `h${p}t${p}t${p}p${p}s?${p}:${p}\\/${p}\\/${p}(?:[-\\w.]|${p})+(?:${p}:(?:[0-9]|${p})+)?(?:\\/${p}(?:[\\w._~:/?#[\\]@!$&'()*+,;=-]|${p})*)?`
+const URL_REGEX = new RegExp(URL_REGEX_STR, 'gui')
+
+const markStart = '\u{E000}'
+const markEnd = '\u{E001}'
+const markStartRegex = new RegExp(markStart, 'gu')
+const markEndRegex = new RegExp(markEnd, 'gu')
 
 /**
  * Processes text to make URLs clickable while escaping other HTML.
  * @param text The text to process.
  * @returns HTML string with clickable URLs.
  */
-export function parseUrlsFromMessage(
+function parseUrlsFromMessage(
   text: string
 ): Array<{ type: 'text'; escaped: string } | { type: 'url'; escaped: string; url: string }> {
   const segments: ReturnType<typeof parseUrlsFromMessage> = []
@@ -34,11 +54,14 @@ export function parseUrlsFromMessage(
   while ((match = URL_REGEX.exec(text)) !== null) {
     // Add text before the URL
     if (match.index > lastIndex) {
-      segments.push({ type: 'text', escaped: escapeHtml(text.slice(lastIndex, match.index)) })
+      const textBefore = text.slice(lastIndex, match.index)
+      segments.push({ type: 'text', escaped: escapeHtml(textBefore) })
     }
 
-    // Add the URL
-    segments.push({ type: 'url', escaped: escapeHtml(match[0]), url: match[0] })
+    // Process the URL - check if it has marks and handle them
+    const urlText = match[0]
+    const url = urlText.replace(PUI_UNICODE_REGEX, '') // Remove PUI unicode characters
+    segments.push({ type: 'url', escaped: escapeHtml(urlText), url })
 
     lastIndex = match.index + match[0].length
   }
@@ -49,6 +72,25 @@ export function parseUrlsFromMessage(
   }
 
   return segments
+}
+
+const replaceMark = (str: string): string =>
+  str.replaceAll(markStart, '<mark>').replaceAll(markEnd, '</mark>')
+
+/**
+ * Corrects unbalanced marks in a string by adding missing closing or opening marks.
+ * @param str The string to correct.
+ */
+function correctMarks(str: string): string {
+  // Ensure marks are correctly closed
+  const openCount = (str.match(markStartRegex) || []).length
+  const closeCount = (str.match(markEndRegex) || []).length
+  if (openCount > closeCount) {
+    return str + markEnd.repeat(openCount - closeCount)
+  } else if (closeCount > openCount) {
+    return markStart.repeat(closeCount - openCount) + str
+  }
+  return str
 }
 
 export function parseFullMessage(
@@ -65,33 +107,39 @@ export function parseFullMessage(
   let processedUsername = username
   let highlight = false
 
-  const markStart = '\uF0000'
-  const markEnd = '\uF0001'
-
-  const replaceMark = (str: string): string =>
-    str.replaceAll(markStart, '<mark>').replaceAll(markEnd, '</mark>')
-
   if (searchQuery) {
     highlight = true
     const fullText = `${username}: ${message}`
     const markedFullMsg = fullText.replace(searchQuery, (match) => markStart + match + markEnd)
-    const splitIndex = markedFullMsg.indexOf(': ')
+    const splitIndex = markedFullMsg.indexOf(':') // ": " is the split point
     if (splitIndex !== -1) {
-      processedUsername = markedFullMsg.slice(0, splitIndex)
-      processedMessage = markedFullMsg.slice(splitIndex + 2)
+      // Check if a mark is opened before ": " and closed after
+      const before = markedFullMsg.slice(0, splitIndex)
+      const after = markedFullMsg.slice(splitIndex + 2)
+      const openBefore = before.lastIndexOf(markStart) > before.lastIndexOf(markEnd)
+      const closeAfter = after.indexOf(markEnd) !== -1
+
+      if (openBefore && closeAfter) {
+        // Close before ": ", reopen after
+        processedUsername = before + markEnd
+        processedMessage = markStart + after
+      } else {
+        processedUsername = before
+        processedMessage = after
+      }
     } else {
       console.error('Invalid message format: no ": " found in', markedFullMsg)
     }
   }
 
   const segments = parseUrlsFromMessage(processedMessage).map((segment) => {
-    if (highlight) segment.escaped = replaceMark(segment.escaped)
+    if (highlight) segment.escaped = replaceMark(correctMarks(segment.escaped))
     return segment
   })
 
   return {
     escapedUsername: highlight
-      ? replaceMark(escapeHtml(processedUsername))
+      ? replaceMark(correctMarks(escapeHtml(processedUsername)))
       : escapeHtml(processedUsername),
     parsedMessageSegments: segments
   }

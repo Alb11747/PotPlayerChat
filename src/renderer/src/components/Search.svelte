@@ -162,7 +162,7 @@
               {urlTracker}
               searchQuery={searchPattern}
               onUrlClick={handleUrlClick}
-              enablePreviews={false}
+              enablePreviews={true}
             />
           </button>
         {/snippet}
@@ -269,7 +269,6 @@
 
   .search-result-item {
     padding: 8px 14px;
-    border: 1px solid #2d2d35;
     cursor: pointer;
     transition: background-color 0.2s ease;
     min-width: 100%;
