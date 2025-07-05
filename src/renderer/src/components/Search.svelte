@@ -41,7 +41,7 @@
         return
       }
       await updateSelectedPotPlayerInfo(selectedPotplayerInfo)
-      videoStartTime = chatService.lastPotPlayerInfo?.videoStartTime || null
+      videoStartTime = chatService.lastPotPlayerInfo?.startTime || null
 
       // Get a wide time range to capture all messages
       const currentTime = await window.api.getCurrentTime(selectedPotplayerInfo.hwnd)

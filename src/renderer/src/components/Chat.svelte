@@ -156,7 +156,7 @@
       {#snippet children(msg)}
         <ChatMessage
           message={msg}
-          videoStartTime={selectedPotplayerInfo.videoStartTime}
+          videoStartTime={selectedPotplayerInfo.startTime}
           {urlTracker}
           onUrlClick={handleUrlClick}
           enablePreviews={true}

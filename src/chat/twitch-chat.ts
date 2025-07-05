@@ -25,8 +25,8 @@ const settings: ChatSettings = {
 export interface PotPlayerInfo {
   hwnd: HWND
   channel: string
-  videoName: string
-  videoStartTime: number
+  title: string
+  startTime: number
 }
 
 export interface LoadingState {
@@ -71,7 +71,7 @@ export class ChatService {
     }
 
     try {
-      const { hwnd, channel, videoStartTime } = this.lastPotPlayerInfo
+      const { hwnd, channel, startTime: videoStartTime } = this.lastPotPlayerInfo
 
       const datePadding = 8 * 60 * 60 * 1000 // 8 hours in milliseconds
       const startDate = new Date(videoStartTime - datePadding)
@@ -236,8 +236,8 @@ export class ChatService {
     if (this.lastPotPlayerInfo === null) {
       return []
     }
-    const startTime = this.lastPotPlayerInfo.videoStartTime + currentVideoTime - beforeTime
-    const endTime = this.lastPotPlayerInfo.videoStartTime + currentVideoTime + afterTime
+    const startTime = this.lastPotPlayerInfo.startTime + currentVideoTime - beforeTime
+    const endTime = this.lastPotPlayerInfo.startTime + currentVideoTime + afterTime
     return getMessagesBetween(this.currentChatData, startTime, endTime)
   }
 
@@ -251,7 +251,7 @@ export class ChatService {
 
     return getMessagesForTime(
       this.currentChatData,
-      this.lastPotPlayerInfo.videoStartTime + currentVideoTime,
+      this.lastPotPlayerInfo.startTime + currentVideoTime,
       settings.getChatMessageLimit(),
       next
     )

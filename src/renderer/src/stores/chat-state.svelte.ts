@@ -1,7 +1,8 @@
 import { ChatService, type LoadingState, type PotPlayerInfo } from '@/chat/twitch-chat'
 import type { HWND } from '@/types/globals'
-import { updateArray } from '@/utils/state'
-import { findStreamByTitle, getStartTimeFromTitle, getStreamerFromUrl } from '@/utils/stream'
+import { updateArray, updateCache as updateCacheRemovingCollisions } from '@/utils/state'
+import { getStreamerFromUrl as getChannelFromUrl, getStartTimeFromTitle } from '@/utils/stream'
+import { stripSymbols } from '@/utils/strings'
 
 export const potplayerInstances: { hwnd: HWND; title: string }[] = $state([])
 export const selectedPotplayerInfo: Partial<PotPlayerInfo> = $state({})
@@ -32,48 +33,57 @@ window.api.onPotPlayerInstancesChanged((_: Event, instances) => {
   onPotPlayerInstancesChanged(instances)
 })
 
+const titleCache: Record<string, { channel: string; startTime: number } | null> = {}
+
 export async function updateSelectedPotPlayerInfo(instance: {
   hwnd: HWND
   title: string
 }): Promise<void> {
+  const hwnd = instance.hwnd
   const title = instance.title
-  const streamHistory = await window.api.getStreamHistory()
-  const stream = findStreamByTitle(title, streamHistory)
-  if (!stream) {
-    console.warn('No stream found for title:', title)
-    console.debug('Available streams:', streamHistory)
-    return
-  }
-  const streamer = getStreamerFromUrl(stream.url)
-  if (!streamer) {
-    console.warn('No streamer found for URL:', stream.url)
-    return
-  }
-  const startTime = getStartTimeFromTitle(title)?.getTime() || null
-  if (startTime === null) {
-    console.warn('No start time found for title:', title)
-    return
+
+  let streamHistory: Awaited<ReturnType<typeof window.api.getStreamHistory>> = []
+  let newPotPlayerInfo: PotPlayerInfo | null = null
+
+  const cachedInfo = titleCache[title] || titleCache[stripSymbols(title)]
+  if (!cachedInfo) {
+    streamHistory = await window.api.getStreamHistory()
+    for (const stream of streamHistory) {
+      if (!stream || !stream.url || !stream.title) continue
+      const isCurrentStream = stripSymbols(stream.title) === stripSymbols(title)
+      const channel = getChannelFromUrl(stream.url)
+      if (!channel) {
+        if (isCurrentStream) console.warn('No channel found for URL:', stream.url)
+        continue
+      }
+      const startTime = getStartTimeFromTitle(stream.title)?.getTime()
+      if (!startTime) {
+        if (isCurrentStream) console.warn('No start time found for title:', stream.title)
+        continue
+      }
+      const data = { channel, startTime }
+      const collisionMsg = 'Title cache collision'
+      updateCacheRemovingCollisions(titleCache, stripSymbols(stream.title), data, collisionMsg)
+      updateCacheRemovingCollisions(titleCache, stream.title, data, collisionMsg)
+      if (isCurrentStream && !newPotPlayerInfo)
+        newPotPlayerInfo = { hwnd, title, channel, startTime }
+    }
+    if (!newPotPlayerInfo) {
+      console.warn('No valid stream found for title:', title)
+      console.debug('Available streams:', streamHistory)
+      return
+    }
+  } else {
+    newPotPlayerInfo = {
+      hwnd,
+      title,
+      channel: cachedInfo.channel,
+      startTime: cachedInfo.startTime
+    }
   }
 
-  let changed = false
-
-  const pi = selectedPotplayerInfo
-  if (pi.hwnd !== instance.hwnd) {
-    pi.hwnd = instance.hwnd
-    changed = true
+  if (newPotPlayerInfo && newPotPlayerInfo !== selectedPotplayerInfo) {
+    for (const key in newPotPlayerInfo) selectedPotplayerInfo[key] = newPotPlayerInfo[key]
+    await chatService.updateVideoInfo(selectedPotplayerInfo as PotPlayerInfo)
   }
-  if (pi.channel !== streamer) {
-    pi.channel = streamer
-    changed = true
-  }
-  if (pi.videoName !== stream.title) {
-    pi.videoName = stream.title
-    changed = true
-  }
-  if (pi.videoStartTime !== startTime) {
-    pi.videoStartTime = startTime
-    changed = true
-  }
-
-  if (changed) await chatService.updateVideoInfo(pi as PotPlayerInfo)
 }

@@ -17,7 +17,7 @@ export function removeSuffix(str: string, suffix: string): string {
  * @returns The string with only alphanumeric characters.
  */
 export function stripSymbols(title: string): string {
-  return title.replace(/[^a-zA-Z0-9]/g, '').trim()
+  return title.replace(/\W+/g, '').trim()
 }
 
 /**

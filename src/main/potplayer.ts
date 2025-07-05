@@ -60,7 +60,7 @@ export async function getPlayStatus(hwnd: HWND): Promise<PlayStatus> {
 
 regedit.setExternalVBSLocation('resources/regedit/vbs')
 
-export async function getStreamsHistory(): Promise<({ url: string; title: string } | null)[]> {
+export async function getStreamHistory(): Promise<({ url: string; title: string } | null)[]> {
   const key = 'HKCU\\Software\\DAUM\\PotPlayerMini64\\UrlHistory'
 
   console.debug('Reading PotPlayer URL history from registry:', key)

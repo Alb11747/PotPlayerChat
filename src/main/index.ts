@@ -4,7 +4,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
 import { removeSuffix } from '@/utils/strings'
 import { join } from 'path'
-import { getCurrentTime, getStreamsHistory, getTotalTime } from './potplayer'
+import { getCurrentTime, getStreamHistory, getTotalTime } from './potplayer'
 import { getForegroundWindow, getHwndByPidAndTitle, getWindowsByExe } from './windows'
 
 function createWindow(): void {
@@ -40,14 +40,24 @@ function createWindow(): void {
   })
 
   ipcMain.handle('set-potplayer-hwnd', async (_event, hwnd: HWND) => {
-    if (selectedPotplayerHwnd !== null) lastActivePotplayerHwnd = selectedPotplayerHwnd
-    selectedPotplayerHwnd = hwnd
-    await sendPotplayerInstancesChanged()
+    if (selectedPotplayerHwnd !== hwnd) {
+      const lastSelected = getPotplayerHwnd()
+      selectedPotplayerHwnd = hwnd
+      if (lastSelected !== selectedPotplayerHwnd) {
+        await sendPotplayerInstancesChanged()
+      }
+    }
   })
 
+  let potplayerInstancesDebounceTimeoutId: NodeJS.Timeout | null = null
   let potplayerInstances: { hwnd: HWND; title: string; selected?: boolean }[] = []
 
   async function updatePotplayerInstances(): Promise<void> {
+    if (potplayerInstancesDebounceTimeoutId) return
+    potplayerInstancesDebounceTimeoutId = setTimeout(() => {
+      potplayerInstancesDebounceTimeoutId = null
+    }, 50)
+
     const windows = await getWindowsByExe('PotPlayerMini64.exe')
     const windowsWithTitles = windows.map((win) => ({
       pid: win.pid,
@@ -182,7 +192,7 @@ function createWindow(): void {
   })
 
   ipcMain.handle('get-stream-history', async () => {
-    return await getStreamsHistory()
+    return await getStreamHistory()
   })
 
   ipcMain.handle('open-url', async (_event, url: string) => {
