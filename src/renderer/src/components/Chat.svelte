@@ -1,14 +1,15 @@
 <script lang="ts">
   import type { TwitchChatMessage } from '@/chat/twitch-chat'
+  import { CurrentVideoTimeHistory } from '@/utils/time'
   import { UrlTracker } from '@/utils/url-tracker'
+  import { onMount } from 'svelte'
   import { VList } from 'virtua/svelte'
   import {
     chatService,
     loadingState,
     potplayerInstances,
     selectedPotplayerInfo,
-    setPotPlayerHwnd,
-    videoTimeHistory
+    setPotPlayerHwnd
   } from '../stores/chat-state.svelte'
   import ChatMessage from './ChatMessage.svelte'
 
@@ -21,25 +22,44 @@
   // Create URL tracker with bloom filter
   let urlTracker = $state(new UrlTracker())
 
-  $effect(() => {
-    const chatIntervalId = setInterval(async () => {
-      const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
-      if (predictedTime === null) return
-      messages = await chatService.getMessagesForTime(predictedTime)
-    }, 200)
+  const videoTimeHistory = new CurrentVideoTimeHistory()
+  window.api.onSetCurrentTime((_: Event, time: number) => {
+    videoTimeHistory.addSample(time)
+    updateChatMessages()
+  })
 
+  let chatIntervalId: ReturnType<typeof setTimeout> | null = null
+  async function updateChatMessages(): Promise<void> {
+    if (chatIntervalId) clearTimeout(chatIntervalId)
+
+    const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
+    if (predictedTime === null) return
+    const newMessages = await chatService.getMessagesForTime(predictedTime, true)
+    if (!newMessages || newMessages.length === 0) return
+    const lastMessage = messages[messages.length - 1] || null
+    const nextMessage =
+      lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
+
+    if (messages !== newMessages) messages = newMessages
+
+    if (nextMessage) {
+      const waitTime = videoTimeHistory.getPredictedTimeUntil(nextMessage.timestamp)
+      // console.debug(`Waiting ${waitTime}ms before fetching next messages`)
+      if (waitTime !== null) chatIntervalId = setTimeout(updateChatMessages, waitTime)
+    }
+  }
+
+  onMount(() => {
+    updateChatMessages()
     return () => {
-      clearInterval(chatIntervalId)
+      if (chatIntervalId) clearTimeout(chatIntervalId)
     }
   })
 
   // Scroll to bottom when messages change
   $effect(() => {
     if (!vlistRef || !messages || messages.length === 0) return
-
-    if (scrollToBottom) {
-      vlistRef.scrollToIndex(messages.length - 1, { align: 'end', smooth: false })
-    }
+    if (scrollToBottom) vlistRef.scrollToIndex(messages.length - 1, { align: 'end', smooth: false })
   })
 
   // Handle user scroll detection

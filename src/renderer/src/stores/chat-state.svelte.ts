@@ -2,12 +2,6 @@ import { ChatService, type LoadingState, type PotPlayerInfo } from '@/chat/twitc
 import type { HWND } from '@/types/globals'
 import { updateArray } from '@/utils/state'
 import { findStreamByTitle, getStartTimeFromTitle, getStreamerFromUrl } from '@/utils/stream'
-import { CurrentVideoTimeHistory } from '@/utils/time'
-
-export const videoTimeHistory = new CurrentVideoTimeHistory()
-window.api.onSetCurrentTime((_: Event, time: number) => {
-  videoTimeHistory.addSample(time)
-})
 
 export const potplayerInstances: { hwnd: HWND; title: string }[] = $state([])
 export const selectedPotplayerInfo: Partial<PotPlayerInfo> = $state({})

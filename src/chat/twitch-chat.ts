@@ -241,7 +241,10 @@ export class ChatService {
     return getMessagesBetween(this.currentChatData, startTime, endTime)
   }
 
-  public async getMessagesForTime(currentVideoTime: number): Promise<TwitchChatMessage[]> {
+  public async getMessagesForTime(
+    currentVideoTime: number,
+    next?: boolean
+  ): Promise<TwitchChatMessage[]> {
     if (this.lastPotPlayerInfo === null) {
       return []
     }
@@ -249,7 +252,8 @@ export class ChatService {
     return getMessagesForTime(
       this.currentChatData,
       this.lastPotPlayerInfo.videoStartTime + currentVideoTime,
-      settings.getChatMessageLimit()
+      settings.getChatMessageLimit(),
+      next
     )
   }
 }

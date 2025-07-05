@@ -19,12 +19,13 @@ export function getMessagesBetween<T extends { timestamp: number }>(
 export function getMessagesForTime<T extends { timestamp: number }>(
   messages: T[],
   currentTime: number,
-  limit: number
+  limit: number,
+  next: boolean = false
 ): T[] {
   const lastIdx = bounds.le(messages, { timestamp: currentTime } as T, cmp)
   if (lastIdx === -1) {
     return []
   }
   const startIdx = Math.max(0, lastIdx - limit + 1)
-  return messages.slice(startIdx, lastIdx + 1)
+  return messages.slice(startIdx, lastIdx + (next ? 2 : 1))
 }
