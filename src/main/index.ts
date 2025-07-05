@@ -2,10 +2,9 @@ import type { HWND } from '@/types/globals'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
-import { removeSuffix } from '@/utils/strings'
 import { join } from 'path'
-import { getCurrentTime, getStreamHistory, getTotalTime } from './potplayer'
-import { getForegroundWindow, getHwndByPidAndTitle, getWindowsByExe } from './windows'
+import { getCurrentTime, getPotPlayerInstances, getStreamHistory, getTotalTime } from './potplayer'
+import { getForegroundWindow } from './windows'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -28,6 +27,8 @@ function createWindow(): void {
         ? instance.hwnd === selectedPotplayerHwnd
         : instance.hwnd === lastActivePotplayerHwnd
     }
+
+    console.debug('Updating PotPlayer instances list')
     await mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
   }
 
@@ -58,33 +59,9 @@ function createWindow(): void {
       potplayerInstancesDebounceTimeoutId = null
     }, 50)
 
-    const windows = await getWindowsByExe('PotPlayerMini64.exe')
-    const windowsWithTitles = windows.map((win) => ({
-      pid: win.pid,
-      title: removeSuffix(win.windowTitle, ' - PotPlayer')
-    }))
-    const instances: { hwnd: HWND; title: string }[] = []
-    for (const win of windowsWithTitles) {
-      const hwnd = await getHwndByPidAndTitle(win.pid, win.title)
-      if (hwnd) {
-        instances.push({ hwnd, title: win.title })
-      } else {
-        console.warn(
-          `Could not find hwnd for PotPlayer instance with PID ${win.pid} and title "${win.title}"`
-        )
-      }
-    }
-
-    function normalize(
-      instances: { hwnd: HWND; title: string; selected?: boolean }[]
-    ): { hwnd: HWND; title: string; selected?: boolean }[] {
-      return instances.map((instance) => ({
-        hwnd: instance.hwnd,
-        title: instance.title
-      }))
-    }
-
-    if (normalize(potplayerInstances) !== normalize(instances)) {
+    const instances = await getPotPlayerInstances()
+    console.debug(`Found ${instances.length} PotPlayer instance(s)`)
+    if (potplayerInstances !== instances) {
       potplayerInstances = instances
 
       // If the selected PotPlayer instance is not in the list, set it to null
@@ -105,8 +82,6 @@ function createWindow(): void {
 
       await sendPotplayerInstancesChanged()
     }
-
-    console.debug(`Found ${potplayerInstances.length} PotPlayer instances`)
 
     if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
     potplayerIntervalId = setTimeout(updatePotplayerInstances, 5 * 60 * 1000) // Update every 5 minutes

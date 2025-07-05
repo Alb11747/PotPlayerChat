@@ -1,6 +1,7 @@
 import type { HWND } from '@/types/globals'
+import { removeSuffix } from '@/utils/strings'
 import regedit from 'regedit'
-import { getWindowsByExe, sendMessage } from './windows'
+import { getHwndByPidAndTitle, getWindowsByExe, sendMessage } from './windows'
 
 export enum WinMsgs {
   COMMAND_TYPE = 273,
@@ -26,13 +27,28 @@ export function getTotalTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_TOTAL_TIME, 0)
 }
 
-export async function getPotPlayerInstances(): Promise<{ pid: number; title: string }[]> {
-  const hwnds: { pid: number; title: string }[] = []
-  const potPlayerWindows = await getWindowsByExe('PotPlayerMini64.exe')
+interface PotPlayerInstance {
+  pid: number
+  hwnd: HWND
+  title: string
+}
+
+export async function getPotPlayerInstances(): Promise<PotPlayerInstance[]> {
+  const hwnds: PotPlayerInstance[] = []
+  const potPlayerWindows = await getWindowsByExe('PotPlayerMini64.exe', true)
   for (const window of potPlayerWindows) {
-    if (window.imageName === 'PotPlayerMini64.exe') {
-      hwnds.push({ pid: window.pid, title: window.windowTitle })
+    if (window.imageName !== 'PotPlayerMini64.exe' && window.sessionName == 'Console') continue
+    const { hwnd = null, title = window.windowTitle } =
+      (await getHwndByPidAndTitle(window.pid, window.windowTitle)) ?? {}
+    if (hwnd === null) {
+      console.warn(`No HWND found for PID ${window.pid} with title "${window.windowTitle}"`)
+      continue
     }
+    hwnds.push({
+      pid: window.pid,
+      hwnd,
+      title: removeSuffix(title, ' - PotPlayer')
+    })
   }
   return hwnds
 }

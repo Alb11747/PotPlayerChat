@@ -2,7 +2,6 @@ import { ChatService, type LoadingState, type PotPlayerInfo } from '@/chat/twitc
 import type { HWND } from '@/types/globals'
 import { updateArray, updateCache as updateCacheRemovingCollisions } from '@/utils/state'
 import { getStreamerFromUrl as getChannelFromUrl, getStartTimeFromTitle } from '@/utils/stream'
-import { stripSymbols } from '@/utils/strings'
 
 export const potplayerInstances: { hwnd: HWND; title: string }[] = $state([])
 export const selectedPotplayerInfo: Partial<PotPlayerInfo> = $state({})
@@ -45,12 +44,12 @@ export async function updateSelectedPotPlayerInfo(instance: {
   let streamHistory: Awaited<ReturnType<typeof window.api.getStreamHistory>> = []
   let newPotPlayerInfo: PotPlayerInfo | null = null
 
-  const cachedInfo = titleCache[title] || titleCache[stripSymbols(title)]
+  const cachedInfo = titleCache[title]
   if (!cachedInfo) {
     streamHistory = await window.api.getStreamHistory()
     for (const stream of streamHistory) {
       if (!stream || !stream.url || !stream.title) continue
-      const isCurrentStream = stripSymbols(stream.title) === stripSymbols(title)
+      const isCurrentStream = stream.title === title
       const channel = getChannelFromUrl(stream.url)
       if (!channel) {
         if (isCurrentStream) console.warn('No channel found for URL:', stream.url)
@@ -63,7 +62,6 @@ export async function updateSelectedPotPlayerInfo(instance: {
       }
       const data = { channel, startTime }
       const collisionMsg = 'Title cache collision'
-      updateCacheRemovingCollisions(titleCache, stripSymbols(stream.title), data, collisionMsg)
       updateCacheRemovingCollisions(titleCache, stream.title, data, collisionMsg)
       if (isCurrentStream && !newPotPlayerInfo)
         newPotPlayerInfo = { hwnd, title, channel, startTime }

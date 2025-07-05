@@ -19,9 +19,10 @@ if (!initializedBoxed.initialized) {
   koffi.alias('BOOL', 'int32_t')
   koffi.alias('LRESULT', 'int')
   koffi.alias('WPARAM', 'uint32_t')
-  koffi.alias('LPARAM', 'int32_t')
+  koffi.alias('LPARAM', 'void *')
   koffi.alias('LPCSTR', 'string')
   koffi.alias('LPSTR', 'string')
+  koffi.alias('LPWSTR', 'string')
 }
 
 const SendMessageW = promisify(
@@ -42,6 +43,33 @@ export function getForegroundWindow(): Promise<HWND> {
   return GetForegroundWindow()
 }
 
+const GetWindowTextA = promisify(
+  user32.func('int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)').async
+)
+const GetWindowTextW = promisify(
+  user32.func('int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)').async
+)
+const titleBufferSize = 1024
+const titleBuffer = Buffer.alloc(titleBufferSize)
+let titleBufferLocked = false
+
+export async function getWindowText(hwnd: HWND, unicode: boolean = false): Promise<string> {
+  if (titleBufferLocked) throw new Error('Title buffer is locked, cannot get window text')
+  titleBufferLocked = true
+
+  let title: string
+  if (unicode) {
+    await GetWindowTextW(hwnd, titleBuffer, titleBufferSize)
+    title = titleBuffer.toString('utf16le').replace(/\0.*$/, '')
+  } else {
+    await GetWindowTextA(hwnd, titleBuffer, titleBufferSize)
+    title = titleBuffer.toString('utf8').replace(/\0.*$/, '')
+  }
+
+  titleBufferLocked = false
+  return title
+}
+
 const FindWindowExA = promisify(
   user32.func(
     'HWND __stdcall FindWindowExA(HWND hwndParent, HWND hwndChildAfter, LPCSTR lpszClass, LPCSTR lpszWindow)'
@@ -51,32 +79,42 @@ const GetWindowThreadProcessId = promisify(
   user32.func('DWORD __stdcall GetWindowThreadProcessId(HWND hWnd, _Out_ DWORD *lpdwProcessId)')
     .async
 )
-const GetWindowTextA = promisify(
-  user32.func('int __stdcall GetWindowTextA(HWND hWnd, LPSTR lpString, int nMaxCount)').async
-)
 
-export async function findHwndByPidAndTitle(pid: number, title: string): Promise<HWND | null> {
-  console.debug(`Searching for window with PID ${pid} and title containing "${title}"`)
+export async function findHwndByPidAndTitle(
+  pid: number,
+  title: string
+): Promise<{ hwnd: HWND; title: string } | null> {
+  console.debug(`Searching for window with PID ${pid} and title:`, title)
 
   const hwnds: { hwnd: HWND; title: string }[] = []
-  let hCurWnd: HWND = await FindWindowExA(0, 0, 0, 0)
+  let hwndCount = 0
 
-  while (hCurWnd) {
-    const pidBuffer = Buffer.alloc(4)
-    await GetWindowThreadProcessId(hCurWnd, pidBuffer)
-    const foundPid = pidBuffer.readUInt32LE(0)
-    if (foundPid === pid) {
-      // Get window title
-      const titleBuffer = Buffer.alloc(512)
-      await GetWindowTextA(hCurWnd, titleBuffer, 512)
-      const currentTitle = titleBuffer.toString('utf8').replace(/\0.*$/, '')
-      if (currentTitle.includes(title)) {
-        hwnds.push({ hwnd: hCurWnd, title: currentTitle })
-        if (process.env.NODE_ENV === 'production') break
+  try {
+    console.time('FindWindowByPidAndTitle')
+    let hCurWnd: HWND = await FindWindowExA(0, 0, 0, 0)
+
+    while (hCurWnd) {
+      hwndCount++
+
+      const pidBuffer = Buffer.alloc(4)
+      await GetWindowThreadProcessId(hCurWnd, pidBuffer)
+      const foundPid = pidBuffer.readUInt32LE(0)
+      if (foundPid === pid) {
+        const currentTitle = await getWindowText(hCurWnd, false)
+        if (currentTitle === title) {
+          hwnds.push({ hwnd: hCurWnd, title: await getWindowText(hCurWnd, true) })
+          if (process.env.NODE_ENV === 'production') break
+        }
       }
-    }
 
-    hCurWnd = await FindWindowExA(0, hCurWnd, 0, 0)
+      hCurWnd = await FindWindowExA(0, hCurWnd, 0, 0)
+    }
+  } catch (error) {
+    console.error(`Error while searching for window with PID ${pid} and title "${title}":`, error)
+    return null
+  } finally {
+    console.timeEnd('FindWindowByPidAndTitle')
+    console.debug(`Searched ${hwndCount} windows for PID ${pid}`)
   }
 
   if (hwnds.length === 0) {
@@ -85,21 +123,24 @@ export async function findHwndByPidAndTitle(pid: number, title: string): Promise
     console.warn(`Multiple windows found for PID ${pid}:`, hwnds.map((h) => h.title).join(', '))
   }
 
-  return hwnds[0].hwnd
+  return hwnds[0]
 }
 
 const pidByHwndCache = new NodeCache({ stdTTL: 2 * 60 * 60, checkperiod: 24 * 60 * 60 })
 
-export async function getHwndByPidAndTitle(pid: number, title: string): Promise<HWND | null> {
-  const cached = pidByHwndCache.get<HWND>(pid)
+export async function getHwndByPidAndTitle(
+  pid: number,
+  title: string
+): Promise<{ hwnd: HWND; title: string } | null> {
+  const cached = pidByHwndCache.get<{ hwnd: HWND; title: string }>(pid)
   if (cached !== undefined) {
     return cached
   }
-  const hwnd = await findHwndByPidAndTitle(pid, title)
-  if (hwnd !== null) {
-    pidByHwndCache.set(pid, hwnd)
-  }
-  return hwnd
+  const { hwnd = null, title: displayTitle = null } =
+    (await findHwndByPidAndTitle(pid, title)) ?? {}
+  if (hwnd === null || displayTitle === null) return null
+  pidByHwndCache.set(pid, { hwnd, title: displayTitle })
+  return { hwnd, title: displayTitle }
 }
 
 export type TasklistWindow = {
@@ -108,16 +149,24 @@ export type TasklistWindow = {
   sessionName: string
   sessionNumber: number
   memUsage: number
+}
+export type TasklistWindowVerbose = TasklistWindow & {
   status: 'Running' | 'Suspended' | 'Not Responding' | 'Unknown'
   username: string
   cpuTime: number
   windowTitle: string
 }
 
-export async function getWindowsByExe(exeName: string): Promise<TasklistWindow[]> {
+export async function getWindowsByExe<V extends boolean>(
+  exeName: string,
+  verbose: V
+): Promise<V extends true ? TasklistWindowVerbose[] : TasklistWindow[]> {
   console.debug(`Fetching windows for executable: ${exeName}`)
-  return (await tasklist({
+  console.time('TaskList')
+  const result = await tasklist({
     filter: [`IMAGENAME eq ${exeName}`],
-    verbose: true
-  })) as TasklistWindow[]
+    verbose
+  })
+  console.timeEnd('TaskList')
+  return result
 }
