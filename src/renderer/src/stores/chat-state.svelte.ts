@@ -1,4 +1,5 @@
 import { ChatService, type LoadingState, type PotPlayerInfo } from '@/chat/twitch-chat'
+import type { HWND } from '@/types/globals'
 import { updateArray } from '@/utils/state'
 import { findStreamByTitle, getStartTimeFromTitle, getStreamerFromUrl } from '@/utils/stream'
 import { CurrentVideoTimeHistory } from '@/utils/time'
@@ -14,6 +15,10 @@ export const loadingState: LoadingState = $state({ state: 'idle', errorMessage: 
 
 export const chatService = new ChatService(window.api, loadingState)
 
+export async function setPotPlayerHwnd(hwnd: HWND): Promise<void> {
+  await window.api.setSelectedPotPlayerHWND(hwnd)
+}
+
 async function onPotPlayerInstancesChanged(
   instances: { hwnd: HWND; title: string; selected?: boolean }[]
 ): Promise<void> {
@@ -26,8 +31,18 @@ async function onPotPlayerInstancesChanged(
 
   const currentMainInstance = instances.find((i) => i.selected)
   if (!currentMainInstance) return
+  await updateSelectedPotPlayerInfo(currentMainInstance)
+}
 
-  const title = currentMainInstance.title
+window.api.onPotPlayerInstancesChanged((_: Event, instances) => {
+  onPotPlayerInstancesChanged(instances)
+})
+
+export async function updateSelectedPotPlayerInfo(instance: {
+  hwnd: HWND
+  title: string
+}): Promise<void> {
+  const title = instance.title
   const streamHistory = await window.api.getStreamHistory()
   const stream = findStreamByTitle(title, streamHistory)
   if (!stream) {
@@ -49,8 +64,8 @@ async function onPotPlayerInstancesChanged(
   let changed = false
 
   const pi = selectedPotplayerInfo
-  if (pi.hwnd !== currentMainInstance.hwnd) {
-    pi.hwnd = currentMainInstance.hwnd
+  if (pi.hwnd !== instance.hwnd) {
+    pi.hwnd = instance.hwnd
     changed = true
   }
   if (pi.channel !== streamer) {
@@ -66,13 +81,5 @@ async function onPotPlayerInstancesChanged(
     changed = true
   }
 
-  if (changed) chatService.updateVideoInfo(pi as PotPlayerInfo)
-}
-
-window.api.onPotPlayerInstancesChanged((_: Event, instances) => {
-  onPotPlayerInstancesChanged(instances)
-})
-
-export async function setPotPlayerHwnd(hwnd: HWND): Promise<void> {
-  await window.api.setSelectedPotPlayer(hwnd)
+  if (changed) await chatService.updateVideoInfo(pi as PotPlayerInfo)
 }

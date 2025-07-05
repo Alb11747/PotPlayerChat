@@ -1,17 +1,10 @@
+import type {} from '@/preload/types/index.d.ts'
+
 export interface LinkPreview {
   status: number
   thumbnail?: string
   tooltip?: string
   link: string
-}
-
-// Declare window.api for this module
-declare global {
-  interface Window {
-    api: {
-      getLinkPreview: (url: string) => Promise<LinkPreview | null>
-    }
-  }
 }
 
 export class LinkPreviewService {

@@ -1,3 +1,4 @@
+import type { HWND } from '@/types/globals'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
@@ -229,6 +230,43 @@ function createWindow(): void {
       console.warn('Failed to fetch link preview:', error)
       return null
     }
+  })
+
+  // Create search window
+  function createSearchWindow(): BrowserWindow {
+    const searchWindow = new BrowserWindow({
+      width: 400,
+      height: 600,
+      show: false,
+      autoHideMenuBar: true,
+      parent: mainWindow,
+      modal: false,
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        sandbox: false
+      }
+    })
+
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      searchWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/search.html`)
+    } else {
+      searchWindow.loadFile(join(__dirname, '../renderer/search.html'))
+    }
+
+    searchWindow.once('ready-to-show', () => {
+      searchWindow.show()
+      searchWindow.focus()
+    })
+
+    searchWindow.on('closed', () => {
+      // Window will be garbage collected
+    })
+
+    return searchWindow
+  }
+
+  ipcMain.handle('open-search-window', async () => {
+    createSearchWindow()
   })
 }
 

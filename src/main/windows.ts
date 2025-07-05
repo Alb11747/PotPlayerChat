@@ -1,6 +1,7 @@
+import type { HWND } from '@/types/globals'
 import koffi from 'koffi'
-import { tasklist } from 'tasklist'
 import NodeCache from 'node-cache'
+import { tasklist } from 'tasklist'
 import { promisify } from 'util'
 
 const user32 = koffi.load('user32.dll')

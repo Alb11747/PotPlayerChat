@@ -1,5 +1,6 @@
 import type { WindowApi } from '@/preload/types/index.d.ts'
-import { getMessagesForTime } from '@/chat/chat'
+import { getMessagesBetween, getMessagesForTime } from '@/chat/chat'
+import type { HWND } from '@/types/globals'
 
 export interface TwitchChatMessage {
   timestamp: number
@@ -35,7 +36,7 @@ export interface LoadingState {
 
 export class ChatService {
   private api: WindowApi
-  private lastPotPlayerInfo: PotPlayerInfo | null = null
+  public lastPotPlayerInfo: PotPlayerInfo | null = null
 
   private currentChatData: TwitchChatMessage[] = []
 
@@ -50,7 +51,7 @@ export class ChatService {
     this.state = state
   }
 
-  public updateVideoInfo(newPotPlayerInfo: PotPlayerInfo): void {
+  public async updateVideoInfo(newPotPlayerInfo: PotPlayerInfo): Promise<void> {
     if (this.lastPotPlayerInfo === newPotPlayerInfo) return
 
     this.lastPotPlayerInfo = { ...newPotPlayerInfo }
@@ -58,7 +59,7 @@ export class ChatService {
     this.state.state = 'idle'
     this.state.errorMessage = ''
 
-    this.loadChat()
+    await this.loadChat()
   }
 
   async loadChat(): Promise<void> {
@@ -225,6 +226,19 @@ export class ChatService {
 
     // Sort messages by timestamp
     return messages.sort((a, b) => a.timestamp - b.timestamp)
+  }
+
+  public getMessagesAroundTime(
+    currentVideoTime: number,
+    beforeTime: number,
+    afterTime: number
+  ): TwitchChatMessage[] {
+    if (this.lastPotPlayerInfo === null) {
+      return []
+    }
+    const startTime = this.lastPotPlayerInfo.videoStartTime + currentVideoTime - beforeTime
+    const endTime = this.lastPotPlayerInfo.videoStartTime + currentVideoTime + afterTime
+    return getMessagesBetween(this.currentChatData, startTime, endTime)
   }
 
   public async getMessagesForTime(currentVideoTime: number): Promise<TwitchChatMessage[]> {

@@ -1,3 +1,4 @@
+import type { HWND } from '@/types/globals'
 import { IpcRenderer } from 'electron/renderer'
 
 declare global {
@@ -11,12 +12,13 @@ declare global {
 
 export interface WindowApi {
   getPotPlayers: () => Promise<{ hwnd: HWND; title: string }[]>
-  getSelectedPotPlayer: () => Promise<HWND | null>
-  setSelectedPotPlayer: (hwnd: HWND | null) => Promise<void>
+  getSelectedPotPlayerHWND: () => Promise<HWND | null>
+  setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>
   getCurrentTime: (hwnd: HWND) => Promise<number>
   getTotalTime: (hwnd: HWND) => Promise<number>
   getStreamHistory: () => Promise<({ url: string; title: string } | null)[]>
   openUrl: (url: string) => Promise<void>
+  openSearchWindow: () => Promise<void>
   getLinkPreview: (
     url: string
   ) => Promise<{ status: number; thumbnail?: string; tooltip?: string; link: string } | null>

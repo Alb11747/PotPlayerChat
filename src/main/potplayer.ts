@@ -1,3 +1,4 @@
+import type { HWND } from '@/types/globals'
 import regedit from 'regedit'
 import { getWindowsByExe, sendMessage } from './windows'
 

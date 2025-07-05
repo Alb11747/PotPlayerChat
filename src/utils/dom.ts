@@ -4,9 +4,12 @@
  * @returns The escaped string.
  */
 export function escapeHtml(text: string): string {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
 }
 
 /**
@@ -19,8 +22,10 @@ const URL_REGEX = /https?:\/\/(?:[-\w.])+(?::[0-9]+)?(?:\/(?:[\w._~:/?#[\]@!$&'(
  * @param text The text to process.
  * @returns HTML string with clickable URLs.
  */
-export function parseMessage(text: string): Array<{ type: 'text' | 'url'; content: string }> {
-  const segments: Array<{ type: 'text' | 'url'; content: string }> = []
+export function parseUrlsFromMessage(
+  text: string
+): Array<{ type: 'text'; escaped: string } | { type: 'url'; escaped: string; url: string }> {
+  const segments: ReturnType<typeof parseUrlsFromMessage> = []
   let lastIndex = 0
   let match: RegExpExecArray | null
 
@@ -29,19 +34,65 @@ export function parseMessage(text: string): Array<{ type: 'text' | 'url'; conten
   while ((match = URL_REGEX.exec(text)) !== null) {
     // Add text before the URL
     if (match.index > lastIndex) {
-      segments.push({ type: 'text', content: text.slice(lastIndex, match.index) })
+      segments.push({ type: 'text', escaped: escapeHtml(text.slice(lastIndex, match.index)) })
     }
 
     // Add the URL
-    segments.push({ type: 'url', content: match[0] })
+    segments.push({ type: 'url', escaped: escapeHtml(match[0]), url: match[0] })
 
     lastIndex = match.index + match[0].length
   }
 
   // Add remaining text
   if (lastIndex < text.length) {
-    segments.push({ type: 'text', content: text.slice(lastIndex) })
+    segments.push({ type: 'text', escaped: escapeHtml(text.slice(lastIndex)) })
   }
 
   return segments
+}
+
+export function parseFullMessage(
+  username: string,
+  message: string,
+  searchQuery?: string | RegExp
+): {
+  escapedUsername: string
+  parsedMessageSegments: Array<
+    { type: 'text'; escaped: string } | { type: 'url'; escaped: string; url: string }
+  >
+} {
+  let processedMessage = message
+  let processedUsername = username
+  let highlight = false
+
+  const markStart = '\uF0000'
+  const markEnd = '\uF0001'
+
+  const replaceMark = (str: string): string =>
+    str.replaceAll(markStart, '<mark>').replaceAll(markEnd, '</mark>')
+
+  if (searchQuery) {
+    highlight = true
+    const fullText = `${username}: ${message}`
+    const markedFullMsg = fullText.replace(searchQuery, (match) => markStart + match + markEnd)
+    const splitIndex = markedFullMsg.indexOf(': ')
+    if (splitIndex !== -1) {
+      processedUsername = markedFullMsg.slice(0, splitIndex)
+      processedMessage = markedFullMsg.slice(splitIndex + 2)
+    } else {
+      console.error('Invalid message format: no ": " found in', markedFullMsg)
+    }
+  }
+
+  const segments = parseUrlsFromMessage(processedMessage).map((segment) => {
+    if (highlight) segment.escaped = replaceMark(segment.escaped)
+    return segment
+  })
+
+  return {
+    escapedUsername: highlight
+      ? replaceMark(escapeHtml(processedUsername))
+      : escapeHtml(processedUsername),
+    parsedMessageSegments: segments
+  }
 }

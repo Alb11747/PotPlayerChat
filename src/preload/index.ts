@@ -5,12 +5,13 @@ import type { WindowApi } from './types'
 // Custom APIs for renderer
 const api: WindowApi = {
   getPotPlayers: () => ipcRenderer.invoke('get-potplayers'),
-  getSelectedPotPlayer: () => ipcRenderer.invoke('get-potplayer-hwnd'),
-  setSelectedPotPlayer: (hwnd) => ipcRenderer.invoke('set-potplayer-hwnd', hwnd),
+  getSelectedPotPlayerHWND: () => ipcRenderer.invoke('get-potplayer-hwnd'),
+  setSelectedPotPlayerHWND: (hwnd) => ipcRenderer.invoke('set-potplayer-hwnd', hwnd),
   getCurrentTime: (hwnd) => ipcRenderer.invoke('get-current-time', hwnd),
   getTotalTime: (hwnd) => ipcRenderer.invoke('get-total-time', hwnd),
   getStreamHistory: () => ipcRenderer.invoke('get-stream-history'),
   openUrl: (url: string) => ipcRenderer.invoke('open-url', url),
+  openSearchWindow: () => ipcRenderer.invoke('open-search-window'),
   getLinkPreview: (url: string) => ipcRenderer.invoke('get-link-preview', url),
   onSetCurrentTime: (callback) => ipcRenderer.on('set-current-time', callback as never),
   offSetCurrentTime: (callback) => ipcRenderer.off('set-current-time', callback as never),

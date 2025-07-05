@@ -4,3 +4,5 @@ declare const tag: unique symbol
 type HWND = {
   readonly [tag]: 'HWND'
 }
+
+export type { HWND }
