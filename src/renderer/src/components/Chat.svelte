@@ -18,7 +18,6 @@
   let isMainPotPlayer = $state(true)
   let vlistRef: VListType<ChatMessage> = $state(null)
   let scrollToBottom = $state(true)
-  let lastScrollOffset: number | null = $state(null)
 
   // Create URL tracker with bloom filter
   let urlTracker = $state(new UrlTracker())
@@ -41,7 +40,10 @@
     const nextMessage =
       lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
 
-    if (messages !== newMessages) messages = newMessages
+    if (messages !== newMessages) {
+      messages = newMessages
+      if (scrollToBottom) vlistRef?.scrollTo(vlistRef.getScrollSize())
+    }
 
     if (nextMessage) {
       const waitTime = videoTimeHistory.getPredictedTimeUntil(nextMessage.timestamp)
@@ -57,36 +59,23 @@
     }
   })
 
-  // Scroll to bottom when messages change
-  $effect(() => {
-    if (!vlistRef || !messages || messages.length === 0) return
-    if (scrollToBottom) vlistRef.scrollToIndex(messages.length - 1, { align: 'end', smooth: false })
-  })
-
   // Handle user scroll detection
   function handleScroll(currentScrollOffset: number): void {
-    const scrolledUp = lastScrollOffset !== null ? currentScrollOffset < lastScrollOffset : false
-    lastScrollOffset = currentScrollOffset
-
-    // If the user scrolls up
-    if (scrolledUp) {
-      if (scrollToBottom) {
-        // console.debug('User scrolled away from bottom, disabling auto-scroll')
-        scrollToBottom = false
-        return
-      }
-    }
-
-    if (!vlistRef || !messages || messages.length === 0 || lastScrollOffset === null) return
+    if (!vlistRef || !messages || messages.length === 0) return
 
     // Check if user is at the bottom
     const isAtBottom =
-      vlistRef.getScrollOffset() + vlistRef.getViewportSize() >= vlistRef.getScrollSize() - 10
+      currentScrollOffset + vlistRef.getViewportSize() >= vlistRef.getScrollSize() - 1
 
     if (isAtBottom) {
       if (!scrollToBottom) {
         // console.debug('User scrolled to bottom, enabling auto-scroll')
         scrollToBottom = true
+      }
+    } else {
+      if (scrollToBottom) {
+        // console.debug('User scrolled away from bottom, disabling auto-scroll')
+        scrollToBottom = false
       }
     }
   }
@@ -152,6 +141,7 @@
       data={messages}
       getKey={(_, i) => i}
       initialTopMostItemIndex={messages.length - 1}
+      shift={true}
       onscroll={handleScroll}
     >
       {#snippet children(msg)}
