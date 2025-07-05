@@ -60,7 +60,7 @@
 
     // Check if user is at the bottom
     const isAtBottom =
-      vlistRef.getScrollOffset() + vlistRef.getViewportSize() >= vlistRef.getScrollSize()
+      vlistRef.getScrollOffset() + vlistRef.getViewportSize() >= vlistRef.getScrollSize() - 10
 
     if (isAtBottom) {
       if (!scrollToBottom) {
