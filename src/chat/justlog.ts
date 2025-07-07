@@ -837,7 +837,7 @@ export class JustLogAPI {
         chatMessage.raw,
         chatMessage.tags,
         chatMessage.id,
-        parseInt(chatMessage.timestamp, 10),
+        Date.parse(chatMessage.timestamp),
         chatMessage.channel,
         chatMessage.username,
         chatMessage.text
