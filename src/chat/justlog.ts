@@ -621,6 +621,7 @@ export class JustLogAPI {
     let response: Response
     let errorMessage: string | null = null
     try {
+      console.debug(`Sending request: ${method} ${url}`)
       response = await fetch(url, fetchOpts)
       if (!response.ok) {
         if (!opts.errorOn404 && response.status === 404) return null
