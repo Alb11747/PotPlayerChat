@@ -4,7 +4,7 @@ export interface IrcMessage {
   command: string
   channel: string
   username?: string
-  text: string
+  text?: string
 }
 
 export function parseIrcMessages(lines: string): IrcMessage[] {
@@ -77,9 +77,9 @@ export function parseIrcMessage(line: string): IrcMessage {
     text = line.slice(ptr + 1)
   }
 
-  if (!command) throw new Error('IRC message must have a command')
-  if (!channel) throw new Error('IRC message must have a channel')
-  if (!text) throw new Error('IRC message must have text')
+  if (!command) throw new Error(`IRC message must have a command: ${line}`)
+  if (!channel) throw new Error(`IRC message must have a channel: ${line}`)
+  if (command === 'PRIVMSG' && !text) throw new Error(`PRIVMSG must have text: ${line}`)
 
   return {
     raw: line,
