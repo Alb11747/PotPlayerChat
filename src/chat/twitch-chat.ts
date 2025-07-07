@@ -37,6 +37,11 @@ export class ChatService {
 
   // Caching chat data per day
   private chatCache: Record<string, { messages: TwitchMessage[]; complete: boolean }> = {}
+  private lastPrefetchRange: {
+    channel: string
+    startTime: number
+    endTime: number
+  } | null = null
 
   // Lock to prevent concurrent fetches for the same cache key
   private fetchLock = new AsyncLock()
@@ -238,6 +243,19 @@ export class ChatService {
     await this.fetchLock.acquire(cacheKey, async () => {
       if (isCached()) return
 
+      // If the last prefetch range overlaps with the current range, skip prefetching
+      if (
+        this.lastPrefetchRange &&
+        this.lastPrefetchRange.channel === channel &&
+        this.lastPrefetchRange.startTime <= startTime &&
+        this.lastPrefetchRange.endTime >= endTime
+      ) {
+        console.debug(
+          `Messages for ${channel} from ${startDate} to ${endDate} are already prefetched`
+        )
+        return
+      }
+
       console.debug(`Prefetching messages for ${channel} from ${startDate} to ${endDate}`)
       const timeLabel = `Prefetched messages for ${channel} from ${startDate} to ${endDate}`
       console.time(timeLabel)
@@ -263,6 +281,11 @@ export class ChatService {
         `Prefetched ${prefetchedMessages.messages.length} messages for ${channel} from ${startTime} to ${endTime}`
       )
       this.currentChatData = prefetchedMessages.messages.sort((a, b) => a.timestamp - b.timestamp)
+      this.lastPrefetchRange = {
+        channel,
+        startTime,
+        endTime
+      }
     })
   }
 
