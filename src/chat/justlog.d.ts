@@ -1,3 +1,5 @@
+import type { TwitchMessage } from './twitch-msg'
+
 export type UsernameToIdFunc = (username: string) => Promise<string | null>
 
 export interface Channel {
@@ -16,15 +18,16 @@ export interface UserLogFile {
   year: number
 }
 
-export interface ChatMessage {
+export interface JustLogChatMessage {
   channel: string
   displayName: string
   id: string
   raw: string
+  systemText?: string
   tags: Record<string, string>
   text: string
   timestamp: string
-  type: number // MessageType
+  type: number // 1 for message, 2 for system message
   username: string
 }
 
@@ -48,8 +51,12 @@ export interface ChannelsDeleteRequest {
   channels: string[] // List of UserIDs
 }
 
+export interface JustLogChatLog {
+  messages: JustLogChatMessage[]
+}
+
 export interface ChatLog {
-  messages: ChatMessage[]
+  messages: TwitchMessage[]
 }
 
 export interface LogList {
