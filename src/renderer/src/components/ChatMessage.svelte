@@ -99,7 +99,7 @@
           </button>
           {#if enablePreviews && showPreviewForUrl === segment.url}
             {#if linkPreviews.has(segment.url)}
-              {#each [linkPreviews.get(segment.url)] as preview ((message.get(), index, preview?.link))}
+              {#each [linkPreviews.get(segment.url)] as preview ((message.getId(), index, preview?.link))}
                 {#if preview && preview.status === 200}
                   <div
                     class="link-preview"
