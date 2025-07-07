@@ -7,6 +7,10 @@ export interface IrcMessage {
   text?: string
 }
 
+export function escapeIrcText(text?: string): string {
+  return text?.replaceAll('\\s', ' ') || ''
+}
+
 export function parseIrcMessages(lines: string): IrcMessage[] {
   return lines
     .split('\n')

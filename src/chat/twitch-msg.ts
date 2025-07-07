@@ -1,10 +1,10 @@
-import type { IrcMessage } from './irc'
+import { escapeIrcText, type IrcMessage } from './irc'
 
 export type TwitchMessage = TwitchChatMessage | TwitchSystemMessage
 
 export class TwitchChatMessage {
-  public static readonly source = 'twitch'
-  public static readonly type = 'message'
+  public readonly source = 'twitch'
+  public readonly type = 'chat'
 
   public readonly raw: string
   public readonly tags: Record<string, string>
@@ -149,8 +149,8 @@ export class TwitchChatMessage {
 }
 
 export class TwitchSystemMessage {
-  public static readonly source = 'twitch'
-  public static readonly type = 'system'
+  public readonly source = 'twitch'
+  public readonly type = 'system'
 
   public readonly raw: string
   public readonly tags: Record<string, string>
@@ -319,13 +319,15 @@ export class TwitchSystemMessage {
     } else if (this.command === 'USERNOTICE') {
       const msgId = this.tags['msg-id']
       const displayName = this.tags['display-name'] || this.tags['login'] || 'Unknown'
-      const systemMsg = this.tags['system-msg']
+      const systemMsg = escapeIrcText(this.tags['system-msg'])
       switch (msgId) {
         case 'sub':
         case 'resub': {
-          const months = this.tags['msg-param-cumulative-months'] || this.tags['msg-param-months']
-          const streak = this.tags['msg-param-streak-months']
-          const planName = this.tags['msg-param-sub-plan-name']
+          const months = escapeIrcText(
+            this.tags['msg-param-cumulative-months'] || this.tags['msg-param-months']
+          )
+          const streak = escapeIrcText(this.tags['msg-param-streak-months'])
+          const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
           let msg = `${displayName} subscribed`
           if (months) msg += ` (${months} months)`
           if (planName) msg += ` with ${planName}`
@@ -334,36 +336,38 @@ export class TwitchSystemMessage {
           return msg
         }
         case 'subgift': {
-          const recipient =
+          const recipient = escapeIrcText(
             this.tags['msg-param-recipient-display-name'] ||
-            this.tags['msg-param-recipient-user-name'] ||
-            'someone'
-          const planName = this.tags['msg-param-sub-plan-name']
+              this.tags['msg-param-recipient-user-name'] ||
+              'someone'
+          )
+          const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
           let msg = `${displayName} gifted a sub to ${recipient}`
           if (planName) msg += ` (${planName})`
           if (systemMsg) msg += `: ${systemMsg}`
           return msg
         }
         case 'submysterygift': {
-          const count = this.tags['msg-param-mass-gift-count']
+          const count = escapeIrcText(this.tags['msg-param-mass-gift-count'])
           let msg = `${displayName} gifted ${count || 'some'} subs to the community`
           if (systemMsg) msg += `: ${systemMsg}`
           return msg
         }
         case 'raid': {
-          const raider = this.tags['msg-param-displayName'] || displayName
-          const viewers = this.tags['msg-param-viewerCount']
+          const raider = escapeIrcText(this.tags['msg-param-displayName'] || displayName)
+          const viewers = escapeIrcText(this.tags['msg-param-viewerCount'])
           let msg = `${raider} is raiding with ${viewers || 'some'} viewers`
           if (systemMsg) msg += `: ${systemMsg}`
           return msg
         }
         case 'bitsbadgetier': {
-          const threshold = this.tags['msg-param-threshold']
+          const threshold = escapeIrcText(this.tags['msg-param-threshold'])
           return `${displayName} just earned a new Bits badge tier: ${threshold}`
         }
         case 'giftpaidupgrade': {
-          const sender =
+          const sender = escapeIrcText(
             this.tags['msg-param-sender-name'] || this.tags['msg-param-sender-login'] || 'someone'
+          )
           return `${displayName} received a gift sub from ${sender}`
         }
         case 'anongiftpaidupgrade': {

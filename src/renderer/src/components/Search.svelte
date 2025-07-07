@@ -52,7 +52,7 @@
       )
       messages = msgs.map((msg) => ({
         ...msg,
-        formattedMessage: `${msg.username}: ${msg.message}`
+        formattedMessage: `${msg.username || ''}: ${msg.message || ''}`
       }))
     } catch (error) {
       console.error('Failed to load messages for search:', error)

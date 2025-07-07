@@ -1,15 +1,8 @@
-import type { WindowApi } from '@/preload/types/index.d.ts'
 import { getMessagesBetween, getMessagesForTime } from '@/chat/chat'
+import type { WindowApi } from '@/preload/types/index.d.ts'
 import type { HWND } from '@/types/globals'
-
-export interface TwitchChatMessage {
-  timestamp: number
-  username: string
-  message: string
-
-  id: string
-  userColor: string
-}
+import { JustLogAPI } from './justlog'
+import type { TwitchMessage } from './twitch-msg'
 
 export interface ChatSettings {
   getJustlogUrl: () => string
@@ -36,12 +29,13 @@ export interface LoadingState {
 
 export class ChatService {
   private api: WindowApi
+  private justLogApi: JustLogAPI
   public lastPotPlayerInfo: PotPlayerInfo | null = null
 
-  private currentChatData: TwitchChatMessage[] = []
+  private currentChatData: TwitchMessage[] = []
 
   // Caching chat data per day
-  private chatCache: Record<string, { messages: TwitchChatMessage[]; complete: boolean }> = {}
+  private chatCache: Record<string, { messages: TwitchMessage[]; complete: boolean }> = {}
 
   // state for UI
   public state: LoadingState
@@ -49,6 +43,8 @@ export class ChatService {
   constructor(api: WindowApi, state: LoadingState) {
     this.api = api
     this.state = state
+
+    this.justLogApi = new JustLogAPI()
   }
 
   public async updateVideoInfo(newPotPlayerInfo: PotPlayerInfo): Promise<void> {
@@ -87,21 +83,28 @@ export class ChatService {
         datesToFetch.push(new Date(currentDate))
       }
 
-      const baseJustlogUrl = settings.getJustlogUrl()
-
       const today = new Date()
       const isSameUTCDate = (d1: Date, d2: Date): boolean =>
         d1.getUTCFullYear() === d2.getUTCFullYear() &&
         d1.getUTCMonth() === d2.getUTCMonth() &&
         d1.getUTCDate() === d2.getUTCDate()
+      const isMsgEqual = (msg1: TwitchMessage, msg2: TwitchMessage): boolean => {
+        if (msg1.id || msg2.id) return msg1.id === msg2.id
+        return (
+          msg1.timestamp === msg2.timestamp &&
+          msg1.channel === msg2.channel &&
+          msg1.username === msg2.username &&
+          msg1.message === msg2.message
+        )
+      }
 
-      const fetchPromises = datesToFetch.map(async (date: Date): Promise<TwitchChatMessage[]> => {
+      const fetchPromises = datesToFetch.map(async (date: Date): Promise<TwitchMessage[]> => {
         const year = date.getUTCFullYear()
         const month = date.getUTCMonth() + 1
         const day = date.getUTCDate()
         const cacheKey = `${channel}:${year}-${month}-${day}`
         const cached = this.chatCache[cacheKey]
-        let cachedMessages: TwitchChatMessage[] | null = null
+        let cachedMessages: TwitchMessage[] | null = null
         let lastTimestamp: number | null = null
         if (cached) {
           cachedMessages = cached.messages
@@ -113,53 +116,52 @@ export class ChatService {
           return cachedMessages
         }
 
-        // Check for new data if the cached data is incomplete (fetched on the same day)
-
-        const complete = !isSameUTCDate(date, today)
-        let justlogUrl = `${baseJustlogUrl}/channel/${encodeURIComponent(channel)}/${year}/${month}/${day}?raw`
-        if (lastTimestamp !== null) justlogUrl += `&from=${lastTimestamp}`
-
-        console.debug(`Fetching chat data from: ${justlogUrl}`)
         try {
-          const response = await window.fetch(justlogUrl)
-          if (response.ok) {
-            const data = await response.text()
-            const newMessages = this.parseChatData(data)
-            let messages: TwitchChatMessage[]
-            if (cachedMessages && lastTimestamp !== null) {
-              const filteredNew = newMessages.filter((msg) => msg.timestamp > lastTimestamp)
+          // Check for new data if the cached data is incomplete (fetched on the same day)
+          const complete = !isSameUTCDate(date, today)
 
-              // If there are new messages with the same timestamp as the last cached message,
-              // we need to ensure we don't duplicate them
-              let overlappedNew = newMessages.filter((msg) => msg.timestamp === lastTimestamp)
-              if (overlappedNew.length > 0) {
-                const overlappedOld = cachedMessages.filter(
-                  (msg) => msg.timestamp === lastTimestamp
-                )
-                // Remove old messages with the same timestamp
-                overlappedNew = overlappedNew.filter(
-                  (msg) => !overlappedOld.some((oldMsg) => oldMsg.id === msg.id)
-                )
-              }
-
-              messages = [...cachedMessages, ...overlappedNew, ...filteredNew]
-              console.debug(
-                `Fetched ${filteredNew.length} new lines from ${year}/${month}/${day} (total: ${messages.length})`
-              )
-            } else {
-              messages = newMessages
-              console.debug(`Fetched ${newMessages.length} lines from ${year}/${month}/${day}`)
-            }
-            this.chatCache[cacheKey] = { messages, complete }
-            return messages
-          } else if (response.status === 404) {
-            console.log(`No chat data found for ${year}/${month}/${day}`)
-            this.chatCache[cacheKey] = { messages: [], complete: false }
-            return []
-          } else {
-            console.warn(`Failed to fetch chat for ${year}/${month}/${day}: ${response.status}`)
+          this.justLogApi.baseApiUrl = settings.getJustlogUrl()
+          console.debug(`Fetching chat for ${channel} on ${year}/${month}/${day}`)
+          const timeLabel = `Fetched chat data for ${channel} on ${year}/${month}/${day}`
+          console.time(timeLabel)
+          const data = await this.justLogApi.getChannelLogsByDate({
+            channelStr: channel,
+            year,
+            month,
+            day
+          })
+          console.timeEnd(timeLabel)
+          if (data == null) {
+            console.warn(`Failed to fetch chat for ${year}/${month}/${day}`)
             return cachedMessages || []
           }
+
+          const newMessages = data.messages
+          let messages: TwitchMessage[]
+          if (cachedMessages && lastTimestamp !== null) {
+            const filteredNew = newMessages.filter((msg) => msg.timestamp > lastTimestamp)
+
+            // If there are new messages with the same timestamp as the last cached message,
+            // we need to ensure we don't duplicate them
+            let overlappedNew = newMessages.filter((msg) => msg.timestamp === lastTimestamp)
+            if (overlappedNew.length > 0) {
+              const overlappedOld = cachedMessages.filter((msg) => msg.timestamp === lastTimestamp)
+              // Remove old messages with the same timestamp
+              overlappedNew = overlappedNew.filter(
+                (msg) => !overlappedOld.some((oldMsg) => isMsgEqual(msg, oldMsg))
+              )
+            }
+
+            messages = [...cachedMessages, ...overlappedNew, ...filteredNew]
+            console.debug(
+              `Fetched ${filteredNew.length} new lines from ${year}/${month}/${day} (total: ${messages.length})`
+            )
+          } else {
+            messages = newMessages
+            console.debug(`Fetched ${newMessages.length} lines from ${year}/${month}/${day}`)
+          }
+          this.chatCache[cacheKey] = { messages, complete }
+          return messages
         } catch (error) {
           console.warn(`Error fetching chat for ${year}/${month}/${day}:`, error)
           return cachedMessages || []
@@ -187,52 +189,11 @@ export class ChatService {
     }
   }
 
-  private parseChatData(rawData: string): TwitchChatMessage[] {
-    const lines = rawData.split('\n')
-    const messages: TwitchChatMessage[] = []
-
-    for (const line of lines) {
-      if (line.trim() === '') continue
-
-      try {
-        // Parse Twitch IRC format
-        // Example: @badge-info=subscriber/8;badges=subscriber/6;client-nonce=abc123;color=#FF69B4;display-name=Username;emotes=;first-msg=0;flags=;id=12345678-1234-1234-1234-123456789012;mod=0;returning-chatter=0;room-id=12345678;subscriber=1;tmi-sent-ts=1698765432123;turbo=0;user-id=87654321;user-type= :username!username@username.tmi.twitch.tv PRIVMSG #channelname :Hello world!
-
-        const tmiMatch = line.match(/tmi-sent-ts=(\d+)/)
-        const usernameMatch = line.match(/display-name=([^;]*)/)
-        const messageMatch = line.match(/PRIVMSG #\w+ :(.+)$/)
-        const idMatch = line.match(/id=([a-zA-Z0-9-]+)/)
-        const colorMatch = line.match(/color=(#[A-Fa-f0-9]{6}|)/)
-
-        if (tmiMatch && messageMatch) {
-          const timestamp = parseInt(tmiMatch[1])
-          const message = messageMatch[1]
-          const username = usernameMatch ? usernameMatch[1] : 'Unknown'
-          const color = colorMatch && colorMatch[1] ? colorMatch[1] : '#FFFFFF'
-          const id = idMatch ? idMatch[1] : `${username}-${timestamp}`
-
-          messages.push({
-            timestamp: timestamp,
-            username: username,
-            message: message,
-            id: `tw-${id}`,
-            userColor: color
-          })
-        }
-      } catch (parseError) {
-        console.warn('Failed to parse chat line:', line, parseError)
-      }
-    }
-
-    // Sort messages by timestamp
-    return messages.sort((a, b) => a.timestamp - b.timestamp)
-  }
-
   public getMessagesAroundTime(
     currentVideoTime: number,
     beforeTime: number,
     afterTime: number
-  ): TwitchChatMessage[] {
+  ): TwitchMessage[] {
     if (this.lastPotPlayerInfo === null) {
       return []
     }
@@ -244,7 +205,7 @@ export class ChatService {
   public async getMessagesForTime(
     currentVideoTime: number,
     next?: boolean
-  ): Promise<TwitchChatMessage[]> {
+  ): Promise<TwitchMessage[]> {
     if (this.lastPotPlayerInfo === null) {
       return []
     }

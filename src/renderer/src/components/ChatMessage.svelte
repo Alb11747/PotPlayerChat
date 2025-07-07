@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TwitchChatMessage } from '@/chat/twitch-chat'
+  import type { TwitchMessage } from '@/chat/twitch-msg'
   import { parseFullMessage } from '@/utils/dom'
   import { linkPreviewService, type LinkPreview } from '@/utils/link-preview'
   import { formatRelativeTime } from '@/utils/strings'
@@ -8,7 +8,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
   interface Props {
-    message: TwitchChatMessage
+    message: TwitchMessage
     videoStartTime: number | null
     urlTracker: UrlTracker
     searchQuery?: string | RegExp
@@ -64,114 +64,122 @@
   <span class="chat-time">
     [{formatRelativeTime(message.timestamp, videoStartTime)}]
   </span>
-  <span class="chat-username" style="color: {message.userColor}">
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html escapedUsername + ': '}
-  </span>
-  <span class="chat-text">
-    {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.id, index))}
-      {#if segment.type === 'url'}
-        <button
-          class="chat-url"
-          class:visited={urlTracker.hasUrl(segment.url)}
-          onclick={() => handleUrlClick(segment.url)}
-          onmouseenter={() => {
-            if (enablePreviews) {
-              showPreviewForUrl = segment.url
-              handleUrlHover(segment.url)
-            }
-          }}
-          onmousemove={(e) => {
-            if (enablePreviews) {
-              mousePosition = { x: e.clientX, y: e.clientY }
-            }
-          }}
-          onmouseleave={() => {
-            if (enablePreviews) {
-              showPreviewForUrl = null
-            }
-          }}
-          type="button"
-        >
+  {#if message.type === 'chat'}
+    <span class="chat-username" style="color: {message.color}">
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+      {@html escapedUsername + ': '}
+    </span>
+    <span class="chat-text">
+      {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.id, index))}
+        {#if segment.type === 'url'}
+          <button
+            class="chat-url"
+            class:visited={urlTracker.hasUrl(segment.url)}
+            onclick={() => handleUrlClick(segment.url)}
+            onmouseenter={() => {
+              if (enablePreviews) {
+                showPreviewForUrl = segment.url
+                handleUrlHover(segment.url)
+              }
+            }}
+            onmousemove={(e) => {
+              if (enablePreviews) {
+                mousePosition = { x: e.clientX, y: e.clientY }
+              }
+            }}
+            onmouseleave={() => {
+              if (enablePreviews) {
+                showPreviewForUrl = null
+              }
+            }}
+            type="button"
+          >
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            {@html segment.escaped}
+          </button>
+          {#if enablePreviews && showPreviewForUrl === segment.url}
+            {#if linkPreviews.has(segment.url)}
+              {#each [linkPreviews.get(segment.url)] as preview ((message.id, index, preview?.link))}
+                {#if preview && preview.status === 200}
+                  <div
+                    class="link-preview"
+                    role="dialog"
+                    tabindex="0"
+                    aria-modal="true"
+                    bind:this={previewElement}
+                    style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
+                  >
+                    {#if preview.thumbnail}
+                      {#if !failedPreviews.has(preview.link)}
+                        <img
+                          src={preview.thumbnail}
+                          onerror={() => {
+                            failedPreviews.add(preview.link)
+                          }}
+                          alt="Link preview"
+                          class="preview-thumbnail"
+                        />
+                      {:else}
+                        <span class="preview-error-text">Image failed to load</span>
+                      {/if}
+                    {/if}
+                    <div class="preview-content">
+                      {#if preview.tooltip}
+                        <div class="preview-tooltip">
+                          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                          {@html sanitizeHtml(preview.tooltip)}
+                        </div>
+                      {/if}
+                      <div class="preview-url">{preview.link}</div>
+                    </div>
+                  </div>
+                {:else if preview && preview.status === 0}
+                  <div
+                    class="link-preview link-preview-error"
+                    role="dialog"
+                    tabindex="0"
+                    aria-modal="true"
+                    bind:this={previewElement}
+                    style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
+                  >
+                    <div class="preview-error-content">
+                      <div class="preview-error-icon">⚠️</div>
+                      <div class="preview-error-text">Failed to load preview</div>
+                      <div class="preview-url">{preview.link}</div>
+                    </div>
+                  </div>
+                {/if}
+              {/each}
+            {:else if linkPreviewService.isLoading(segment.url)}
+              <div
+                class="link-preview link-preview-loading"
+                role="dialog"
+                tabindex="0"
+                aria-modal="true"
+                bind:this={previewElement}
+                style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
+              >
+                <div class="preview-loading-content">
+                  <div class="preview-loading-spinner">⏳</div>
+                  <div class="preview-loading-text">Loading preview...</div>
+                  <div class="preview-url">{segment.url}</div>
+                </div>
+              </div>
+            {/if}
+          {/if}
+        {:else}
           <!-- eslint-disable-next-line svelte/no-at-html-tags -->
           {@html segment.escaped}
-        </button>
-        {#if enablePreviews && showPreviewForUrl === segment.url}
-          {#if linkPreviews.has(segment.url)}
-            {#each [linkPreviews.get(segment.url)] as preview ((message.id, index, preview?.link))}
-              {#if preview && preview.status === 200}
-                <div
-                  class="link-preview"
-                  role="dialog"
-                  tabindex="0"
-                  aria-modal="true"
-                  bind:this={previewElement}
-                  style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
-                >
-                  {#if preview.thumbnail}
-                    {#if !failedPreviews.has(preview.link)}
-                      <img
-                        src={preview.thumbnail}
-                        onerror={() => {
-                          failedPreviews.add(preview.link)
-                        }}
-                        alt="Link preview"
-                        class="preview-thumbnail"
-                      />
-                    {:else}
-                      <span class="preview-error-text">Image failed to load</span>
-                    {/if}
-                  {/if}
-                  <div class="preview-content">
-                    {#if preview.tooltip}
-                      <div class="preview-tooltip">
-                        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                        {@html sanitizeHtml(preview.tooltip)}
-                      </div>
-                    {/if}
-                    <div class="preview-url">{preview.link}</div>
-                  </div>
-                </div>
-              {:else if preview && preview.status === 0}
-                <div
-                  class="link-preview link-preview-error"
-                  role="dialog"
-                  tabindex="0"
-                  aria-modal="true"
-                  bind:this={previewElement}
-                  style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
-                >
-                  <div class="preview-error-content">
-                    <div class="preview-error-icon">⚠️</div>
-                    <div class="preview-error-text">Failed to load preview</div>
-                    <div class="preview-url">{preview.link}</div>
-                  </div>
-                </div>
-              {/if}
-            {/each}
-          {:else if linkPreviewService.isLoading(segment.url)}
-            <div
-              class="link-preview link-preview-loading"
-              role="dialog"
-              tabindex="0"
-              aria-modal="true"
-              bind:this={previewElement}
-              style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
-            >
-              <div class="preview-loading-content">
-                <div class="preview-loading-spinner">⏳</div>
-                <div class="preview-loading-text">Loading preview...</div>
-                <div class="preview-url">{segment.url}</div>
-              </div>
-            </div>
-          {/if}
         {/if}
-      {:else}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-        {@html segment.escaped}
-      {/if}
-    {/each}
-  </span>
+      {/each}
+    </span>
+  {:else if message.type === 'system'}
+    <span class="chat-text chat-system">{message.getSystemText()}</span>
+  {:else}
+    <span class="chat-text">
+      Unknown message type: {message.type}
+    </span>
+  {/if}
 </div>
 
 <style>
@@ -188,13 +196,16 @@
     color: #a9a9a9;
     margin-right: 0.5rem;
   }
-
   .chat-username {
     font-weight: bold;
   }
-
   .chat-text {
     white-space: pre-wrap;
+  }
+  .chat-system {
+    color: #c0c0c0;
+    font-style: italic;
+    font-weight: 500;
   }
 
   .chat-url {
