@@ -64,12 +64,17 @@ export class JustLogAPI {
   }
 
   public async getLogListChannel(
-    channel?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      channelId,
+      channelStr
+    }: {
+      channel?: string | Channel
+      channelId?: string
+      channelStr?: string
+    },
+    { baseUrl }: { baseUrl?: string | null } = {}
   ): Promise<ChannelLogList | null> {
-    const { baseUrl } = opts
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
     const [channelParam, channelValue] = await this.getUsernameOrUserId(
       channelVal,
@@ -93,15 +98,23 @@ export class JustLogAPI {
   }
 
   public async getLogListUser(
-    channel?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    user?: string | Channel | null,
-    userId?: string | null,
-    userStr?: string | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      channelId,
+      channelStr,
+      user,
+      userId,
+      userStr
+    }: {
+      channel?: string | Channel
+      channelId?: string
+      channelStr?: string
+      user?: string | Channel
+      userId?: string
+      userStr?: string
+    },
+    { baseUrl }: { baseUrl?: string | null } = {}
   ): Promise<UserLogList | null> {
-    const { baseUrl } = opts
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
     const [channelParam, channelValue] = await this.getUsernameOrUserId(
       channelVal,
@@ -125,13 +138,22 @@ export class JustLogAPI {
   }
 
   public async getChannelLogs(
-    channel?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    fromTime?: Date | null,
-    toTime?: Date | null,
-    reverse?: boolean | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      channelId,
+      channelStr,
+      fromTime,
+      toTime,
+      reverse
+    }: {
+      channel?: string | Channel
+      channelId?: string
+      channelStr?: string
+      fromTime?: Date
+      toTime?: Date
+      reverse?: boolean
+    },
+    { baseUrl }: { baseUrl?: string } = {}
   ): Promise<ChatLog | null> {
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
     const params = this.argsToDict(fromTime, toTime, reverse)
@@ -149,7 +171,7 @@ export class JustLogAPI {
         url.replace('{channel}', channelValue),
         {
           params,
-          baseUrl: opts.baseUrl
+          baseUrl
         }
       )
 
@@ -163,7 +185,7 @@ export class JustLogAPI {
         url.replace('{channel}', channelValue),
         {
           params,
-          baseUrl: opts.baseUrl
+          baseUrl
         }
       )
 
@@ -177,16 +199,28 @@ export class JustLogAPI {
   }
 
   public async getUserLogs(
-    channel?: string | Channel | null,
-    user?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    userId?: string | null,
-    userStr?: string | null,
-    fromTime?: Date | null,
-    toTime?: Date | null,
-    reverse?: boolean | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      user,
+      channelId,
+      channelStr,
+      userId,
+      userStr,
+      fromTime,
+      toTime,
+      reverse
+    }: {
+      channel?: string | Channel
+      user?: string | Channel
+      channelId?: string
+      channelStr?: string
+      userId?: string
+      userStr?: string
+      fromTime?: Date
+      toTime?: Date
+      reverse?: boolean
+    },
+    { baseUrl }: { baseUrl?: string } = {}
   ): Promise<ChatLog | null> {
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
     const userVal = this.argsToUser(user, userId, userStr, 'user')
@@ -208,7 +242,7 @@ export class JustLogAPI {
       params['raw'] = 'true'
       const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
         params,
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (!rawData || typeof rawData !== 'string') return null
@@ -218,7 +252,7 @@ export class JustLogAPI {
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
         params,
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (!responseData) return null
@@ -231,15 +265,26 @@ export class JustLogAPI {
   }
 
   public async getUserLogsByDate(
-    channel?: string | Channel | null,
-    user?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    userId?: string | null,
-    userStr?: string | null,
-    year?: number | null,
-    month?: number | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      channelId,
+      channelStr,
+      user,
+      userId,
+      userStr,
+      year,
+      month
+    }: {
+      channel?: string | Channel
+      user?: string | Channel
+      channelId?: string
+      channelStr?: string
+      userId?: string
+      userStr?: string
+      year?: number
+      month?: number
+    } = {},
+    { baseUrl }: { baseUrl?: string | null } = {}
   ): Promise<ChatLog | null> {
     if (!year || !month) throw new Error('Year and month are required')
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
@@ -262,7 +307,7 @@ export class JustLogAPI {
     if (this.useRaw) {
       const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
         params: { raw: 'true' },
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (!rawData || typeof rawData !== 'string') return null
@@ -271,7 +316,7 @@ export class JustLogAPI {
       return { messages }
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (!responseData) return null
@@ -286,13 +331,22 @@ export class JustLogAPI {
   }
 
   public async getChannelLogsByDate(
-    channel?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    year?: number | null,
-    month?: number | null,
-    day?: number | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      channelId,
+      channelStr,
+      year,
+      month,
+      day
+    }: {
+      channel?: string | Channel
+      channelId?: string
+      channelStr?: string
+      year?: number
+      month?: number
+      day?: number
+    } = {},
+    { baseUrl }: { baseUrl?: string | null } = {}
   ): Promise<ChatLog | null> {
     if (!year || !month || !day) throw new Error('Year, month and day are required')
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
@@ -306,7 +360,7 @@ export class JustLogAPI {
     if (this.useRaw) {
       const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
         params: { raw: 'true' },
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (!rawData || typeof rawData !== 'string') return null
@@ -315,7 +369,7 @@ export class JustLogAPI {
       return { messages }
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (!responseData) return null
@@ -330,10 +384,16 @@ export class JustLogAPI {
   }
 
   public async getRandomChannelLog(
-    channel?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      channelId,
+      channelStr
+    }: {
+      channel?: string | Channel
+      channelId?: string
+      channelStr?: string
+    } = {},
+    { baseUrl }: { baseUrl?: string | null } = {}
   ): Promise<ChatLog | null> {
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
     const [endpoint, channelValue] = await this.getUsernameOrUserId(
@@ -349,7 +409,7 @@ export class JustLogAPI {
         endpoint.replace('{channel}', channelValue),
         {
           params: { raw: 'true' },
-          baseUrl: opts.baseUrl
+          baseUrl
         }
       )
 
@@ -361,7 +421,7 @@ export class JustLogAPI {
       const responseData = await this.sendRequestJson(
         'GET',
         endpoint.replace('{channel}', channelValue),
-        { baseUrl: opts.baseUrl }
+        { baseUrl }
       )
 
       if (responseData === null) return null
@@ -376,13 +436,22 @@ export class JustLogAPI {
   }
 
   public async getRandomUserLog(
-    channel?: string | Channel | null,
-    user?: string | Channel | null,
-    channelId?: string | null,
-    channelStr?: string | null,
-    userId?: string | null,
-    userStr?: string | null,
-    opts: { baseUrl?: string | null } = {}
+    {
+      channel,
+      channelId,
+      channelStr,
+      user,
+      userId,
+      userStr
+    }: {
+      channel?: string | Channel
+      channelId?: string
+      channelStr?: string
+      user?: string | Channel
+      userId?: string
+      userStr?: string
+    } = {},
+    { baseUrl }: { baseUrl?: string | null } = {}
   ): Promise<ChatLog | null> {
     const channelVal = this.argsToUser(channel, channelId, channelStr, 'channel')
     const userVal = this.argsToUser(user, userId, userStr, 'user')
@@ -404,7 +473,7 @@ export class JustLogAPI {
     if (this.useRaw) {
       const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
         params: { raw: 'true' },
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (!rawData || typeof rawData !== 'string') return null
@@ -413,7 +482,7 @@ export class JustLogAPI {
       return { messages }
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
-        baseUrl: opts.baseUrl
+        baseUrl
       })
 
       if (responseData === null) return null
