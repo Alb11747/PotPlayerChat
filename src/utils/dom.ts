@@ -83,12 +83,28 @@ const replaceMark = (str: string): string =>
  */
 function correctMarks(str: string): string {
   // Ensure marks are correctly closed
-  const openCount = (str.match(markStartRegex) || []).length
-  const closeCount = (str.match(markEndRegex) || []).length
-  if (openCount > closeCount) {
-    return str + markEnd.repeat(openCount - closeCount)
-  } else if (closeCount > openCount) {
-    return markStart.repeat(closeCount - openCount) + str
+  const firstOpenIndex = str.indexOf(markStart)
+  const firstCloseIndex = str.indexOf(markEnd)
+  const lastOpenIndex = str.lastIndexOf(markStart)
+  const lastCloseIndex = str.lastIndexOf(markEnd)
+  if (firstOpenIndex === -1 && firstCloseIndex === -1) {
+    // No marks at all
+    return str
+  } else if (firstOpenIndex === -1 || firstCloseIndex === -1) {
+    // If one type of mark is missing, add it
+    if (firstOpenIndex === -1) {
+      // No opening mark, add one at the start
+      return markStart + str
+    } else if (firstCloseIndex === -1) {
+      // No closing mark, add one at the end
+      return str + markEnd
+    }
+  } else if (firstOpenIndex < firstCloseIndex) {
+    // Opening mark comes before closing mark
+    return str + markEnd
+  } else if (lastOpenIndex > lastCloseIndex) {
+    // Last opening mark comes after last closing mark
+    return markStart + str
   }
   return str
 }
@@ -132,7 +148,16 @@ export function parseFullMessage(
     }
   }
 
+  let markDepth = 0
   const segments = parseUrlsFromMessage(processedMessage).map((segment) => {
+    const openCount = (segment.escaped.match(markStartRegex) || []).length
+    const closeCount = (segment.escaped.match(markEndRegex) || []).length
+    const lastMarkDepth = markDepth
+    markDepth += openCount - closeCount
+    if (lastMarkDepth > 0 && markDepth > 0) {
+      // The current segment is nested inside marks
+      segment.escaped = markStart + segment.escaped + markEnd
+    }
     if (highlight) segment.escaped = replaceMark(correctMarks(segment.escaped))
     return segment
   })
