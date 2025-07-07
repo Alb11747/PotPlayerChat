@@ -1,5 +1,5 @@
 import { validatePropertiesExist } from '@/utils/objects'
-import { parseIrcMessages } from './irc'
+import { parseIrcMessage, parseIrcMessages } from './irc'
 import type {
   AllChannelsJSON,
   Channel,
@@ -842,18 +842,9 @@ export class JustLogAPI {
         chatMessage.username,
         chatMessage.text
       )
-    } else if (chatMessage.type === 2) {
-      return new TwitchSystemMessage(
-        chatMessage.raw,
-        chatMessage.tags,
-        parseInt(chatMessage.timestamp, 10),
-        undefined,
-        chatMessage.channel,
-        chatMessage.username,
-        chatMessage.systemText || chatMessage.text
-      )
     }
-    throw new Error(`Unsupported chat message type: ${chatMessage.type}`)
+
+    return TwitchSystemMessage.fromIrcMessage(parseIrcMessage(chatMessage.raw))
   }
 
   private convertJustLogChatMessagesToTwitchMessages(
