@@ -32,6 +32,10 @@ export class TwitchChatMessage {
     this.message = message
   }
 
+  public getId(): string {
+    return this.id
+  }
+
   // Optional Twitch tags as getters
   get displayName(): string | undefined {
     return this.tags['display-name']
@@ -160,6 +164,8 @@ export class TwitchSystemMessage {
   public readonly message?: string
   public readonly systemText?: string
 
+  private tempId: string | undefined
+
   constructor(
     raw: string,
     tags: Record<string, string>,
@@ -176,6 +182,12 @@ export class TwitchSystemMessage {
     this.channel = channel
     this.message = message
     this.systemText = systemText
+  }
+
+  public getId(): string {
+    if (this.id) return this.id
+    if (this.tempId) return this.tempId
+    return (this.tempId = `${this.timestamp}-${this.command || 'unknown'}-${this.channel}-${this.message || ''}`)
   }
 
   public getSystemText(lastRoomStateTags?: Record<string, string>): string {

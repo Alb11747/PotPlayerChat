@@ -70,7 +70,7 @@
       {@html escapedUsername + ': '}
     </span>
     <span class="chat-text">
-      {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.id, index))}
+      {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.getId(), index))}
         {#if segment.type === 'url'}
           <button
             class="chat-url"
@@ -99,7 +99,7 @@
           </button>
           {#if enablePreviews && showPreviewForUrl === segment.url}
             {#if linkPreviews.has(segment.url)}
-              {#each [linkPreviews.get(segment.url)] as preview ((message.id, index, preview?.link))}
+              {#each [linkPreviews.get(segment.url)] as preview ((message.get(), index, preview?.link))}
                 {#if preview && preview.status === 200}
                   <div
                     class="link-preview"

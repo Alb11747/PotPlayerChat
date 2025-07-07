@@ -154,7 +154,7 @@
       <VList
         bind:this={vlistRef}
         data={filteredMessages}
-        getKey={(_, i) => messages[i].id}
+        getKey={(_, i) => messages[i].getId()}
         itemSize={80}
       >
         {#snippet children(msg)}

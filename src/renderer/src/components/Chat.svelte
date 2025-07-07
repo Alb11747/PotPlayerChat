@@ -141,7 +141,7 @@
     <VList
       bind:this={vlistRef}
       data={messages}
-      getKey={(_, i) => messages[i].id}
+      getKey={(_, i) => messages[i].getId()}
       initialTopMostItemIndex={messages.length - 1}
       onscroll={handleScroll}
       ssrCount={20}
