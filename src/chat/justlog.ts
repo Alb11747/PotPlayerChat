@@ -1,4 +1,3 @@
-import { isDev } from '@/utils/env'
 import { validatePropertiesExist } from '@/utils/objects'
 import { parseIrcMessages } from './irc'
 import type {
@@ -32,7 +31,7 @@ export class JustLogAPI {
     headers?: Record<string, string>,
     usernameToIdFunc?: UsernameToIdFunc,
     useRaw: boolean = true,
-    isStrict: boolean = isDev()
+    isStrict: boolean = true
   ) {
     // Remove trailing slashes from baseApiUrl
     this.baseApiUrl = baseApiUrl ? baseApiUrl.replace(/\/+$|\/$/, '') : undefined
