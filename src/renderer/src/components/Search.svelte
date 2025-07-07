@@ -50,10 +50,10 @@
         60 * 60 * 1000, // 1 hour before
         5 * 60 * 1000 // 5 minutes after
       )
-      messages = msgs.map((msg) => ({
-        ...msg,
-        formattedMessage: `${msg.username || ''}: ${msg.message || ''}`
-      }))
+      msgs.forEach((msg) => {
+        msg.formattedMessage = `${msg.username || ''}: ${msg.message || ''}`
+      })
+      messages = msgs
     } catch (error) {
       console.error('Failed to load messages for search:', error)
     }
@@ -154,7 +154,7 @@
       <VList
         bind:this={vlistRef}
         data={filteredMessages}
-        getKey={(_, i) => messages[i].getId()}
+        getKey={(_, i) => filteredMessages[i].getId()}
         itemSize={80}
       >
         {#snippet children(msg)}
