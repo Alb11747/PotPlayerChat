@@ -9,6 +9,8 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "allowJs": true,
+    "checkJs": true,
     "sourceMap": true,
     "verbatimModuleSyntax": true,
     "useDefineForClassFields": true,
