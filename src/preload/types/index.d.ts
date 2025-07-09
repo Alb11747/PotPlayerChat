@@ -11,6 +11,9 @@ declare global {
 }
 
 export interface WindowApi {
+  loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
+  saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
+  loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
   getPotPlayers: () => Promise<{ hwnd: HWND; title: string }[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>

@@ -4,6 +4,10 @@ import type { WindowApi } from './types'
 
 // Custom APIs for renderer
 const api: WindowApi = {
+  loadDataFile: (subpath: string) => ipcRenderer.invoke('load-data-file', subpath),
+  saveDataFile: (subpath: string, value: unknown) =>
+    ipcRenderer.invoke('save-data-file', subpath, value),
+  loadKeys: () => ipcRenderer.invoke('load-keys'),
   getPotPlayers: () => ipcRenderer.invoke('get-potplayers'),
   getSelectedPotPlayerHWND: () => ipcRenderer.invoke('get-potplayer-hwnd'),
   setSelectedPotPlayerHWND: (hwnd) => ipcRenderer.invoke('set-potplayer-hwnd', hwnd),

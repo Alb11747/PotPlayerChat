@@ -1,8 +1,10 @@
 import type { HWND } from '@/types/globals'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { loadDataFile, saveDataFile } from './storage'
 
 import { RecentValue } from '@/utils/state'
+import AsyncLock from 'async-lock'
 import { join } from 'path'
 import {
   getCurrentTime,
@@ -23,6 +25,35 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
+  })
+
+  const lock = new AsyncLock()
+
+  ipcMain.handle('load-data-file', async (_event, subpath: string) => {
+    return await loadDataFile(subpath)
+  })
+
+  ipcMain.handle('save-data-file', async (_event, subpath: string, value: unknown) => {
+    await saveDataFile(subpath, value)
+    return true
+  })
+
+  const keysCache: { twitch?: { clientId: string; clientSecret: string } | null } = {}
+
+  ipcMain.handle('load-keys', async () => {
+    return await lock.acquire('keysCache', async () => {
+      if (keysCache.twitch === undefined) {
+        const twitchKeys = (await loadDataFile<{ clientId: string; clientSecret: string }>(
+          'twitch-keys.json'
+        )) || {
+          clientId: '',
+          clientSecret: ''
+        }
+        if (twitchKeys.clientId) keysCache.twitch = twitchKeys
+        else keysCache.twitch = null
+      }
+      return keysCache
+    })
   })
 
   let selectedPotplayerHwnd: HWND | null = null
