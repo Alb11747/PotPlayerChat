@@ -1,9 +1,7 @@
 <script lang="ts">
   import type { TwitchChatMessage } from '@/chat/twitch-chat'
   import type {} from '@/preload/types/index.d.ts'
-  import { chatService, updateSelectedPotPlayerInfo } from '@/renderer/src/stores/chat-state.svelte'
-  import type { HWND } from '@/types/globals'
-  import { UrlTracker } from '@/utils/url-tracker'
+  import { chatService, updateSelectedPotPlayerInfo } from '@/renderer/src/state/chat-state.svelte'
   import { onMount } from 'svelte'
   import { VList } from 'virtua/svelte'
   import ChatMessage from './ChatMessage.svelte'

@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { TwitchMessage } from '@/chat/twitch-msg'
-  import { parseFullMessage } from '@/utils/dom'
-  import { linkPreviewService, type LinkPreview } from '@/utils/link-preview'
+  import { parseFullMessage } from '@/renderer/src/core/chat-dom'
   import { formatRelativeTime } from '@/utils/strings'
   import { UrlTracker } from '@/utils/url-tracker'
   import sanitizeHtml from 'sanitize-html'

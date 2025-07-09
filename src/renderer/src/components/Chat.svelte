@@ -10,7 +10,8 @@
     loadingState,
     potplayerInstances,
     selectedPotplayerInfo
-  } from '../stores/chat-state.svelte'
+  } from '../state/chat-state.svelte'
+  import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
   const videoTimeHistory = new CurrentVideoTimeHistory()
