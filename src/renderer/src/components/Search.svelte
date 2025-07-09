@@ -32,10 +32,6 @@
   let vlistRef: VList<unknown> | null = $state(null)
   let searchInputRef: HTMLInputElement | null = $state(null)
   let selectedPotplayerInfo: PotPlayerInstance | null = $state(null)
-  let videoStartTime: number | null = $state(null)
-
-  // Create URL tracker with bloom filter
-  let urlTracker = $state(new UrlTracker())
 
   // Load all messages when component mounts
   onMount(loadAllMessages)
@@ -58,7 +54,6 @@
         return
       }
       await updateSelectedPotPlayerInfo(selectedPotplayerInfo)
-      videoStartTime = chatService.lastPotPlayerInfo?.startTime || null
 
       // Get a wide time range to capture all messages
       const currentTime = await window.api.getCurrentTime(selectedPotplayerInfo.hwnd)
@@ -183,7 +178,8 @@
           >
             <ChatMessage
               message={msg}
-              {videoStartTime}
+              videoStartTime={chatService?.lastPotPlayerInfo?.startTime}
+              videoEndTime={chatService?.lastPotPlayerInfo?.endTime}
               {urlTracker}
               searchQuery={searchPattern}
               onUrlClick={handleUrlClick}

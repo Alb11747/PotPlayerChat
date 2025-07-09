@@ -1,14 +1,14 @@
 <script lang="ts">
   import type { TwitchMessage } from '@/chat/twitch-msg'
   import { parseFullMessage } from '@/renderer/src/core/chat-dom'
-  import { formatRelativeTime } from '@/utils/strings'
-  import { UrlTracker } from '@/utils/url-tracker'
+  import { formatTime } from '@/utils/strings'
   import sanitizeHtml from 'sanitize-html'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
   interface Props {
     message: TwitchMessage
     videoStartTime?: number
+    videoEndTime?: number
     urlTracker: UrlTracker
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
@@ -18,6 +18,7 @@
   let {
     message,
     videoStartTime,
+    videoEndTime,
     urlTracker,
     searchQuery,
     onUrlClick,
@@ -61,7 +62,7 @@
 
 <div class="chat-message">
   <span class="chat-time">
-    [{formatRelativeTime(message.timestamp, videoStartTime ?? null)}]
+    {formatTime(message.timestamp, videoStartTime, videoEndTime)}
   </span>
   {#if message.type === 'chat'}
     <span class="chat-username" style="color: {message.color}">

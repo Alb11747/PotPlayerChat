@@ -149,6 +149,7 @@
         <ChatMessage
           message={msg}
           videoStartTime={selectedPotplayerInfo.startTime}
+          videoEndTime={selectedPotplayerInfo.endTime}
           {urlTracker}
           onUrlClick={handleUrlClick}
           enablePreviews={true}

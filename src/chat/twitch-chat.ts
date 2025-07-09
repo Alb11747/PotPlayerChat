@@ -21,6 +21,7 @@ export interface PotPlayerInfo {
   channel: string
   title: string
   startTime: number
+  endTime?: number
 }
 
 export interface LoadingState {
