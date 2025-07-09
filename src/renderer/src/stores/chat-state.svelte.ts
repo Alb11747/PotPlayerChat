@@ -21,6 +21,7 @@ async function onPotPlayerInstancesChanged(
 
   const currentMainInstance = instances.find((i) => i.selected)
   if (!currentMainInstance) return
+  selectedPotplayerInfo.hwnd = currentMainInstance.hwnd
   await updateSelectedPotPlayerInfo(currentMainInstance)
 }
 

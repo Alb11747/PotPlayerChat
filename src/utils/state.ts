@@ -36,3 +36,21 @@ export function updateCache<K extends string | number | symbol, V>(
     cache[key] = data
   }
 }
+
+export class RecentValue<T> {
+  private values: T[] = []
+
+  public add(value: T): void {
+    const index = this.values.indexOf(value)
+    if (index !== -1) this.values.splice(index, 1)
+    this.values.push(value)
+  }
+
+  public getRecent(): T | null {
+    return this.values.length > 0 ? this.values[this.values.length - 1] : null
+  }
+
+  public filter(other: T[]): void {
+    this.values = this.values.filter((v) => other.includes(v))
+  }
+}

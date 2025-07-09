@@ -2,6 +2,7 @@ import type { HWND } from '@/types/globals'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
+import { RecentValue } from '@/utils/state'
 import { join } from 'path'
 import {
   getCurrentTime,
@@ -25,7 +26,7 @@ function createWindow(): void {
   })
 
   let selectedPotplayerHwnd: HWND | null = null
-  let lastActivePotplayerHwnd: HWND | null = null
+  const lastActivePotplayerHwnd = new RecentValue<HWND>()
 
   async function sendPotplayerInstancesChanged(
     potplayerInstances: { hwnd: HWND; title: string }[],
@@ -42,7 +43,7 @@ function createWindow(): void {
   }
 
   function getPotplayerHwnd(): HWND | null {
-    return selectedPotplayerHwnd || lastActivePotplayerHwnd
+    return selectedPotplayerHwnd || lastActivePotplayerHwnd.getRecent()
   }
 
   ipcMain.handle('get-potplayer-hwnd', async () => {
@@ -62,18 +63,16 @@ function createWindow(): void {
   let potplayerInstancesDebounceTimeoutId: NodeJS.Timeout | null = null
   let potplayerInstances: PotPlayerInstance[] = []
 
-  async function updatePotplayerInstances(update: boolean = true): Promise<boolean> {
-    if (potplayerInstancesDebounceTimeoutId) return false
+  async function updatePotplayerInstances(): Promise<void> {
+    if (potplayerInstancesDebounceTimeoutId) return
     potplayerInstancesDebounceTimeoutId = setTimeout(() => {
       potplayerInstancesDebounceTimeoutId = null
     }, 50)
 
-    let changed = false
     const instances = await getPotPlayerInstances()
     console.debug(`Found ${instances.length} PotPlayer instance(s)`)
-    if (update && potplayerInstances !== instances) {
+    if (potplayerInstances !== instances) {
       potplayerInstances = instances
-      changed = true
 
       // If the selected PotPlayer instance is not in the list, set it to null
       if (selectedPotplayerHwnd) {
@@ -81,22 +80,18 @@ function createWindow(): void {
         if (!exists) selectedPotplayerHwnd = null
       }
 
-      // If the last active instance is not in the list, set it to null
-      if (lastActivePotplayerHwnd) {
-        const exists = potplayerInstances.some((i) => i.hwnd === lastActivePotplayerHwnd)
-        if (!exists) lastActivePotplayerHwnd = null
-      }
+      // If the last active instance is not in the list, remove it
+      lastActivePotplayerHwnd.filter(potplayerInstances.map((i) => i.hwnd))
 
       // If there is only one instance, select it automatically
       if (potplayerInstances.length === 1 && selectedPotplayerHwnd === null)
         selectedPotplayerHwnd = potplayerInstances[0].hwnd
 
-      if (update) await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
+      await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
     }
 
     if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
     potplayerIntervalId = setTimeout(updatePotplayerInstances, 5 * 60 * 1000) // Update every 5 minutes
-    return changed
   }
 
   let currentTimeIntervalId: NodeJS.Timeout | null = null
@@ -113,20 +108,28 @@ function createWindow(): void {
         }
       }, 1000)
     }
+
     if (!potplayerIntervalId) {
       updatePotplayerInstances()
     }
+
+    // Poll for active PotPlayer instance
     if (!activePotplayerIntervalId) {
       activePotplayerIntervalId = setInterval(async () => {
         const focusedWindow = await getForegroundWindow()
         if (!focusedWindow) return
+        // Check if the focused window is a PotPlayer instance
         for (const instance of potplayerInstances) {
           if (focusedWindow === instance.hwnd) {
-            if (lastActivePotplayerHwnd !== instance.hwnd) {
-              lastActivePotplayerHwnd = instance.hwnd
-              if (selectedPotplayerHwnd === null) {
-                await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
-              }
+            if (lastActivePotplayerHwnd.getRecent() !== instance.hwnd) {
+              lastActivePotplayerHwnd.add(instance.hwnd)
+
+              // If the selected PotPlayer instance is not set, that means we are using the last active one
+              if (selectedPotplayerHwnd === null)
+                await sendPotplayerInstancesChanged(
+                  potplayerInstances,
+                  lastActivePotplayerHwnd.getRecent()
+                )
             }
           }
         }
