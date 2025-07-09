@@ -8,31 +8,30 @@
     }
   ],
   "compilerOptions": {
-    "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "strictNullChecks": true,
-    "noImplicitAny": true,
+    "sourceMap": true,
+    "forceConsistentCasingInFileNames": true,
+
     "alwaysStrict": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true,
     "strictBindCallApply": true,
+    "strictBuiltinIteratorReturn": true,
     "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "useUnknownInCatchVariables": true,
     "strict": true,
+
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "src/*"
-      ],
-    },
-    "typeRoots": [
-      "./node_modules/@types",
-      "src/types",
-      "src/renderer/types"
-    ]
+      "@/*": ["src/*"]
+    }
   },
-  "exclude": [
-    "node_modules",
-    "build",
-    "out"
-  ]
+  "exclude": ["node_modules", "build", "out"]
 }

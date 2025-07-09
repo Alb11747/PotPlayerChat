@@ -1,31 +1,36 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
   "include": [
-    "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
-    "src/renderer/src/**/*.svelte",
-    "src/preload/types/**/*",
-    "src/chat/**/*",
     "src/utils/**/*",
+    "src/chat/**/*",
     "src/types/**/*",
+    "src/preload/types/**/*"
   ],
   "compilerOptions": {
+    "composite": true,
+    "sourceMap": true,
     "verbatimModuleSyntax": true,
     "useDefineForClassFields": true,
+
+    "alwaysStrict": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "strictBindCallApply": true,
+    "strictBuiltinIteratorReturn": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "useUnknownInCatchVariables": true,
     "strict": true,
-    "allowJs": true,
-    "checkJs": true,
-    "lib": [
-      "ESNext",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "composite": true,
+
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "src/*"
-      ]
+      "@/*": ["src/*"]
     }
   }
 }
