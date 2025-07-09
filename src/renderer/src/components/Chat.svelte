@@ -9,24 +9,17 @@
     chatService,
     loadingState,
     potplayerInstances,
-    selectedPotplayerInfo,
-    setPotPlayerHwnd
+    selectedPotplayerInfo
   } from '../stores/chat-state.svelte'
   import ChatMessage from './ChatMessage.svelte'
 
-  let messages: TwitchChatMessage[] = $state([])
-  let isMainPotPlayer = $state(true)
-  let vlistRef: VListType<unknown> = $state(null)
-  let scrollToBottom = $state(true)
-
-  // Create URL tracker with bloom filter
-  let urlTracker = $state(new UrlTracker())
-
   const videoTimeHistory = new CurrentVideoTimeHistory()
-  window.api.onSetCurrentTime((_: Event, time: number) => {
-    videoTimeHistory.addSample(time)
-    updateChatMessages()
-  })
+  let urlTracker = $state.raw(new UrlTracker())
+
+  let vlistRef: VListType<unknown> = $state(null)
+  let messages: TwitchChatMessage[] = $state.raw([])
+  let isMainPotPlayer = $state(true)
+  let scrollToBottom = $state(true)
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(): Promise<void> {
@@ -53,17 +46,24 @@
     }
   }
 
+  function onCurrentTime(_: Event, time: number): void {
+    videoTimeHistory.addSample(time)
+    updateChatMessages()
+  }
+
   onMount(() => {
     updateChatMessages()
-    vlistRef?.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
+    window.api.onSetCurrentTime(onCurrentTime)
+
     return () => {
       if (chatIntervalId) clearTimeout(chatIntervalId)
+      window.api.offSetCurrentTime(onCurrentTime)
     }
   })
 
   // Handle user scroll detection
   function handleScroll(currentScrollOffset: number): void {
-    if (!vlistRef || !messages || messages.length === 0) return
+    if (!vlistRef) return
 
     // Check if user is at the bottom
     const isAtBottom =
@@ -85,6 +85,7 @@
   // Handle URL click
   function handleUrlClick(url: string): void {
     urlTracker.addUrl(url)
+    urlTracker = urlTracker // Trigger reactivity
     window.api.openUrl(url)
   }
 
@@ -105,17 +106,15 @@
   })
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="header" onkeydown={handleKeydown}>
+<div class="header" role="presentation" onkeydown={handleKeydown}>
   <div class="instances">
     <button
       class:main={isMainPotPlayer}
       onclick={() => {
         isMainPotPlayer = true
-        setPotPlayerHwnd(null)
+        window.api.setSelectedPotPlayerHWND(null)
       }}
       aria-pressed={isMainPotPlayer}
-      style="cursor: pointer;"
     >
       Main
     </button>
@@ -125,10 +124,9 @@
         class:main={inst.hwnd === selectedPotplayerInfo.hwnd}
         onclick={() => {
           isMainPotPlayer = false
-          setPotPlayerHwnd(inst.hwnd)
+          window.api.setSelectedPotPlayerHWND(inst.hwnd)
         }}
         aria-pressed={inst.hwnd === selectedPotplayerInfo.hwnd}
-        style="cursor: pointer;"
       >
         {inst.title}
       </button>
@@ -137,7 +135,7 @@
 </div>
 
 <div class="chat-container">
-  {#if messages}
+  {#if messages && messages.length > 0}
     <VList
       bind:this={vlistRef}
       data={messages}
@@ -157,13 +155,23 @@
       {/snippet}
     </VList>
   {:else if loadingState?.state === 'loading'}
-    <div class="chat-message system">Loading chat...</div>
+    <div class="chat-message system center">Loading chat...</div>
   {:else if loadingState?.state === 'error'}
-    <div class="chat-message error">{loadingState.errorMessage}</div>
+    <div class="chat-message error center">{loadingState.errorMessage}</div>
   {:else if loadingState?.state === 'channel-not-found'}
-    <div class="chat-message system">Channel not found.</div>
+    <div class="chat-message system center">Channel not found.</div>
+  {:else if !selectedPotplayerInfo.hwnd}
+    <div class="chat-message system center">No PotPlayer instance selected.</div>
+  {:else if !selectedPotplayerInfo.startTime}
+    <div class="chat-message system center">
+      No start time set for the selected PotPlayer instance.
+    </div>
   {:else}
-    <div class="chat-message system">Unknown error occurred.</div>
+    <div class="chat-message system">
+      Unknown error occurred.<br />
+      <span>Loading state: {JSON.stringify(loadingState)}</span><br />
+      <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
+    </div>
   {/if}
 </div>
 
@@ -241,5 +249,12 @@
     font-size: 108%;
     box-sizing: border-box;
     user-select: text;
+  }
+
+  .center {
+    display: flex;
+    text-align: center;
+    justify-content: center;
+    align-items: center;
   }
 </style>

@@ -41,6 +41,7 @@ function createWindow(): void {
   })
 
   ipcMain.handle('set-potplayer-hwnd', async (_event, hwnd: HWND) => {
+    await updatePotplayerInstances()
     if (selectedPotplayerHwnd !== hwnd) {
       const lastSelected = getPotplayerHwnd()
       selectedPotplayerHwnd = hwnd

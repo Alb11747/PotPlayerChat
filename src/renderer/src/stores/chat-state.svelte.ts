@@ -9,10 +9,6 @@ export const loadingState: LoadingState = $state({ state: 'idle', errorMessage: 
 
 export const chatService = new ChatService(window.api, loadingState)
 
-export async function setPotPlayerHwnd(hwnd: HWND): Promise<void> {
-  await window.api.setSelectedPotPlayerHWND(hwnd)
-}
-
 async function onPotPlayerInstancesChanged(
   instances: { hwnd: HWND; title: string; selected?: boolean }[]
 ): Promise<void> {
