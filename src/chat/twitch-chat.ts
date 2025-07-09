@@ -62,7 +62,7 @@ export class ChatService {
 
     this.lastPotPlayerInfo = { ...newPotPlayerInfo }
     this.currentChatData = []
-    this.state.state = 'idle'
+    this.state.state = 'loading'
     this.state.errorMessage = ''
 
     // Delay loading to allow prefetching

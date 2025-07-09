@@ -52,6 +52,12 @@
     updateChatMessages()
   }
 
+  $effect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    chatService?.state.state // Trigger reactivity when chat service state changes
+    updateChatMessages()
+  })
+
   onMount(() => {
     updateChatMessages()
     window.api.onSetCurrentTime(onCurrentTime)
