@@ -11,7 +11,7 @@ import type {
   UserLogFile,
   UserLogList,
   UsernameToIdFunc
-} from './justlog.d'
+} from './types/justlog'
 import { TwitchChatMessage, TwitchSystemMessage, type TwitchMessage } from './twitch-msg'
 
 export class JustLogAPI {

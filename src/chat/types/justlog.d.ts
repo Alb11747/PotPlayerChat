@@ -1,4 +1,4 @@
-import type { TwitchMessage } from './twitch-msg'
+import type { TwitchMessage } from '../twitch-msg'
 
 export type UsernameToIdFunc = (username: string) => Promise<string | null>
 
