@@ -94,15 +94,15 @@ export class ChatService {
           const cached = this.chatCache[cacheKey]
           let cachedMessages: TwitchMessage[] | null = null
           let lastTimestamp: number | null = null
-          if (cached) {
+          if (cached && cached.messages) {
             cachedMessages = cached.messages
             lastTimestamp =
-              cachedMessages.length > 0 ? cachedMessages[cachedMessages.length - 1].timestamp : null
+              cachedMessages.length > 0
+                ? (cachedMessages[cachedMessages.length - 1]?.timestamp ?? null)
+                : null
           }
 
-          if (cachedMessages !== null && cached.complete) {
-            return cachedMessages
-          }
+          if (cachedMessages !== null && cached?.complete) return cachedMessages
 
           try {
             // Check for new data if the cached data is incomplete (fetched on the same day)

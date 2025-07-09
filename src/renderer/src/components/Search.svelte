@@ -1,19 +1,37 @@
 <script lang="ts">
-  import type { TwitchChatMessage } from '@/chat/twitch-chat'
+  import { TwitchChatMessage } from '@/chat/twitch-msg'
+  import type { PotPlayerInstance } from '@/main/potplayer'
   import type {} from '@/preload/types/index.d.ts'
   import { chatService, updateSelectedPotPlayerInfo } from '@/renderer/src/state/chat-state.svelte'
   import { onMount } from 'svelte'
   import { VList } from 'virtua/svelte'
   import ChatMessage from './ChatMessage.svelte'
 
+  class TwitchMessageFormatted extends TwitchChatMessage {
+    formattedMessage: string
+
+    constructor(message: TwitchChatMessage) {
+      super(
+        message.raw,
+        message.tags,
+        message.id,
+        message.timestamp,
+        message.channel,
+        message.username,
+        message.message
+      )
+      this.formattedMessage = `${message.username || ''}: ${message.message || ''}`
+    }
+  }
+
   let searchQuery = $state('')
   let caseSensitive = $state(false)
   let useRegex = $state(false)
-  let messages: TwitchChatMessage[] & { formattedMessage: string } = $state([])
-  let filteredMessages: TwitchChatMessage[] = $state([])
-  let vlistRef: VList | null = $state(null)
+  let messages: TwitchMessageFormatted[] = $state([])
+  let filteredMessages: TwitchMessageFormatted[] = $state([])
+  let vlistRef: VList<unknown> | null = $state(null)
   let searchInputRef: HTMLInputElement | null = $state(null)
-  let selectedPotplayerInfo: { hwnd: HWND; title: string } | null = $state(null)
+  let selectedPotplayerInfo: PotPlayerInstance | null = $state(null)
   let videoStartTime: number | null = $state(null)
 
   // Create URL tracker with bloom filter
@@ -33,7 +51,8 @@
     try {
       const selectedPotplayerHwnd = await window.api.getSelectedPotPlayerHWND()
       const potplayerInstances = await window.api.getPotPlayers()
-      selectedPotplayerInfo = potplayerInstances.find((p) => p.hwnd === selectedPotplayerHwnd)
+      selectedPotplayerInfo =
+        potplayerInstances.find((p) => p.hwnd === selectedPotplayerHwnd) ?? null
       if (!selectedPotplayerInfo) {
         console.warn('No selected PotPlayer instance found')
         return
@@ -49,9 +68,10 @@
         5 * 60 * 1000 // 5 minutes after
       )
       msgs.forEach((msg) => {
-        msg.formattedMessage = `${msg.username || ''}: ${msg.message || ''}`
+        const formattedMsg = msg as TwitchMessageFormatted
+        formattedMsg.formattedMessage = `${msg.username || ''}: ${msg.message || ''}`
       })
-      messages = msgs
+      messages = msgs as TwitchMessageFormatted[]
     } catch (error) {
       console.error('Failed to load messages for search:', error)
     }

@@ -78,7 +78,7 @@ export async function updateSelectedPotPlayerInfo(instance: {
   }
 
   if (newPotPlayerInfo && newPotPlayerInfo !== selectedPotplayerInfo) {
-    for (const key in newPotPlayerInfo) selectedPotplayerInfo[key] = newPotPlayerInfo[key]
+    Object.assign(selectedPotplayerInfo, newPotPlayerInfo)
     await chatService.updateVideoInfo(selectedPotplayerInfo as PotPlayerInfo)
   }
 }

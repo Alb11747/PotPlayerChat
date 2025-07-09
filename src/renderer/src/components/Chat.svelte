@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TwitchChatMessage } from '@/chat/twitch-chat'
+  import type { TwitchMessage } from '@/chat/twitch-msg'
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import { UrlTracker } from '@/utils/url-tracker'
   import { onMount } from 'svelte'
@@ -17,8 +17,8 @@
   const videoTimeHistory = new CurrentVideoTimeHistory()
   let urlTracker = $state.raw(new UrlTracker())
 
-  let vlistRef: VListType<unknown> = $state(null)
-  let messages: TwitchChatMessage[] = $state.raw([])
+  let vlistRef: VList<unknown> | null = $state(null)
+  let messages: TwitchMessage[] = $state.raw([])
   let isMainPotPlayer = $state(true)
   let scrollToBottom = $state(true)
 

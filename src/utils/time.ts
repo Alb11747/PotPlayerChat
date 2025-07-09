@@ -10,9 +10,9 @@ export class CurrentVideoTimeHistory {
 
   getPredictedRate(): number | null {
     const history = this.history
-    if (history.length < 2) return null
     const prev = history[history.length - 2]
     const curr = history[history.length - 1]
+    if (!prev || !curr) return null
     const dt = curr.timestamp - prev.timestamp
     return dt === 0 ? null : (curr.time - prev.time) / dt
   }
@@ -20,9 +20,10 @@ export class CurrentVideoTimeHistory {
   getPredictedCurrentVideoTime(): number | null {
     const history = this.history
     if (history.length === 0) return null
-    if (history.length === 1) return history[0].time
+    if (history.length === 1) return history[0]?.time ?? null
     const rate = this.getPredictedRate()
     const curr = history[history.length - 1]
+    if (!curr) return null
     if (rate === null) return curr.time
 
     // If time jumps backward, is paused, or, is >32x real time, just return the most recent sample

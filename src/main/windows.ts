@@ -1,7 +1,7 @@
 import type { HWND } from '@/types/globals'
 import koffi from 'koffi'
 import NodeCache from 'node-cache'
-import { tasklist } from 'tasklist'
+import { tasklist, type TasklistWindow, type TasklistWindowVerbose } from 'tasklist'
 import { promisify } from 'util'
 
 const user32 = koffi.load('user32.dll')
@@ -103,7 +103,7 @@ export async function findHwndByPidAndTitle(
         const currentTitle = await getWindowText(hCurWnd, false)
         if (currentTitle === title) {
           hwnds.push({ hwnd: hCurWnd, title: await getWindowText(hCurWnd, true) })
-          if (process.env.NODE_ENV === 'production') break
+          if (process.env['NODE_ENV'] === 'production') break
         }
       }
 
@@ -123,7 +123,7 @@ export async function findHwndByPidAndTitle(
     console.warn(`Multiple windows found for PID ${pid}:`, hwnds.map((h) => h.title).join(', '))
   }
 
-  return hwnds[0]
+  return hwnds[0]!
 }
 
 const pidByHwndCache = new NodeCache({ stdTTL: 2 * 60 * 60, checkperiod: 24 * 60 * 60 })
@@ -141,20 +141,6 @@ export async function getHwndByPidAndTitle(
   if (hwnd === null || displayTitle === null) return null
   pidByHwndCache.set(pid, { hwnd, title: displayTitle })
   return { hwnd, title: displayTitle }
-}
-
-export type TasklistWindow = {
-  imageName: string
-  pid: number
-  sessionName: string
-  sessionNumber: number
-  memUsage: number
-}
-export type TasklistWindowVerbose = TasklistWindow & {
-  status: 'Running' | 'Suspended' | 'Not Responding' | 'Unknown'
-  username: string
-  cpuTime: number
-  windowTitle: string
 }
 
 export async function getWindowsByExe<V extends boolean>(

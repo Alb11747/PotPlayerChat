@@ -116,7 +116,7 @@ function createWindow(): void {
 
       // If there is only one instance, select it automatically
       if (potplayerInstances.length === 1 && selectedPotplayerHwnd === null)
-        selectedPotplayerHwnd = potplayerInstances[0].hwnd
+        selectedPotplayerHwnd = potplayerInstances[0]!.hwnd
 
       await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
     }

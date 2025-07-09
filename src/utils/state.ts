@@ -47,7 +47,7 @@ export class RecentValue<T> {
   }
 
   public getRecent(): T | null {
-    return this.values.length > 0 ? this.values[this.values.length - 1] : null
+    return this.values.length > 0 ? (this.values[this.values.length - 1] ?? null) : null
   }
 
   public filter(other: T[]): void {

@@ -701,7 +701,7 @@ export class JustLogAPI {
     fromTime?: Date | null,
     toTime?: Date | null,
     reverse?: boolean | null
-  ): { from?: number; to?: number; reverse?: string } {
+  ): { from?: number; to?: number; reverse?: string; raw?: string } {
     const data: { from?: number; to?: number; reverse?: string } = {}
     if (fromTime) data.from = this.fromDatetimeToTimestamp(fromTime)
     if (toTime) data.to = this.fromDatetimeToTimestamp(toTime)

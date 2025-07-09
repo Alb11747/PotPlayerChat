@@ -1,3 +1,4 @@
+import type { PotPlayerInstance } from '@/main/potplayer'
 import type { HWND } from '@/types/globals'
 import { IpcRenderer } from 'electron/renderer'
 
@@ -14,7 +15,7 @@ export interface WindowApi {
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
   loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
-  getPotPlayers: () => Promise<{ hwnd: HWND; title: string }[]>
+  getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>
   getCurrentTime: (hwnd: HWND) => Promise<number>

@@ -135,6 +135,8 @@ export class TwitchChatMessage {
     if (!timestamp) throw new Error('Twitch message must have a timestamp')
     const username = ircMessage.username
     if (!username) throw new Error('Twitch message must have a username')
+    const message = ircMessage.text
+    if (!message) throw new Error('Twitch message must have text content')
 
     return new TwitchChatMessage(
       ircMessage.raw,
@@ -143,7 +145,7 @@ export class TwitchChatMessage {
       parseInt(timestamp, 10),
       ircMessage.channel,
       username,
-      ircMessage.text
+      message
     )
   }
 
@@ -272,8 +274,7 @@ export class TwitchSystemMessage {
           return `This room is in slow mode and you are sending messages too quickly. You will be able to talk again in ${seconds} seconds.`
         }
         case 'msg_subsonly': {
-          const channelName = this.channel.replace(/^#/, '')
-          return `This room is in subscribers only mode. To talk, purchase a channel subscription at https://www.twitch.tv/products/${channelName}/ticket?ref=subscriber_only_mode_chat.`
+          return `This room is in subscribers only mode. To talk, purchase a channel subscription at https://www.twitch.tv/products/${this.channel}/ticket?ref=subscriber_only_mode_chat.`
         }
         case 'msg_suspended':
           return 'You don’t have permission to perform that action.'

@@ -8,7 +8,7 @@
 
   interface Props {
     message: TwitchMessage
-    videoStartTime: number | null
+    videoStartTime?: number
     urlTracker: UrlTracker
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
@@ -61,7 +61,7 @@
 
 <div class="chat-message">
   <span class="chat-time">
-    [{formatRelativeTime(message.timestamp, videoStartTime)}]
+    [{formatRelativeTime(message.timestamp, videoStartTime ?? null)}]
   </span>
   {#if message.type === 'chat'}
     <span class="chat-username" style="color: {message.color}">
@@ -176,7 +176,7 @@
     <span class="chat-text chat-system">{message.getSystemText()}</span>
   {:else}
     <span class="chat-text">
-      Unknown message type: {message.type}
+      Unknown message type: {(message as { type: string }).type}
     </span>
   {/if}
 </div>
