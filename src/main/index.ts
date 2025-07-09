@@ -3,7 +3,13 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 
 import { join } from 'path'
-import { getCurrentTime, getPotPlayerInstances, getStreamHistory, getTotalTime } from './potplayer'
+import {
+  getCurrentTime,
+  getPotPlayerInstances,
+  getStreamHistory,
+  getTotalTime,
+  type PotPlayerInstance
+} from './potplayer'
 import { getForegroundWindow } from './windows'
 
 function createWindow(): void {
@@ -21,15 +27,18 @@ function createWindow(): void {
   let selectedPotplayerHwnd: HWND | null = null
   let lastActivePotplayerHwnd: HWND | null = null
 
-  async function sendPotplayerInstancesChanged(): Promise<void> {
-    for (const instance of potplayerInstances) {
-      instance.selected = selectedPotplayerHwnd
-        ? instance.hwnd === selectedPotplayerHwnd
-        : instance.hwnd === lastActivePotplayerHwnd
-    }
-
+  async function sendPotplayerInstancesChanged(
+    potplayerInstances: { hwnd: HWND; title: string }[],
+    selectedPotplayerHwnd: HWND | null
+  ): Promise<void> {
     console.debug('Updating PotPlayer instances list')
-    await mainWindow.webContents.send('potplayer-instances-changed', potplayerInstances)
+    await mainWindow.webContents.send(
+      'potplayer-instances-changed',
+      potplayerInstances.map((instance) => ({
+        ...instance,
+        selected: instance.hwnd === selectedPotplayerHwnd
+      }))
+    )
   }
 
   function getPotplayerHwnd(): HWND | null {
@@ -41,29 +50,30 @@ function createWindow(): void {
   })
 
   ipcMain.handle('set-potplayer-hwnd', async (_event, hwnd: HWND) => {
-    await updatePotplayerInstances()
     if (selectedPotplayerHwnd !== hwnd) {
       const lastSelected = getPotplayerHwnd()
       selectedPotplayerHwnd = hwnd
-      if (lastSelected !== selectedPotplayerHwnd) {
-        await sendPotplayerInstancesChanged()
-      }
+      if (lastSelected !== selectedPotplayerHwnd)
+        await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
     }
+    await updatePotplayerInstances()
   })
 
   let potplayerInstancesDebounceTimeoutId: NodeJS.Timeout | null = null
-  let potplayerInstances: { hwnd: HWND; title: string; selected?: boolean }[] = []
+  let potplayerInstances: PotPlayerInstance[] = []
 
-  async function updatePotplayerInstances(): Promise<void> {
-    if (potplayerInstancesDebounceTimeoutId) return
+  async function updatePotplayerInstances(update: boolean = true): Promise<boolean> {
+    if (potplayerInstancesDebounceTimeoutId) return false
     potplayerInstancesDebounceTimeoutId = setTimeout(() => {
       potplayerInstancesDebounceTimeoutId = null
     }, 50)
 
+    let changed = false
     const instances = await getPotPlayerInstances()
     console.debug(`Found ${instances.length} PotPlayer instance(s)`)
-    if (potplayerInstances !== instances) {
+    if (update && potplayerInstances !== instances) {
       potplayerInstances = instances
+      changed = true
 
       // If the selected PotPlayer instance is not in the list, set it to null
       if (selectedPotplayerHwnd) {
@@ -81,11 +91,12 @@ function createWindow(): void {
       if (potplayerInstances.length === 1 && selectedPotplayerHwnd === null)
         selectedPotplayerHwnd = potplayerInstances[0].hwnd
 
-      await sendPotplayerInstancesChanged()
+      if (update) await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
     }
 
     if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
     potplayerIntervalId = setTimeout(updatePotplayerInstances, 5 * 60 * 1000) // Update every 5 minutes
+    return changed
   }
 
   let currentTimeIntervalId: NodeJS.Timeout | null = null
@@ -114,7 +125,7 @@ function createWindow(): void {
             if (lastActivePotplayerHwnd !== instance.hwnd) {
               lastActivePotplayerHwnd = instance.hwnd
               if (selectedPotplayerHwnd === null) {
-                await sendPotplayerInstancesChanged()
+                await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
               }
             }
           }

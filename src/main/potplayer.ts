@@ -27,7 +27,7 @@ export function getTotalTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_TOTAL_TIME, 0)
 }
 
-interface PotPlayerInstance {
+export interface PotPlayerInstance {
   pid: number
   hwnd: HWND
   title: string
