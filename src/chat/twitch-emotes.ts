@@ -39,6 +39,7 @@ export class TwitchEmoteService {
   private fetcher: EmoteFetcher
 
   private channelCache: Map<number | undefined, boolean>
+  private globalEmotesFetchPromise: Promise<unknown> | null = null
   private lock = new AsyncLock()
 
   constructor({
@@ -63,12 +64,41 @@ export class TwitchEmoteService {
     await this.lock.acquire(String(channelId ?? 'global'), async () => {
       if (this.channelCache.get(channelId)) return
       try {
-        await Promise.all([
-          this.fetcher.fetchTwitchEmotes(channelId),
-          this.fetcher.fetchBTTVEmotes(channelId),
-          this.fetcher.fetchSevenTVEmotes(channelId, 'avif'),
-          this.fetcher.fetchFFZEmotes(channelId)
-        ])
+        const tasks: Promise<unknown>[] = []
+
+        if (channelId !== undefined) {
+          tasks.push(
+            ...[
+              this.fetcher.fetchTwitchEmotes(channelId),
+              this.fetcher.fetchBTTVEmotes(channelId),
+              this.fetcher.fetchSevenTVEmotes(channelId, 'avif'),
+              this.fetcher.fetchFFZEmotes(channelId)
+            ]
+          )
+        }
+
+        if (!this.globalEmotesFetchPromise) {
+          this.globalEmotesFetchPromise = Promise.all([
+            this.fetcher.fetchTwitchEmotes(undefined),
+            this.fetcher.fetchBTTVEmotes(undefined),
+            this.fetcher.fetchSevenTVEmotes(undefined, 'avif'),
+            this.fetcher.fetchFFZEmotes(undefined)
+          ])
+        }
+
+        await Promise.all([...tasks, this.globalEmotesFetchPromise])
+
+        if (channelId !== undefined) {
+          const globalEmotes = this.fetcher.channels.get(null as unknown as string)?.emotes
+          const emotes = this.fetcher.channels.get(channelId as unknown as string)?.emotes
+          if (globalEmotes && emotes) {
+            // Merge global emotes into channel emotes
+            for (const [name, emote] of globalEmotes) {
+              if (!emotes.has(name)) emotes.set(name, emote)
+            }
+          }
+        }
+
         this.channelCache.set(channelId, true)
       } catch (error) {
         this.channelCache.set(channelId, false)
