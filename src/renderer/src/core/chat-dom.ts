@@ -313,7 +313,7 @@ export function parseFullMessage(
               acc.push({
                 type: 'emote',
                 text,
-                url: emote.toLink(emote.sizes?.length - 1),
+                url: emote.toLink(emote.sizes?.length - 1 || 2),
                 emote
               })
             } else {
