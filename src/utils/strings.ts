@@ -21,6 +21,16 @@ export function stripSymbols(title: string): string {
 }
 
 /**
+ * Escapes special characters in a string for use in a regular expression.
+ * This is a polyfill for `RegExp.escape` if it doesn't exist.
+ * @param str The string to escape.
+ * @returns The escaped string.
+ */
+export const regExpEscape: (str: string) => string =
+  (RegExp as unknown as { escape: (str: string) => string }).escape ??
+  ((str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+/**
  * Formats a time value relative to a given start time.
  * - If startTime is null or the result is invalid, returns "[0:00]".
  * - If the time is before the startTime, returns the absolute local date/time in a readable format.

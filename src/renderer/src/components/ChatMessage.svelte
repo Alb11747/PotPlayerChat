@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { getTwitchUserIdByName } from '@/chat/twitch-api'
+  import { mainEmoteService, type TwitchEmoteService } from '@/chat/twitch-emotes'
   import type { TwitchMessage } from '@/chat/twitch-msg'
   import { parseFullMessage } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
+  import type { TwitchEmote } from '@mkody/twitch-emoticons'
   import sanitizeHtml from 'sanitize-html'
-  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
+  import { UrlTracker } from '../state/url-tracker'
 
   interface Props {
     message: TwitchMessage
@@ -12,7 +15,9 @@
     urlTracker: UrlTracker
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
+    onEmoteLoad?: (emote: TwitchEmote) => void
     enablePreviews?: boolean
+    enableEmotes?: boolean
   }
 
   let {
@@ -22,20 +27,18 @@
     urlTracker,
     searchQuery,
     onUrlClick,
-    enablePreviews = true
+    onEmoteLoad,
+    enablePreviews = true,
+    enableEmotes = true
   }: Props = $props()
 
-  // Link preview state - these need to be global or passed in
-  // svelte-ignore non_reactive_update
-  let linkPreviews = new SvelteMap<string, LinkPreview>()
-  let failedPreviews = new SvelteSet<string>()
   let showPreviewForUrl = $state<string | null>(null)
   let previewElement: HTMLDivElement | null = $state(null)
   let mousePosition = $state({ x: 0, y: 0 })
 
   // Handle URL click
   function handleUrlClick(url: string): void {
-    urlTracker.addUrl(url)
+    urlTracker.markVisitedUrl(url)
     if (onUrlClick) {
       onUrlClick(url)
     } else {
@@ -45,18 +48,40 @@
 
   // Handle URL hover to preload preview
   async function handleUrlHover(url: string): Promise<void> {
-    if (!enablePreviews || (!linkPreviews.has(url) && !linkPreviewService.isLoading(url))) {
-      const preview = await linkPreviewService.getPreview(url)
-      if (preview) {
-        linkPreviews.set(url, preview)
-      }
+    if (!enablePreviews || !urlTracker.isPreviewLoading(url)) {
+      await urlTracker.getPreview(url)
     }
   }
 
-  // Highlight search terms in the message
+  let emoteService: TwitchEmoteService | null = $state(null)
+  let channelUserId: number | null = $state(null)
+
+  async function loadEmotes(): Promise<void> {
+    if (enableEmotes) {
+      const id = await getTwitchUserIdByName(message.channel)
+      if (!id) return
+      channelUserId = parseInt(id, 10)
+      const service = await mainEmoteService
+      if (!service) return
+      const fetchPromise = channelUserId
+        ? service.fetchAllEmotes(channelUserId)
+        : service.fetchAllEmotes()
+      await fetchPromise
+      emoteService = service
+    }
+  }
+
+  loadEmotes()
+
+  // Highlight search terms in the message and parse emotes and parse emotes
   const { escapedUsername, parsedMessageSegments } = $derived.by(() => {
     if (!message) return { escapedUsername: '', parsedMessageSegments: [] }
-    return parseFullMessage(message.username, message.message, searchQuery)
+    let emotes: Record<string, TwitchEmote[]> | undefined = undefined
+    if (emoteService) emotes = emoteService.getEmotes(channelUserId)
+    return parseFullMessage(message.username || '', message.message || '', {
+      emotes: emotes ?? undefined,
+      searchQuery
+    })
   })
 </script>
 
@@ -71,10 +96,27 @@
     </span>
     <span class="chat-text">
       {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.getId(), index))}
-        {#if segment.type === 'url'}
+        {#if segment.type === 'emote'}
+          {#if urlTracker.isFailedUrl(segment.url)}
+            {segment.text}
+          {:else}
+            <img
+              class="chat-emote"
+              src={segment.url}
+              alt={segment.text}
+              title={segment.text}
+              onload={() => {
+                if (onEmoteLoad) onEmoteLoad(segment.emote)
+              }}
+              onerror={() => {
+                urlTracker.markFailedUrl(segment.url)
+              }}
+            />
+          {/if}
+        {:else if segment.type === 'url'}
           <button
             class="chat-url"
-            class:visited={urlTracker.hasUrl(segment.url)}
+            class:visited={urlTracker.isVisitedUrl(segment.url)}
             onclick={() => handleUrlClick(segment.url)}
             onmouseenter={() => {
               if (enablePreviews) {
@@ -98,8 +140,8 @@
             {@html segment.escaped}
           </button>
           {#if enablePreviews && showPreviewForUrl === segment.url}
-            {#if linkPreviews.has(segment.url)}
-              {#each [linkPreviews.get(segment.url)] as preview ((message.getId(), index, preview?.link))}
+            {#if urlTracker.hasPreview(segment.url)}
+              {#each [urlTracker.getCachedPreview(segment.url)] as preview ((message.getId(), index, preview?.link))}
                 {#if preview && preview.status === 200}
                   <div
                     class="link-preview"
@@ -110,11 +152,11 @@
                     style:left="{mousePosition.x - previewElement?.clientWidth / 2}px"
                   >
                     {#if preview.thumbnail}
-                      {#if !failedPreviews.has(preview.link)}
+                      {#if !urlTracker.isFailedUrl(preview.link)}
                         <img
                           src={preview.thumbnail}
                           onerror={() => {
-                            failedPreviews.add(preview.link)
+                            urlTracker.markFailedUrl(preview.link)
                           }}
                           alt="Link preview"
                           class="preview-thumbnail"
@@ -150,7 +192,7 @@
                   </div>
                 {/if}
               {/each}
-            {:else if linkPreviewService.isLoading(segment.url)}
+            {:else if urlTracker.isPreviewLoading(segment.url)}
               <div
                 class="link-preview link-preview-loading"
                 role="dialog"
@@ -206,6 +248,13 @@
     color: #c0c0c0;
     font-style: italic;
     font-weight: 500;
+  }
+
+  .chat-emote {
+    display: inline-block;
+    vertical-align: middle;
+    max-height: 2.6rem;
+    margin-right: 0.25rem;
   }
 
   .chat-url {

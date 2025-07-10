@@ -1,10 +1,8 @@
 import type { HWND } from '@/types/globals'
-import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { loadDataFile, saveDataFile } from './storage'
-
 import { RecentValue } from '@/utils/state'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import AsyncLock from 'async-lock'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import {
   getCurrentTime,
@@ -13,6 +11,7 @@ import {
   getTotalTime,
   type PotPlayerInstance
 } from './potplayer'
+import { loadDataFile, saveDataFile } from './storage'
 import { getForegroundWindow } from './windows'
 
 function createWindow(): void {

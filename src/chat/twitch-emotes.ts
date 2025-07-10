@@ -1,0 +1,77 @@
+import {
+  EmoteFetcher,
+  type Channel,
+  type Collection,
+  type TwitchEmote as BaseTwitchEmote
+} from '@mkody/twitch-emoticons'
+import AsyncLock from 'async-lock'
+
+export interface TwitchEmote extends BaseTwitchEmote {
+  sizes: string[]
+}
+
+/**
+ * Service for fetching and parsing Twitch, BTTV, FFZ, and 7TV emotes, with per-channel caching.
+ */
+export class TwitchEmoteService {
+  private fetcher: EmoteFetcher
+
+  private channelCache: Map<number | undefined, boolean>
+  private lock = new AsyncLock()
+
+  constructor(
+    options: {
+      clientId?: string
+      clientSecret?: string
+    } = {}
+  ) {
+    const { clientId, clientSecret } = options
+    this.fetcher = new EmoteFetcher(clientId, clientSecret)
+    this.channelCache = new Map()
+  }
+
+  /**
+   * Fetches all emotes (Twitch, BTTV, FFZ, 7TV) for a channel and caches them.
+   * Uses async-lock to prevent duplicate fetches for the same channel.
+   * @param channelId Twitch user/channel ID (number or string). Use undefined for global emotes.
+   */
+  async fetchAllEmotes(channelId?: number): Promise<void> {
+    if (this.channelCache.get(channelId) !== undefined) return
+
+    await this.lock.acquire(String(channelId ?? 'global'), async () => {
+      if (this.channelCache.get(channelId)) return
+      try {
+        await Promise.all([
+          this.fetcher.fetchTwitchEmotes(channelId),
+          this.fetcher.fetchBTTVEmotes(channelId),
+          this.fetcher.fetchSevenTVEmotes(channelId, 'avif'),
+          this.fetcher.fetchFFZEmotes(channelId)
+        ])
+        this.channelCache.set(channelId, true)
+      } catch (error) {
+        this.channelCache.set(channelId, false)
+        console.error(`Failed to fetch emotes for channel ${channelId}:`, error)
+      }
+    })
+  }
+
+  getEmotes(channelId?: number): Collection<string, Emote> | null {
+    const channel: Channel | undefined = this.fetcher.channels.get(
+      (channelId ? channelId : null) as unknown as string
+    )
+    if (!channel) return null
+    return channel.emotes
+  }
+}
+
+export const mainEmoteService = (async (): Promise<TwitchEmoteService | null> => {
+  const keys = await window.api.loadKeys()
+  if (!keys.twitch) {
+    console.warn('Twitch keys not found, emote service will not work')
+    return null
+  }
+  return new TwitchEmoteService({
+    clientId: keys.twitch.clientId,
+    clientSecret: keys.twitch.clientSecret
+  })
+})()

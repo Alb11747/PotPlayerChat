@@ -5,6 +5,7 @@
   import { chatService, updateSelectedPotPlayerInfo } from '@/renderer/src/state/chat-state.svelte'
   import { onMount } from 'svelte'
   import { VList } from 'virtua/svelte'
+  import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
   class TwitchMessageFormatted extends TwitchChatMessage {
@@ -23,6 +24,8 @@
       this.formattedMessage = `${message.username || ''}: ${message.message || ''}`
     }
   }
+
+  const urlTracker = new UrlTracker()
 
   let searchQuery = $state('')
   let caseSensitive = $state(false)
@@ -126,7 +129,7 @@
 
   // Handle URL click
   function handleUrlClick(url: string): void {
-    urlTracker.addUrl(url)
+    urlTracker.markVisitedUrl(url)
     window.api.openUrl(url)
   }
 </script>

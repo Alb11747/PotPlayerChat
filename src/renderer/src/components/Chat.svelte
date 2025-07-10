@@ -1,9 +1,7 @@
 <script lang="ts">
   import type { TwitchMessage } from '@/chat/twitch-msg'
   import { CurrentVideoTimeHistory } from '@/utils/time'
-  import { UrlTracker } from '@/utils/url-tracker'
   import { onMount } from 'svelte'
-  import type { VList as VListType } from 'virtua/lib/svelte'
   import { VList } from 'virtua/svelte'
   import {
     chatService,
@@ -15,12 +13,18 @@
   import ChatMessage from './ChatMessage.svelte'
 
   const videoTimeHistory = new CurrentVideoTimeHistory()
-  let urlTracker = $state.raw(new UrlTracker())
+  const urlTracker = new UrlTracker()
 
   let vlistRef: VList<unknown> | null = $state(null)
   let messages: TwitchMessage[] = $state.raw([])
   let isMainPotPlayer = $state(true)
   let scrollToBottom = $state(true)
+
+  function scrollToBottomIfNeeded(): void {
+    if (vlistRef && scrollToBottom) {
+      vlistRef.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
+    }
+  }
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(): Promise<void> {
@@ -36,8 +40,7 @@
 
     if (messages !== newMessages) {
       messages = newMessages
-      if (scrollToBottom)
-        vlistRef?.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
+      scrollToBottomIfNeeded()
     }
 
     if (nextMessage) {
@@ -91,8 +94,7 @@
 
   // Handle URL click
   function handleUrlClick(url: string): void {
-    urlTracker.addUrl(url)
-    urlTracker = urlTracker // Trigger reactivity
+    urlTracker.markVisitedUrl(url)
     window.api.openUrl(url)
   }
 
@@ -158,6 +160,7 @@
           videoEndTime={selectedPotplayerInfo.endTime}
           {urlTracker}
           onUrlClick={handleUrlClick}
+          onEmoteLoad={scrollToBottomIfNeeded}
           enablePreviews={true}
         />
       {/snippet}
