@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { getTwitchUserIdByName } from '@/chat/twitch-api'
-  import { mainEmoteService, type TwitchEmoteService } from '@/chat/twitch-emotes'
-  import type { TwitchMessage } from '@/chat/twitch-msg'
+  import { getTwitchUserIdByName } from '@core/chat/twitch-api'
+  import { mainEmoteService, type TwitchEmoteService } from '@core/chat/twitch-emotes'
+  import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { parseFullMessage, isActionMessage } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
   import type { TwitchEmote } from '@mkody/twitch-emoticons'

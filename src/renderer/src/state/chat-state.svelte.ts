@@ -1,4 +1,4 @@
-import { ChatService, type LoadingState, type PotPlayerInfo } from '@/chat/twitch-chat'
+import { ChatService, type LoadingState, type PotPlayerInfo } from '@core/chat/twitch-chat'
 import type { HWND } from '@/types/globals'
 import { updateArray, updateCache as updateCacheRemovingCollisions } from '@/utils/state'
 import { getStreamerFromUrl as getChannelFromUrl, getStartTimeFromTitle } from '@/utils/stream'

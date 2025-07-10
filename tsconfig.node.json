@@ -29,7 +29,8 @@
     "types": ["electron-vite/node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@core/chat/*": ["src/chat/*"]
     }
   }
 }

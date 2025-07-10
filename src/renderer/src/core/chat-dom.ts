@@ -1,5 +1,5 @@
-import { NativeTwitchEmote, type TwitchEmote } from '@/chat/twitch-emotes'
-import type { TwitchChatMessage } from '@/chat/twitch-msg'
+import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
+import type { TwitchChatMessage } from '@core/chat/twitch-msg'
 import { regExpEscape } from '@/utils/strings'
 import type { Collection } from '@mkody/twitch-emoticons'
 

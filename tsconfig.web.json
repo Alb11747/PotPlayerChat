@@ -32,7 +32,8 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@core/chat/*": ["src/chat/*"]
     }
   }
 }

@@ -1,4 +1,4 @@
-import type { TwitchMessage } from '@/chat/twitch-msg'
+import type { TwitchMessage } from '@core/chat/twitch-msg'
 import type { HWND } from '@/types/globals'
 import { RecentValue } from '@/utils/state'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'

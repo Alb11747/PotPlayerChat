@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TwitchChatMessage } from '@/chat/twitch-msg'
+  import { TwitchChatMessage } from '@core/chat/twitch-msg'
   import type { PotPlayerInstance } from '@/main/potplayer'
   import type {} from '@/preload/types/index.d.ts'
   import { chatService, updateSelectedPotPlayerInfo } from '@/renderer/src/state/chat-state.svelte'

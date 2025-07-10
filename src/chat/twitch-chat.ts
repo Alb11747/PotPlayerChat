@@ -1,4 +1,4 @@
-import { getMessagesBetween, getMessagesForTime } from '@/chat/chat'
+import { getMessagesBetween, getMessagesForTime } from '@core/chat/chat'
 import type { WindowApi } from '@/preload/types/index.d.ts'
 import type { HWND } from '@/types/globals'
 import { JustLogAPI } from './justlog'

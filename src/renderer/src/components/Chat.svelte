@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TwitchMessage } from '@/chat/twitch-msg'
+  import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import { onMount } from 'svelte'
   import { VList } from 'virtua/svelte'
