@@ -3,6 +3,7 @@ import { RecentValue } from '@/utils/state'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import AsyncLock from 'async-lock'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { Conf } from 'electron-conf/main'
 import { join } from 'path'
 import {
   getCurrentTime,
@@ -26,7 +27,10 @@ function createWindow(): void {
     }
   })
 
+  const conf = new Conf()
   const lock = new AsyncLock()
+
+  conf.registerRendererListener()
 
   ipcMain.handle('load-data-file', async (_event, subpath: string) => {
     return await loadDataFile(subpath)

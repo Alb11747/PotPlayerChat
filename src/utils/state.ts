@@ -28,15 +28,17 @@ export function updateCache<K extends string | number | symbol, V>(
   key: K,
   data: V,
   collisionMsg?: string
-): void {
+): boolean {
   const existing = cache[key]
   if (existing) {
-    if (isEqual(existing, data)) return
+    if (isEqual(existing, data)) return false
     if (collisionMsg) console.warn(collisionMsg, key, existing, data)
     cache[key] = null
   } else if (existing !== null) {
     cache[key] = data
+    return true
   }
+  return false
 }
 
 export class RecentValue<T> {

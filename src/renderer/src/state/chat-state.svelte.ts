@@ -2,6 +2,7 @@ import { ChatService, type LoadingState, type PotPlayerInfo } from '@/chat/twitc
 import type { HWND } from '@/types/globals'
 import { updateArray, updateCache as updateCacheRemovingCollisions } from '@/utils/state'
 import { getStreamerFromUrl as getChannelFromUrl, getStartTimeFromTitle } from '@/utils/stream'
+import conf from './config'
 
 export const potplayerInstances: { hwnd: HWND; title: string }[] = $state([])
 export const selectedPotplayerInfo: Partial<PotPlayerInfo> = $state({})
@@ -30,6 +31,9 @@ window.api.onPotPlayerInstancesChanged((_: Event, instances) => {
 })
 
 const titleCache: Record<string, { channel: string; startTime: number } | null> = {}
+conf.get('titleCache').then((cache) => {
+  if (cache) Object.assign(titleCache, cache)
+})
 
 export async function updateSelectedPotPlayerInfo(instance: {
   hwnd: HWND
@@ -41,7 +45,7 @@ export async function updateSelectedPotPlayerInfo(instance: {
   let streamHistory: Awaited<ReturnType<typeof window.api.getStreamHistory>> = []
   let newPotPlayerInfo: PotPlayerInfo | null = null
 
-  const cachedInfo = titleCache[title]
+  const cachedInfo = titleCache[title] || null
   if (!cachedInfo) {
     streamHistory = await window.api.getStreamHistory()
     for (const stream of streamHistory) {
@@ -58,8 +62,11 @@ export async function updateSelectedPotPlayerInfo(instance: {
         continue
       }
       const data = { channel, startTime }
+
       const collisionMsg = 'Title cache collision'
-      updateCacheRemovingCollisions(titleCache, stream.title, data, collisionMsg)
+      if (updateCacheRemovingCollisions(titleCache, stream.title, data, collisionMsg))
+        conf.set('titleCache', titleCache)
+
       if (isCurrentStream && !newPotPlayerInfo)
         newPotPlayerInfo = { hwnd, title, channel, startTime }
     }
