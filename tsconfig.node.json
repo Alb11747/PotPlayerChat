@@ -1,6 +1,12 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/utils/**/*", "src/types/**/*"],
+  "include": [
+    "electron.vite.config.*",
+    "src/main/**/*",
+    "src/utils/**/*",
+    "src/chat/**/*",
+    "src/types/**/*"
+  ],
   "compilerOptions": {
     "composite": true,
     "sourceMap": true,

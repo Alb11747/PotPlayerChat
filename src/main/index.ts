@@ -1,3 +1,4 @@
+import type { TwitchMessage } from '@/chat/twitch-msg'
 import type { HWND } from '@/types/globals'
 import { RecentValue } from '@/utils/state'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -267,7 +268,7 @@ function createWindow(): void {
   })
 
   // Create search window
-  function createSearchWindow(): BrowserWindow {
+  function createSearchWindow(messages?: TwitchMessage[]): BrowserWindow {
     const searchWindow = new BrowserWindow({
       width: 400,
       height: 600,
@@ -287,6 +288,8 @@ function createWindow(): void {
       searchWindow.loadFile(join(__dirname, '../renderer/search.html'))
     }
 
+    searchWindow.webContents.send('preload-messages', messages ?? null)
+
     searchWindow.once('ready-to-show', () => {
       searchWindow.show()
       searchWindow.focus()
@@ -299,8 +302,8 @@ function createWindow(): void {
     return searchWindow
   }
 
-  ipcMain.handle('open-search-window', async () => {
-    createSearchWindow()
+  ipcMain.handle('open-search-window', async (_event, messages?: TwitchMessage[]) => {
+    createSearchWindow(messages)
   })
 }
 

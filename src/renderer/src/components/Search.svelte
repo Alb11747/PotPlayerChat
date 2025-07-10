@@ -30,8 +30,9 @@
   let searchQuery = $state('')
   let caseSensitive = $state(false)
   let useRegex = $state(false)
-  let messages: TwitchMessageFormatted[] = $state([])
-  let filteredMessages: TwitchMessageFormatted[] = $state([])
+  const seenMessages = new Set()
+  let messages: TwitchMessageFormatted[] = $state.raw([])
+  let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
   let vlistRef: VList<unknown> | null = $state(null)
   let searchInputRef: HTMLInputElement | null = $state(null)
   let selectedPotplayerInfo: PotPlayerInstance | null = $state(null)
@@ -41,9 +42,7 @@
 
   // Focus search input when component mounts
   onMount(() => {
-    if (searchInputRef) {
-      searchInputRef.focus()
-    }
+    if (searchInputRef) searchInputRef.focus()
   })
 
   async function loadAllMessages(): Promise<void> {
@@ -60,40 +59,47 @@
 
       // Get a wide time range to capture all messages
       const currentTime = await window.api.getCurrentTime(selectedPotplayerInfo.hwnd)
-      const msgs = await chatService.getMessagesAroundTime(
-        currentTime,
-        60 * 60 * 1000, // 1 hour before
-        5 * 60 * 1000 // 5 minutes after
-      )
-      msgs.forEach((msg) => {
-        const formattedMsg = msg as TwitchMessageFormatted
-        formattedMsg.formattedMessage = `${msg.username || ''}: ${msg.message || ''}`
+
+      window.api.getPreloadedMessages().then((msgs?: TwitchChatMessage[]) => {
+        if (!msgs || msgs.length === 0) return
+        console.debug('Preloaded messages:', msgs.length)
+        loadMessages(msgs)
       })
-      messages = msgs as TwitchMessageFormatted[]
+
+      chatService
+        .getMessagesAroundTime(
+          currentTime,
+          60 * 60 * 1000, // 1 hour before
+          5 * 60 * 1000 // 5 minutes after
+        )
+        .then((msgs: TwitchChatMessage[]) => {
+          console.debug('Loaded messages:', msgs.length)
+          loadMessages(msgs)
+        })
     } catch (error) {
       console.error('Failed to load messages for search:', error)
     }
   }
 
-  // Computed search pattern for highlighting
-  let searchPattern = $derived.by(() => {
-    if (!searchQuery.trim()) return undefined
-    if (useRegex || !caseSensitive) {
-      try {
-        const escapedQuery = useRegex ? searchQuery : RegExp.escape(searchQuery)
-        return new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi')
-      } catch (error) {
-        // Invalid regex, fall back to string search
-        console.warn('Invalid regex pattern:', searchQuery, error)
-        return searchQuery
-      }
+  function loadMessages(msgs: TwitchChatMessage[]): void {
+    // Merge new messages with existing ones
+    for (const msg of msgs) {
+      if (seenMessages.has(msg.id)) continue // Skip duplicates
+      seenMessages.add(msg.id)
+      messages.push(new TwitchMessageFormatted(msg))
     }
-    return searchQuery
-  })
+
+    // Sort messages by timestamp
+    messages.sort((a, b) => a.timestamp - b.timestamp)
+
+    // Update filtered messages
+    updateFilteredMessages()
+  }
 
   // Filter messages when search query changes
-  $effect(() => {
-    if (searchQuery.trim() === '') {
+  $effect(updateFilteredMessages)
+  function updateFilteredMessages(): void {
+    if (!searchQuery.trim()) {
       filteredMessages = []
       return
     }
@@ -114,12 +120,26 @@
         return msg.formattedMessage.toLowerCase().includes(searchQuery.toLowerCase())
       }
     })
+  }
+
+  // Computed search pattern for highlighting
+  let searchPattern = $derived.by(() => {
+    if (!searchQuery.trim()) return undefined
+    if (useRegex || !caseSensitive) {
+      try {
+        const escapedQuery = useRegex ? searchQuery : RegExp.escape(searchQuery)
+        return new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi')
+      } catch (error) {
+        // Invalid regex, fall back to string search
+        console.warn('Invalid regex pattern:', searchQuery, error)
+        return searchQuery
+      }
+    }
+    return searchQuery
   })
 
   function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      window.close()
-    }
+    if (event.key === 'Escape') window.close()
   }
 
   function jumpToMessage(timestamp: number): void {

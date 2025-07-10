@@ -102,7 +102,7 @@
   function handleKeydown(event: KeyboardEvent): void {
     if (event.ctrlKey && event.key === 'f') {
       event.preventDefault()
-      window.api.openSearchWindow()
+      window.api.openSearchWindow(messages)
     }
   }
 

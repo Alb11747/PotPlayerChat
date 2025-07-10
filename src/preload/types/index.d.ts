@@ -1,3 +1,4 @@
+import type { TwitchMessage } from '@/chat/twitch-msg'
 import type { PotPlayerInstance } from '@/main/potplayer'
 import type { HWND } from '@/types/globals'
 import { IpcRenderer } from 'electron/renderer'
@@ -15,6 +16,7 @@ export interface WindowApi {
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
   loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
+  getPreloadedMessages: () => Promise<TwitchMessage[] | null>
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>
@@ -22,7 +24,7 @@ export interface WindowApi {
   getTotalTime: (hwnd: HWND) => Promise<number>
   getStreamHistory: () => Promise<({ url: string; title: string } | null)[]>
   openUrl: (url: string) => Promise<void>
-  openSearchWindow: () => Promise<void>
+  openSearchWindow: (messages?: TwitchMessage[]) => Promise<void>
   getLinkPreview: (
     url: string
   ) => Promise<{ status: number; thumbnail?: string; tooltip?: string; link: string } | null>

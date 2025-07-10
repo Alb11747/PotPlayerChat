@@ -293,6 +293,10 @@ export class ChatService {
     })
   }
 
+  public getLoadedMessages(): TwitchMessage[] {
+    return this.currentChatData
+  }
+
   public async getMessagesAroundTime(
     currentVideoTime: number,
     beforeTime: number,
