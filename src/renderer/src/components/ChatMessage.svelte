@@ -253,6 +253,7 @@
     display: inline-block;
     vertical-align: middle;
     max-height: 2.6rem;
+    max-width: 9rem;
     margin-right: 0.25rem;
   }
 
