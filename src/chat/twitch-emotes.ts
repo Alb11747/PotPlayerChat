@@ -1,13 +1,35 @@
 import {
   EmoteFetcher,
+  type TwitchEmote as BaseTwitchEmote,
   type Channel,
   type Collection,
-  type TwitchEmote as BaseTwitchEmote
+  type Emote
 } from '@mkody/twitch-emoticons'
+import { buildEmoteImageUrl, type EmoteSize } from '@twurple/chat'
 import AsyncLock from 'async-lock'
 
 export interface TwitchEmote extends BaseTwitchEmote {
   sizes: string[]
+}
+
+export class NativeTwitchEmote {
+  public static readonly sizes: EmoteSize[] = ['1.0', '2.0', '3.0']
+
+  constructor(
+    public id: string,
+    public name?: string
+  ) {}
+
+  get sizes(): EmoteSize[] {
+    return NativeTwitchEmote.sizes
+  }
+
+  toLink(size: number): string {
+    return buildEmoteImageUrl(this.id, {
+      animationSettings: 'animated',
+      size: this.sizes[size] || '1.0'
+    })
+  }
 }
 
 /**
@@ -19,13 +41,13 @@ export class TwitchEmoteService {
   private channelCache: Map<number | undefined, boolean>
   private lock = new AsyncLock()
 
-  constructor(
-    options: {
-      clientId?: string
-      clientSecret?: string
-    } = {}
-  ) {
-    const { clientId, clientSecret } = options
+  constructor({
+    clientId,
+    clientSecret
+  }: {
+    clientId?: string
+    clientSecret?: string
+  } = {}) {
     this.fetcher = new EmoteFetcher(clientId, clientSecret)
     this.channelCache = new Map()
   }

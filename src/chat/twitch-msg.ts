@@ -55,9 +55,28 @@ export class TwitchChatMessage {
   get color(): string | undefined {
     return this.tags['color']
   }
-  get emotes(): string | undefined {
-    return this.tags['emotes']
+
+  get emotes(): { id: string; startIndex: number; endIndex: number }[] | undefined {
+    const emotesRaw = this.tags['emotes']
+    if (!emotesRaw) return undefined
+
+    // emotes=25:0-4,12-16/1902:6-10;
+    // Split by '/' for each emote id group
+    return emotesRaw.split('/').flatMap((group) => {
+      const [id, ranges] = group.split(':')
+      if (!id || !ranges) return []
+      const emotes = []
+      for (const range of ranges.split(',')) {
+        const [start, end] = range.split('-').map(Number)
+        if (Number.isNaN(start) || Number.isNaN(end)) continue
+        if (start !== undefined && end !== undefined) {
+          emotes.push({ id, startIndex: start, endIndex: end })
+        }
+      }
+      return emotes
+    })
   }
+
   get firstMsg(): string | undefined {
     return this.tags['first-msg']
   }

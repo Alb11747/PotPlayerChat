@@ -27,6 +27,7 @@
     "@mkody/twitch-emoticons": "^2.9.2",
     "@twurple/api": "^7.3.0",
     "@twurple/auth": "^7.3.0",
+    "@twurple/chat": "^7.3.0",
     "async-lock": "^1.4.1",
     "binary-searching": "^2.0.5",
     "bloom-filters": "^3.0.4",

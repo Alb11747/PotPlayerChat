@@ -57,18 +57,17 @@
   let channelUserId: number | null = $state(null)
 
   async function loadEmotes(): Promise<void> {
-    if (enableEmotes) {
-      const id = await getTwitchUserIdByName(message.channel)
-      if (!id) return
-      channelUserId = parseInt(id, 10)
-      const service = await mainEmoteService
-      if (!service) return
-      const fetchPromise = channelUserId
-        ? service.fetchAllEmotes(channelUserId)
-        : service.fetchAllEmotes()
-      await fetchPromise
-      emoteService = service
-    }
+    if (!enableEmotes) return
+    const id = await getTwitchUserIdByName(message.channel)
+    if (!id) return
+    channelUserId = parseInt(id, 10)
+    const service = await mainEmoteService
+    if (!service) return
+    const fetchPromise = channelUserId
+      ? service.fetchAllEmotes(channelUserId)
+      : service.fetchAllEmotes()
+    await fetchPromise
+    emoteService = service
   }
 
   loadEmotes()
@@ -79,7 +78,8 @@
     let emotes: Record<string, TwitchEmote[]> | undefined = undefined
     if (emoteService) emotes = emoteService.getEmotes(channelUserId)
     return parseFullMessage(message.username || '', message.message || '', {
-      emotes: emotes ?? undefined,
+      twitchMessage: message,
+      twitchEmotes: emotes ?? undefined,
       searchQuery
     })
   })

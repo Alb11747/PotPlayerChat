@@ -1,4 +1,5 @@
-import type { TwitchEmote } from '@/chat/twitch-emotes'
+import { NativeTwitchEmote, type TwitchEmote } from '@/chat/twitch-emotes'
+import type { TwitchChatMessage } from '@/chat/twitch-msg'
 import { regExpEscape } from '@/utils/strings'
 import type { Collection } from '@mkody/twitch-emoticons'
 
@@ -104,7 +105,7 @@ export function correctMarks(str: string): string {
 
 type SegmentNoEscape =
   | { type: 'text'; text: string }
-  | { type: 'emote'; text: string; url: string; emote: TwitchEmote }
+  | { type: 'emote'; text: string; url: string; emote: TwitchEmote | NativeTwitchEmote }
   | { type: 'url'; text: string; url: string }
 type Segment = SegmentNoEscape & { escaped: string }
 
@@ -112,11 +113,15 @@ export function parseFullMessage(
   username: string,
   message: string,
   {
-    emotes,
+    twitchMessage,
+    twitchEmotes: emotes,
+    emotesEnabled = true,
     searchQuery,
     debug = true
   }: {
-    emotes?: Collection<string, TwitchEmote>
+    twitchMessage?: TwitchChatMessage
+    twitchEmotes?: Collection<string, TwitchEmote>
+    emotesEnabled?: boolean
     searchQuery?: string | RegExp
     debug?: boolean
   } = {}
@@ -128,6 +133,7 @@ export function parseFullMessage(
   let processedUsername = username.replace(PUI_UNICODE_REGEX, '')
   let processedMessage = message.replace(PUI_UNICODE_REGEX, '')
 
+  const nativeEmotes = new Map<string, NativeTwitchEmote>()
   const markIndices: {
     index: number
     char: string
@@ -155,9 +161,9 @@ export function parseFullMessage(
     markIndices.push({ index: endIndex, char: MarkType.UrlEnd })
   }
 
-  // Process emotes in the message
-  if (emotes) {
-    message.matchAll(/\S+/g).forEach((word) => {
+  // Process external emotes
+  if (emotesEnabled && emotes) {
+    processedMessage.matchAll(/\S+/g).forEach((word) => {
       if (!word[0] || !emotes.has(word[0])) return
       const endIndex = word.index + word[0].length
       markIndices.push({ index: word.index, char: MarkType.EmoteStart })
@@ -165,8 +171,38 @@ export function parseFullMessage(
     })
   }
 
+  // Process Twitch emotes
+  if (emotesEnabled && twitchMessage) {
+    const twitchEmotes = twitchMessage.emotes
+    if (twitchEmotes) {
+      for (const { id, startIndex, endIndex } of twitchEmotes) {
+        const endIndexAdjusted = endIndex + 1 // Adjust for inclusive end index
+        const emoteName = message.slice(startIndex, endIndexAdjusted)
+        const emote = new NativeTwitchEmote(id, emoteName)
+        nativeEmotes.set(emoteName, emote)
+        markIndices.push({ index: startIndex, char: MarkType.EmoteStart })
+        markIndices.push({ index: endIndexAdjusted, char: MarkType.EmoteEnd })
+      }
+    }
+  }
+
   // Insert marks descending by index to avoid index shifting issues
   markIndices.sort((a, b) => (a.index > 0 || b.index > 0 ? b.index - a.index : a.index - b.index))
+
+  // Remove duplicates
+  const uniqueMarks = new Map<string, { index: number; char: string }>()
+  for (let i = 0; i < markIndices.length; i++) {
+    const mark = markIndices[i]
+    if (!mark) continue
+    const key = `${mark.index}:${mark.char}`
+    if (!uniqueMarks.has(key)) {
+      uniqueMarks.set(key, mark)
+    } else {
+      markIndices.splice(i, 1)
+      i-- // Adjust index after removal
+    }
+  }
+
   for (const mark of markIndices) {
     if (mark.index < 0) {
       // Negative index means the mark is in the username
@@ -240,7 +276,7 @@ export function parseFullMessage(
 
           if (type === 'emote') {
             // Handle emotes
-            const emote = emotes?.get(text)
+            const emote = nativeEmotes.get(text) || emotes?.get(text)
             if (emote) {
               acc.push({
                 type: 'emote',
