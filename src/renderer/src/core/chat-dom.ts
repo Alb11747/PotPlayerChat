@@ -31,6 +31,30 @@ export function unescapeHtml(text: string): string {
     .replaceAll('&#039;', "'")
 }
 
+const actionStart = '\u{0001}ACTION '
+const actionEnd = '\u{0001}'
+
+/**
+ * Checks if a message is an action message.
+ * Action messages are prefixed with '\u{0001}ACTION ' and suffixed with '\u{0001}'.
+ * @param message The message to check.
+ * @returns True if the message is an action message, false otherwise.
+ */
+export function isActionMessage(message: string): boolean {
+  return message.startsWith(actionStart) && message.endsWith(actionEnd)
+}
+
+/**
+ * Strips the action message markers from a message.
+ * If the message is not an action message, it returns the original message.
+ * @param message The message to strip.
+ * @returns The stripped message.
+ */
+export function stripActionMessage(message: string): string {
+  if (isActionMessage(message)) return message.slice(actionStart.length, -actionEnd.length)
+  return message
+}
+
 const MarkType = {
   HighlightStart: '\u{E000}',
   HighlightEnd: '\u{E001}',
@@ -104,7 +128,7 @@ export function correctMarks(str: string): string {
 }
 
 type SegmentNoEscape =
-  | { type: 'text'; text: string }
+  | { type: 'text' | 'action'; text: string }
   | { type: 'emote'; text: string; url: string; emote: TwitchEmote | NativeTwitchEmote }
   | { type: 'url'; text: string; url: string }
 type Segment = SegmentNoEscape & { escaped: string }
@@ -129,9 +153,15 @@ export function parseFullMessage(
   escapedUsername: string
   parsedMessageSegments: Segment[]
 } {
+  let processedUsername: string = username
+  let processedMessage: string = message
+
+  const isAction = isActionMessage(processedMessage)
+  if (isAction) processedMessage = stripActionMessage(processedMessage)
+
   // Strip PUI unicode characters from username and message
-  let processedUsername = username.replace(PUI_UNICODE_REGEX, '')
-  let processedMessage = message.replace(PUI_UNICODE_REGEX, '')
+  processedUsername = processedUsername.replace(PUI_UNICODE_REGEX, '')
+  processedMessage = processedMessage.replace(PUI_UNICODE_REGEX, '')
 
   const nativeEmotes = new Map<string, NativeTwitchEmote>()
   const markIndices: {
@@ -232,7 +262,9 @@ export function parseFullMessage(
     .map((url) => url.trim().replace(PUI_UNICODE_REGEX, ''))
 
   const preSegmentedMessage = processedMessage
-  let segments: SegmentNoEscape[] = [{ type: 'text', text: preSegmentedMessage }]
+  let segments: SegmentNoEscape[] = [
+    { type: isAction ? 'action' : 'text', text: preSegmentedMessage }
+  ]
 
   function nextIndexOf(str: string, currentIndex: number, chars: string[]): number {
     let nextIndex = str.length
@@ -249,7 +281,7 @@ export function parseFullMessage(
   ]) {
     if (!startMark || !endMark) throw new Error(`Invalid mark type: ${type}`)
     segments = segments.reduce<SegmentNoEscape[]>((acc, segment): SegmentNoEscape[] => {
-      if (segment.type !== 'text') {
+      if (segment.type !== 'text' && segment.type !== 'action') {
         acc.push(segment)
         return acc
       }
@@ -268,7 +300,7 @@ export function parseFullMessage(
           const end = i
           if (lastIndex < start) {
             const textBefore = segment.text.slice(lastIndex, start)
-            acc.push({ type: 'text', text: textBefore })
+            acc.push({ type: segment.type, text: textBefore })
           }
           const fullText = segment.text.slice(start, end + endMark.length)
           const text = fullText.slice(startMark.length, end - start).replace(PUI_UNICODE_REGEX, '')
@@ -306,7 +338,7 @@ export function parseFullMessage(
           }
 
           if (failed) {
-            acc.push({ type: 'text', text })
+            acc.push({ type: segment.type, text })
           }
 
           lastIndex = end + MarkType.HighlightEnd.length
@@ -323,7 +355,7 @@ export function parseFullMessage(
           }
           acc.push({ type: 'url', text: textAfter, url })
         } else {
-          acc.push({ type: 'text', text: textAfter })
+          acc.push({ type: segment.type, text: textAfter })
         }
       }
       return acc

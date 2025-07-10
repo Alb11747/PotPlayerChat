@@ -2,7 +2,7 @@
   import { getTwitchUserIdByName } from '@/chat/twitch-api'
   import { mainEmoteService, type TwitchEmoteService } from '@/chat/twitch-emotes'
   import type { TwitchMessage } from '@/chat/twitch-msg'
-  import { parseFullMessage } from '@/renderer/src/core/chat-dom'
+  import { parseFullMessage, isActionMessage } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
   import type { TwitchEmote } from '@mkody/twitch-emoticons'
   import sanitizeHtml from 'sanitize-html'
@@ -94,25 +94,24 @@
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html escapedUsername + ': '}
     </span>
-    <span class="chat-text">
+    <span
+      class="chat-text"
+      style={isActionMessage(message.message) ? `color: ${message.color}` : ''}
+    >
       {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.getId(), index))}
-        {#if segment.type === 'emote'}
-          {#if urlTracker.isFailedUrl(segment.url)}
-            {segment.text}
-          {:else}
-            <img
-              class="chat-emote"
-              src={segment.url}
-              alt={segment.text}
-              title={segment.text}
-              onload={() => {
-                if (onEmoteLoad) onEmoteLoad(segment.emote)
-              }}
-              onerror={() => {
-                urlTracker.markFailedUrl(segment.url)
-              }}
-            />
-          {/if}
+        {#if segment.type === 'emote' && !urlTracker.isFailedUrl(segment.url)}
+          <img
+            class="chat-emote"
+            src={segment.url}
+            alt={segment.text}
+            title={segment.text}
+            onload={() => {
+              if (onEmoteLoad) onEmoteLoad(segment.emote)
+            }}
+            onerror={() => {
+              urlTracker.markFailedUrl(segment.url)
+            }}
+          />
         {:else if segment.type === 'url'}
           <button
             class="chat-url"
