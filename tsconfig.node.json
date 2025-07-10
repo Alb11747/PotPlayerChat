@@ -4,7 +4,7 @@
     "electron.vite.config.*",
     "src/main/**/*",
     "src/utils/**/*",
-    "src/chat/**/*",
+    "src/core/chat/**/*",
     "src/types/**/*"
   ],
   "compilerOptions": {
@@ -30,7 +30,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@core/chat/*": ["src/chat/*"]
+      "@core/*": ["src/core/*"]
     }
   }
 }

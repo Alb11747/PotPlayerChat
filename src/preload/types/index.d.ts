@@ -1,4 +1,4 @@
-import type { TwitchMessage } from '@/chat/twitch-msg'
+import type { TwitchMessage } from '@core/chat/twitch-msg'
 import type { PotPlayerInstance } from '@/main/potplayer'
 import type { HWND } from '@/types/globals'
 import { IpcRenderer } from 'electron/renderer'
