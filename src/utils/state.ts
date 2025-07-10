@@ -1,3 +1,5 @@
+import { isEqual } from './objects'
+
 export function updateArray<T>(array: T[], newItems: T[]): void {
   const oldLen = array.length
   const newLen = newItems.length
@@ -29,7 +31,7 @@ export function updateCache<K extends string | number | symbol, V>(
 ): void {
   const existing = cache[key]
   if (existing) {
-    if (existing === data) return
+    if (isEqual(existing, data)) return
     if (collisionMsg) console.warn(collisionMsg, key, existing, data)
     cache[key] = null
   } else if (existing !== null) {
