@@ -16,6 +16,24 @@ import {
 import { loadDataFile, saveDataFile } from './storage'
 import { getForegroundWindow } from './windows'
 
+function setAccessControlHeaders(window: BrowserWindow): void {
+  window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const { responseHeaders } = details
+    if (responseHeaders) {
+      for (const header of Object.keys(responseHeaders)) {
+        if (header.toLowerCase() === 'access-control-allow-origin') delete responseHeaders[header]
+      }
+      // Add custom headers
+      responseHeaders['Access-Control-Allow-Origin'] = ['*']
+      callback({
+        responseHeaders
+      })
+    } else {
+      callback({})
+    }
+  })
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 600,
@@ -27,6 +45,8 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  setAccessControlHeaders(mainWindow)
 
   const conf = new Conf()
   const lock = new AsyncLock()
@@ -281,6 +301,8 @@ function createWindow(): void {
         sandbox: false
       }
     })
+
+    setAccessControlHeaders(searchWindow)
 
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       searchWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/search.html`)
