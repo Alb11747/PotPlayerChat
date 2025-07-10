@@ -229,10 +229,13 @@ export class ChatService {
   ): Promise<void> {
     if (endTime - startTime > 8 * 60 * 60 * 1000) return // Avoid fetching too large ranges
 
-    const startDate = new Date(startTime)
-    const endDate = new Date(endTime)
+    const padding = 5 * 60 * 1000 // 5 minutes padding
+    const startDate = new Date(startTime - padding)
+    const startDateNoPadding = new Date(startTime)
+    const endDate = new Date(endTime + padding)
+    const endDateNoPadding = new Date(endTime)
 
-    const datesToFetch = this.generateDatesInRange(startDate, endDate, false)
+    const datesToFetch = this.generateDatesInRange(startDateNoPadding, endDateNoPadding, false)
     const isCached = (): boolean =>
       datesToFetch.every((d) => {
         const cacheKey = this.getCacheKey(channel, d)
@@ -284,8 +287,8 @@ export class ChatService {
       this.currentChatData = prefetchedMessages.messages.sort((a, b) => a.timestamp - b.timestamp)
       this.lastPrefetchRange = {
         channel,
-        startTime,
-        endTime
+        startTime: startDate.getTime(),
+        endTime: endDate.getTime()
       }
     })
   }
