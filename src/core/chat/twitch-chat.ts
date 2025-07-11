@@ -126,6 +126,7 @@ export class ChatService {
             console.timeEnd(timeLabel)
             if (data == null) {
               console.warn(`Failed to fetch chat for ${year}/${month}/${day}`)
+              this.chatCache[cacheKey] = { messages: [], complete }
               return cachedMessages || []
             }
 
