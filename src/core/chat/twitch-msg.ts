@@ -65,7 +65,7 @@ export class TwitchChatMessage {
     return emotesRaw.split('/').flatMap((group) => {
       const [id, ranges] = group.split(':')
       if (!id || !ranges) return []
-      const emotes = []
+      const emotes: { id: string; startIndex: number; endIndex: number }[] = []
       for (const range of ranges.split(',')) {
         const [start, end] = range.split('-').map(Number)
         if (Number.isNaN(start) || Number.isNaN(end)) continue
