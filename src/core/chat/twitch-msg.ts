@@ -355,42 +355,62 @@ export class TwitchSystemMessage {
       switch (msgId) {
         case 'sub':
         case 'resub': {
-          const months = escapeIrcText(
-            this.tags['msg-param-cumulative-months'] || this.tags['msg-param-months']
-          )
-          const streak = escapeIrcText(this.tags['msg-param-streak-months'])
-          const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
-          let msg = `${displayName} subscribed`
-          if (months) msg += ` (${months} months)`
-          if (planName) msg += ` with ${planName}`
-          if (streak && streak !== '0') msg += ` (streak: ${streak} months)`
-          if (systemMsg) msg += `: ${systemMsg}`
-          return msg
+          let msg = ''
+          if (systemMsg) {
+            msg = systemMsg
+          } else {
+            console.warn("'sub' or 'resub' message without system-msg tag, using default format")
+            const months = escapeIrcText(
+              this.tags['msg-param-cumulative-months'] || this.tags['msg-param-months']
+            )
+            const streak = escapeIrcText(this.tags['msg-param-streak-months'])
+            const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
+            msg = `${displayName} subscribed`
+            if (months) msg += ` (${months} months)`
+            if (planName) msg += ` with ${planName}`
+            if (streak && streak !== '0') msg += ` (streak: ${streak} months)`
+          }
+          return `${msg}: ${this.message}`
         }
         case 'subgift': {
-          const recipient = escapeIrcText(
-            this.tags['msg-param-recipient-display-name'] ||
-              this.tags['msg-param-recipient-user-name'] ||
-              'someone'
-          )
-          const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
-          let msg = `${displayName} gifted a sub to ${recipient}`
-          if (planName) msg += ` (${planName})`
-          if (systemMsg) msg += `: ${systemMsg}`
-          return msg
+          let msg = ''
+          if (systemMsg) {
+            msg = systemMsg
+          } else {
+            console.warn("'subgift' message without system-msg tag, using default format")
+            const recipient = escapeIrcText(
+              this.tags['msg-param-recipient-display-name'] ||
+                this.tags['msg-param-recipient-user-name'] ||
+                'someone'
+            )
+            const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
+            msg = `${displayName} gifted a sub to ${recipient}`
+            if (planName) msg += ` (${planName})`
+          }
+          return `${msg}: ${this.message}`
         }
         case 'submysterygift': {
-          const count = escapeIrcText(this.tags['msg-param-mass-gift-count'])
-          let msg = `${displayName} gifted ${count || 'some'} subs to the community`
-          if (systemMsg) msg += `: ${systemMsg}`
-          return msg
+          let msg = ''
+          if (systemMsg) {
+            msg = systemMsg
+          } else {
+            console.warn("'submysterygift' message without system-msg tag, using default format")
+            const count = escapeIrcText(this.tags['msg-param-mass-gift-count'])
+            msg = `${displayName} gifted ${count || 'some'} mystery subs to the community`
+          }
+          return `${msg}: ${this.message}`
         }
         case 'raid': {
-          const raider = escapeIrcText(this.tags['msg-param-displayName'] || displayName)
-          const viewers = escapeIrcText(this.tags['msg-param-viewerCount'])
-          let msg = `${raider} is raiding with ${viewers || 'some'} viewers`
-          if (systemMsg) msg += `: ${systemMsg}`
-          return msg
+          let msg = ''
+          if (systemMsg) {
+            msg = systemMsg
+          } else {
+            console.warn("'raid' message without system-msg tag, using default format")
+            const raider = escapeIrcText(this.tags['msg-param-displayName'] || displayName)
+            const viewers = escapeIrcText(this.tags['msg-param-viewerCount'])
+            msg = `${raider} is raiding with ${viewers || 'some'} viewers`
+          }
+          return `${msg}: ${this.message}`
         }
         case 'bitsbadgetier': {
           const threshold = escapeIrcText(this.tags['msg-param-threshold'])

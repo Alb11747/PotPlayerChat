@@ -8,7 +8,15 @@ export interface IrcMessage {
 }
 
 export function escapeIrcText(text?: string): string {
-  return text?.replaceAll('\\s', ' ') || ''
+  if (!text) return ''
+  return (
+    text
+      .replaceAll('\\s', ' ')
+      .replaceAll('\\n', '\n')
+      .replaceAll('\\r', '\r')
+      .replaceAll('\\t', '\t')
+      .replaceAll('\\\\', '\\') || ''
+  )
 }
 
 export function parseIrcMessages(lines: string): IrcMessage[] {
