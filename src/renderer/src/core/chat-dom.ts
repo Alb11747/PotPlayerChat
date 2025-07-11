@@ -55,11 +55,21 @@ export function stripActionMessage(message: string): string {
   return message
 }
 
+let nextPUAId = '\u{E000}'
+
+function genNextPUA(): string {
+  const id = nextPUAId
+  nextPUAId = String.fromCodePoint(nextPUAId.codePointAt(0)! + 1)
+  if (nextPUAId.codePointAt(0)! > 0xf8ff) throw new Error('PUA ID overflow')
+  return id
+}
+
 const markData = [
-  { name: 'Emote', start: '\u{E004}', end: '\u{E005}' },
-  { name: 'Url', start: '\u{E002}', end: '\u{E003}' },
-  { name: 'Mention', start: '\u{E006}', end: '\u{E007}' },
-  { name: 'Highlight', start: '\u{E000}', end: '\u{E001}' }
+  { name: 'TwitchEmote', start: genNextPUA(), end: genNextPUA() },
+  { name: 'Emote', start: genNextPUA(), end: genNextPUA() },
+  { name: 'Url', start: genNextPUA(), end: genNextPUA() },
+  { name: 'Mention', start: genNextPUA(), end: genNextPUA() },
+  { name: 'Highlight', start: genNextPUA(), end: genNextPUA() }
 ] as const
 
 const MarkType = Object.fromEntries(
