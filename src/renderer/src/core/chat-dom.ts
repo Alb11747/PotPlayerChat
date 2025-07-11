@@ -498,6 +498,48 @@ export function parseFullMessage(
     return str.replace(highlightStartRegex, '<mark>').replace(highlightEndRegex, '</mark>')
   }
 
+  // Carry open marks into next segments
+  for (let i = 0; i < segments.length - 1; i++) {
+    const segment = segments[i]
+    const nextSegment = segments[i + 1]
+    if (!segment || !nextSegment) continue
+    while (true) {
+      const lastCharFull = segment.fullText.slice(-1)
+      if (!(lastCharFull in markStarts)) break
+      segment.fullText = segment.fullText.slice(0, -1) // Remove last character
+      nextSegment.fullText = lastCharFull + nextSegment.fullText // Prepend to next segment
+      const lastChar = segment.text.slice(-1)
+      if (!(lastChar in markEnds)) break
+      // If the last character is a closing mark, we need to remove it from the current segment
+      segment.text = segment.text.slice(0, -1) // Remove last character
+      nextSegment.text = lastChar + nextSegment.text // Prepend to next segment
+    }
+  }
+
+  // Carry closing marks into previous segments
+  for (let i = 1; i < segments.length; i++) {
+    const prevSegment = segments[i - 1]
+    const segment = segments[i]
+    if (!prevSegment || !segment) continue
+    while (true) {
+      const firstCharFull = segment.fullText.slice(0, 1)
+      if (!(firstCharFull in markEnds)) break
+      segment.fullText = segment.fullText.slice(1) // Remove first character
+      prevSegment.fullText += firstCharFull // Append to previous segment
+      const firstChar = segment.fullText.slice(0, 1)
+      if (!(firstChar in markStarts)) break
+      // If the first character is an opening mark, we need to remove it from the next segment
+      segment.text = segment.text.slice(1) // Remove first character
+      prevSegment.text += firstChar // Append to previous segment
+    }
+  }
+
+  // Filter out empty segments
+  segments = segments.filter((segment) => {
+    if (!segment) return false
+    return segment.fullText !== '' || segment.text !== ''
+  })
+
   // Carry open marks into following segments
   const markDepthMap = new Map<string, number>()
   segments = segments.map((segment) => {
