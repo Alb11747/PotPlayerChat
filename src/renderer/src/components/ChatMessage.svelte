@@ -13,6 +13,7 @@
     videoStartTime?: number
     videoEndTime?: number
     urlTracker: UrlTracker
+    usernameColorMap?: Map<string, { color: string; timestamp: number }>
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
     onEmoteLoad?: (emote: TwitchEmote) => void
@@ -25,6 +26,7 @@
     videoStartTime,
     videoEndTime,
     urlTracker,
+    usernameColorMap,
     searchQuery,
     onUrlClick,
     onEmoteLoad,
@@ -208,6 +210,14 @@
               </div>
             {/if}
           {/if}
+        {:else if segment.type === 'mention'}
+          <span
+            class="chat-username"
+            style="color: {usernameColorMap?.get(segment.username)?.color || '#ffffff'}"
+          >
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            {@html segment.escaped}
+          </span>
         {:else}
           <!-- eslint-disable-next-line svelte/no-at-html-tags -->
           {@html segment.escaped}

@@ -1,4 +1,17 @@
 /**
+ * Removes the prefix from a string if it exists.
+ * @param str The string to remove the prefix from.
+ * @param prefix The prefix to remove.
+ * @returns The string without the prefix.
+ */
+export function removePrefix(str: string, prefix: string): string {
+  if (str.startsWith(prefix)) {
+    return str.slice(prefix.length)
+  }
+  return str
+}
+
+/**
  * Removes the suffix from a string if it exists.
  * @param str The string to remove the suffix from.
  * @param suffix The suffix to remove.

@@ -1,6 +1,6 @@
+import { regExpEscape, removePrefix } from '@/utils/strings'
 import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchChatMessage } from '@core/chat/twitch-msg'
-import { regExpEscape } from '@/utils/strings'
 import type { Collection } from '@mkody/twitch-emoticons'
 
 /**
@@ -55,39 +55,67 @@ export function stripActionMessage(message: string): string {
   return message
 }
 
-const MarkType = {
-  HighlightStart: '\u{E000}',
-  HighlightEnd: '\u{E001}',
-  UrlStart: '\u{E002}',
-  UrlEnd: '\u{E003}',
-  EmoteStart: '\u{E004}',
-  EmoteEnd: '\u{E005}'
-} as const
-
-const markPairs = [
-  [MarkType.HighlightStart, MarkType.HighlightEnd],
-  [MarkType.UrlStart, MarkType.UrlEnd],
-  [MarkType.EmoteStart, MarkType.EmoteEnd]
+const markData = [
+  { name: 'Emote', start: '\u{E004}', end: '\u{E005}' },
+  { name: 'Url', start: '\u{E002}', end: '\u{E003}' },
+  { name: 'Mention', start: '\u{E006}', end: '\u{E007}' },
+  { name: 'Highlight', start: '\u{E000}', end: '\u{E001}' }
 ] as const
 
-const markOpens = {
-  [MarkType.HighlightStart]: MarkType.HighlightEnd,
-  [MarkType.UrlStart]: MarkType.UrlEnd,
-  [MarkType.EmoteStart]: MarkType.EmoteEnd
-} as const
+const MarkType = Object.fromEntries(
+  markData.flatMap(({ name, start, end }) => [
+    [`${name}Start`, start],
+    [`${name}End`, end]
+  ])
+) as {
+  [K in
+    | `${(typeof markData)[number]['name']}Start`
+    | `${(typeof markData)[number]['name']}End`]: string
+}
 
-const markEnds = {
-  [MarkType.HighlightEnd]: MarkType.HighlightStart,
-  [MarkType.UrlEnd]: MarkType.UrlStart,
-  [MarkType.EmoteEnd]: MarkType.EmoteStart
-} as const
+const markRanking = Object.fromEntries(
+  markData.flatMap(({ start, end }, i) => [
+    [start, i],
+    [end, i]
+  ])
+)
 
-const PUI_UNICODE_REGEX = new RegExp('[\u{E000}-\u{F8FF}]*', 'gu')
+const markStarts = Object.fromEntries(markData.map(({ start, end }) => [start, end])) as Record<
+  string,
+  string
+>
+
+const markEnds = Object.fromEntries(markData.map(({ start, end }) => [end, start])) as Record<
+  string,
+  string
+>
+
+const PUI_UNICODE_REGEX = new RegExp('[\u{E000}-\u{F8FF}]+', 'gu')
 const URL_REGEX = /https?:\/\/(?:[-\w.])+(?::[0-9]+)?(?:\/(?:[\w._~:/?#[\]@!$&'()*+,;=-])*)?/gi
-const URL_MARKED = new RegExp(`${MarkType.UrlStart}(.+?)${MarkType.UrlEnd}`, 'gu')
 
 const highlightStartRegex = new RegExp(MarkType.HighlightStart, 'gu')
 const highlightEndRegex = new RegExp(MarkType.HighlightEnd, 'gu')
+
+const legibleMarksData = [
+  { start: '(', end: ')', name: 'Parentheses' },
+  { start: '[', end: ']', name: 'Square Brackets' },
+  { start: '<', end: '>', name: 'Angle Brackets' },
+  { start: '{', end: '}', name: 'Curly Braces' },
+  { start: '«', end: '»', name: 'Guillemets' },
+  { start: '‹', end: '›', name: 'Single Guillemets' },
+  { start: '【', end: '】', name: 'Chinese Brackets' },
+  { start: '〔', end: '〕', name: 'Japanese Brackets' }
+] as const
+
+export function convertStringToLegibleMarks(s: string): string {
+  for (const [i, { start, end }] of markData.entries()) {
+    const legibleStart = legibleMarksData[i]?.start
+    const legibleEnd = legibleMarksData[i]?.end
+    s = s.replaceAll(start, legibleStart ?? start)
+    s = s.replaceAll(end, legibleEnd ?? end)
+  }
+  return s
+}
 
 /**
  * Corrects unbalanced marks in a string by adding missing closing or opening marks for all mark types.
@@ -99,38 +127,42 @@ export function correctMarks(str: string): string {
   let prefix = ''
   let suffix = ''
   for (const mark of str) {
-    if (mark in markOpens) {
+    if (mark in markStarts) {
       // If it's an opening mark, push it onto the stack
       stack.push(mark)
       continue
     }
-    const openMark = (markOpens as Record<string, string>)[mark]
+    const openMark = markStarts[mark]
     if (openMark) {
       // If it's a closing mark, check the stack
       if (stack.length === 0) {
         // If the stack is empty, we need to add the corresponding opening mark
         prefix = openMark + prefix
-      } else if (openMark === stack[stack.length - 1]) {
-        // If it matches the last opened mark, pop it from the stack
-        stack.pop()
       } else {
-        throw new Error(`Unbalanced string: ${str}`)
+        // Remove the last one that matches openMark
+        const lastIndex = stack.lastIndexOf(openMark)
+        if (lastIndex !== -1) stack.splice(lastIndex, 1)
+        else prefix = openMark + prefix
       }
     }
   }
   // If there are still marks in the stack, we need to add their corresponding closing marks
   if (stack.length > 0)
     suffix = stack
-      .map((mark) => (markEnds as Record<string, string>)[mark])
+      .map((mark) => markEnds[mark])
       .reverse()
       .join('')
   return prefix + str + suffix
 }
 
-type SegmentNoEscape =
-  | { type: 'text' | 'action'; text: string }
-  | { type: 'emote'; text: string; url: string; emote: TwitchEmote | NativeTwitchEmote }
-  | { type: 'url'; text: string; url: string }
+const basicTextTypes = ['text', 'action'] as const
+// const partialTextTypes = ['mention', 'url'] as const
+type SegmentNoEscape = { fullText: string; text: string } & (
+  | { type: 'text' | 'action' | 'highlight' }
+  | { type: 'emote'; url: string; emote: TwitchEmote | NativeTwitchEmote }
+  | { type: 'mention'; username: string }
+  | { type: 'url'; url: string }
+)
 type Segment = SegmentNoEscape & { escaped: string }
 
 export function parseFullMessage(
@@ -164,10 +196,12 @@ export function parseFullMessage(
   processedMessage = processedMessage.replace(PUI_UNICODE_REGEX, '')
 
   const nativeEmotes = new Map<string, NativeTwitchEmote>()
-  const markIndices: {
+  type CharIndex = {
     index: number
     char: string
-  }[] = []
+    otherIndex: number
+  }
+  const markIndices: CharIndex[] = []
 
   // Process search query
   if (searchQuery) {
@@ -177,27 +211,33 @@ export function parseFullMessage(
     for (const match of fullText.matchAll(regex)) {
       const startIndex = (match.index || 0) - processedUsername.length - 2 // Adjust for "username: "
       const endIndex = startIndex + match[0].length
-      markIndices.push({ index: startIndex, char: MarkType.HighlightStart })
-      markIndices.push({ index: endIndex, char: MarkType.HighlightEnd })
+      markIndices.push({ index: startIndex, char: MarkType.HighlightStart, otherIndex: endIndex })
+      markIndices.push({ index: endIndex, char: MarkType.HighlightEnd, otherIndex: startIndex })
     }
   }
 
   // Process URLs in the message
+  const markedUrls: string[] = []
   for (const match of processedMessage.matchAll(URL_REGEX)) {
     const url = match[0]
     const startIndex = match.index || 0
     const endIndex = startIndex + url.length
-    markIndices.push({ index: startIndex, char: MarkType.UrlStart })
-    markIndices.push({ index: endIndex, char: MarkType.UrlEnd })
+    markIndices.push({ index: startIndex, char: MarkType.UrlStart, otherIndex: endIndex })
+    markIndices.push({ index: endIndex, char: MarkType.UrlEnd, otherIndex: startIndex })
+    markedUrls.push(url)
   }
+  markedUrls.reverse()
 
   // Process external emotes
+  const markedEmotes: { name: string; id?: string }[] = []
   if (emotesEnabled && emotes) {
     processedMessage.matchAll(/\S+/g).forEach((word) => {
-      if (!word[0] || !emotes.has(word[0])) return
-      const endIndex = word.index + word[0].length
-      markIndices.push({ index: word.index, char: MarkType.EmoteStart })
-      markIndices.push({ index: endIndex, char: MarkType.EmoteEnd })
+      const emoteName = word[0]
+      if (!emoteName || !emotes.has(emoteName)) return
+      const endIndex = word.index + emoteName.length
+      markIndices.push({ index: word.index, char: MarkType.EmoteStart, otherIndex: endIndex })
+      markIndices.push({ index: endIndex, char: MarkType.EmoteEnd, otherIndex: word.index })
+      markedEmotes.push({ name: emoteName })
     })
   }
 
@@ -210,14 +250,64 @@ export function parseFullMessage(
         const emoteName = message.slice(startIndex, endIndexAdjusted)
         const emote = new NativeTwitchEmote(id, emoteName)
         nativeEmotes.set(emoteName, emote)
-        markIndices.push({ index: startIndex, char: MarkType.EmoteStart })
-        markIndices.push({ index: endIndexAdjusted, char: MarkType.EmoteEnd })
+        markIndices.push({ index: startIndex, char: MarkType.EmoteStart, otherIndex: endIndex })
+        markIndices.push({
+          index: endIndexAdjusted,
+          char: MarkType.EmoteEnd,
+          otherIndex: startIndex
+        })
+        markedEmotes.push({ name: emoteName, id })
       }
     }
   }
+  markedEmotes.reverse()
+
+  // Process mentions in the message
+  const markedMentions: string[] = []
+  for (const match of processedMessage.matchAll(/(?<=^|\s)(@[\p{L}\p{M}\p{N}_]+)(?=\s|$)/gu)) {
+    const usernameMatch = match[1]
+    if (!usernameMatch) continue
+    const startIndex = match.index || 0
+    const endIndex = startIndex + usernameMatch.length
+    markIndices.push({ index: startIndex, char: MarkType.MentionStart, otherIndex: endIndex })
+    markIndices.push({ index: endIndex, char: MarkType.MentionEnd, otherIndex: startIndex })
+    markedMentions.push(removePrefix(usernameMatch, '@'))
+  }
+  markedMentions.reverse()
 
   // Insert marks descending by index to avoid index shifting issues
-  markIndices.sort((a, b) => (a.index > 0 || b.index > 0 ? b.index - a.index : a.index - b.index))
+  function compare(a: CharIndex, b: CharIndex): number {
+    if (a.index < 0 && b.index >= 0) return 1 // Negative index (username) should come after positive index (message)
+    if (a.index >= 0 && b.index < 0) return -1 // Positive index (message) should come before negative index (username)
+    console.assert(a.index < 0 === b.index < 0)
+    const isNegative = a.index < 0
+    const sign = isNegative ? -1 : 1 // If both are negative, flip the order
+    // Higher index comes first
+    if (b.index !== a.index) return sign * (b.index - a.index)
+    if (a.char === b.char) return 0 // Same mark, keep order stable
+    // Marks are inserted left-to-right, and each insertion shifts the string to the right.
+    // So a mark inserted earlier will appear further to the right in the final string.
+    const isOpenA = markStarts[a.char] !== undefined
+    const isOpenB = markStarts[b.char] !== undefined
+    // Opening marks should come before closing marks - Result: )[
+    if (isOpenA && !isOpenB) return sign * -1
+    if (!isOpenA && isOpenB) return sign * 1
+    console.assert(isOpenA === isOpenB)
+    const isOpen = isOpenA
+    //Lower otherIndex should come first - Result: ([__]__)
+    if (a.otherIndex < b.otherIndex) return sign * -1
+    if (a.otherIndex > b.otherIndex) return sign * 1
+    const rankA = markRanking[a.char] ?? 0
+    const rankB = markRanking[b.char] ?? 0
+    // Higher rank should come first in insertion order (Opening) — ends up inside
+    // Lower rank should come first in insertion order (Closing) — ends up outside
+    // Lower rank should surround higher rank
+    // E.g. Rank('(') < Rank('[') - Result: ([__])
+    if (rankA !== rankB) return (isOpen ? 1 : -1) * sign * (rankB - rankA)
+    // If all else is equal, keep the order stable
+    return 0
+  }
+  markIndices.sort(compare)
 
   // Remove duplicates
   const uniqueMarks = new Map<string, { index: number; char: string }>()
@@ -253,17 +343,9 @@ export function parseFullMessage(
     processedMessage = balancedMessage
   }
 
-  const urlMatches = processedMessage
-    .matchAll(URL_MARKED)
-    .toArray()
-    .reverse()
-    .map((match) => match[1])
-    .filter((url): url is string => typeof url === 'string')
-    .map((url) => url.trim().replace(PUI_UNICODE_REGEX, ''))
-
   const preSegmentedMessage = processedMessage
   let segments: SegmentNoEscape[] = [
-    { type: isAction ? 'action' : 'text', text: preSegmentedMessage }
+    { type: isAction ? 'action' : 'text', fullText: preSegmentedMessage, text: preSegmentedMessage }
   ]
 
   function nextIndexOf(str: string, currentIndex: number, chars: string[]): number {
@@ -275,16 +357,68 @@ export function parseFullMessage(
     return nextIndex
   }
 
+  function processSegment(
+    acc: SegmentNoEscape[],
+    segment: SegmentNoEscape,
+    type: string,
+    fullText: string,
+    text: string
+  ): boolean {
+    if (type === 'emote') {
+      let emoteName = markedEmotes.pop()?.name
+      if (!emoteName) {
+        console.warn(`No emote name found for marked segment: ${message} - ${segment}`)
+        emoteName = text.replace(PUI_UNICODE_REGEX, '') // Fallback to text if no emote name found
+      } else {
+        console.assert(
+          emoteName === text.replace(PUI_UNICODE_REGEX, ''),
+          `Emote name mismatch: ${text}`,
+          markedEmotes
+        )
+      }
+      const emote = nativeEmotes.get(emoteName) || emotes?.get(emoteName)
+      if (!emote) {
+        console.warn(`No emote found for marked segment: ${message} - ${segment}`)
+        return false
+      }
+      const url = emote.toLink(emote.sizes?.length - 1 || 2)
+      acc.push({ type, fullText, text, url, emote })
+    } else if (type === 'url') {
+      const url = markedUrls.pop()
+      if (!url) {
+        console.warn(`No URL found for marked segment: ${message} - ${segment}`)
+        return false
+      }
+      acc.push({ type, fullText, text, url })
+    } else if (type === 'highlight') {
+      acc.push({ type, fullText, text })
+    } else if (type === 'mention') {
+      let username = markedMentions.pop()
+      if (!username) {
+        console.warn(`No username found for marked segment: ${message} - ${segment}`)
+        username = removePrefix(text, '@') // Fallback to text if no mention found
+      }
+      acc.push({ type, fullText, text, username })
+    } else {
+      console.warn(`Unknown type: ${type} in segment: ${segment.text}`)
+      return false
+    }
+    return true
+  }
+
   for (const [type, startMark, endMark] of [
     ['emote', MarkType.EmoteStart, MarkType.EmoteEnd],
-    ['url', MarkType.UrlStart, MarkType.UrlEnd]
+    ['url', MarkType.UrlStart, MarkType.UrlEnd],
+    ['highlight', MarkType.HighlightStart, MarkType.HighlightEnd],
+    ['mention', MarkType.MentionStart, MarkType.MentionEnd]
   ]) {
-    if (!startMark || !endMark) throw new Error(`Invalid mark type: ${type}`)
+    if (!type || !startMark || !endMark) throw new Error(`Invalid mark type: ${type}`)
     segments = segments.reduce<SegmentNoEscape[]>((acc, segment): SegmentNoEscape[] => {
-      if (segment.type !== 'text' && segment.type !== 'action') {
+      if (!basicTextTypes.includes(segment.type as (typeof basicTextTypes)[number])) {
         acc.push(segment)
         return acc
       }
+      segment.type = segment.type as (typeof basicTextTypes)[number]
 
       let lastIndex = 0
       const startStack: number[] = []
@@ -296,66 +430,57 @@ export function parseFullMessage(
         if (segment.text.slice(i, i + startMark.length) === startMark) {
           startStack.push(i)
         } else if (segment.text.slice(i, i + endMark.length) === endMark) {
-          const start = startStack.pop() ?? 0
+          const start = startStack.pop() ?? null
           const end = i
-          if (lastIndex < start) {
-            const textBefore = segment.text.slice(lastIndex, start)
-            acc.push({ type: segment.type, text: textBefore })
+          if (lastIndex < (start ?? 0)) {
+            const textBefore = segment.text.slice(lastIndex, start ?? 0)
+            acc.push({ type: segment.type, fullText: textBefore, text: textBefore })
           }
-          const fullText = segment.text.slice(start, end + endMark.length)
-          const text = fullText.slice(startMark.length, end - start).replace(PUI_UNICODE_REGEX, '')
-          let failed = false
-
-          if (type === 'emote') {
-            // Handle emotes
-            const emote = nativeEmotes.get(text) || emotes?.get(text)
-            if (emote) {
-              acc.push({
-                type: 'emote',
-                text,
-                url: emote.toLink(emote.sizes?.length - 1 || 2),
-                emote
-              })
-            } else {
-              console.warn(`No emote found for marked segment: ${message} - ${segment}`)
-              failed = true
-            }
-          } else if (type === 'url') {
-            const url = urlMatches.pop()
-            if (url) {
-              acc.push({
-                type: 'url',
-                text,
-                url
-              })
-            } else {
-              console.warn(`No URL found for marked segment: ${message} - ${segment}`)
-              failed = true
-            }
-          } else {
-            console.warn(`Unknown type: ${type} in segment: ${segment.text}`)
-            failed = true
-          }
-
-          if (failed) {
-            acc.push({ type: segment.type, text })
-          }
-
+          const fullText = segment.text.slice(start ?? 0, end + endMark.length)
+          const text = fullText.slice(start === null ? 0 : startMark.length, end - (start ?? 0))
+          if (!processSegment(acc, segment, type, fullText, text))
+            acc.push({ type: segment.type, fullText, text })
           lastIndex = end + MarkType.HighlightEnd.length
         }
       }
       if (lastIndex < segment.text.length) {
-        const textAfter = segment.text.slice(lastIndex)
-        if (startStack.length > 0 && type === 'url') {
-          // We have an unclosed url, just push the remaining text
-          const url = urlMatches[urlMatches.length - 1] // Peek the last URL
-          if (!url) {
-            console.warn(`No URL found for unclosed segment: ${message} - ${segment}`)
-            return acc
-          }
-          acc.push({ type: 'url', text: textAfter, url })
+        if (startStack.length > 0) {
+          const firstStart = startStack[0]!
+          const textBeforeStartMark = segment.text.slice(lastIndex, firstStart)
+          acc.push({ type: segment.type, fullText: textBeforeStartMark, text: textBeforeStartMark })
+          const textAfterStartMark = segment.text.slice(firstStart + startMark.length)
+          const textAfterIncludingStartMark = segment.text.slice(firstStart)
+
+          if (type === 'url') {
+            // We have an unclosed url, just push the remaining text
+            const url = markedUrls[markedUrls.length - 1] // Peek the last URL
+            if (!url) console.warn(`No URL found for unclosed segment: ${message} - ${segment}`)
+            acc.push({
+              type: type,
+              fullText: textAfterIncludingStartMark,
+              text: textAfterStartMark,
+              url: url || ''
+            })
+          } else if (type === 'mention') {
+            // We have an unclosed mention, just push the remaining text
+            const username = markedMentions[markedMentions.length - 1] // Peek the last mention
+            if (!username)
+              console.warn(`No username found for unclosed segment: ${message} - ${segment}`)
+            acc.push({
+              type: type,
+              fullText: textAfterStartMark,
+              text: textAfterStartMark,
+              username: username || ''
+            })
+          } else
+            acc.push({
+              type: segment.type,
+              fullText: textAfterIncludingStartMark,
+              text: textAfterIncludingStartMark
+            })
         } else {
-          acc.push({ type: segment.type, text: textAfter })
+          const textAfterEndMark = segment.text.slice(lastIndex)
+          acc.push({ type: segment.type, fullText: textAfterEndMark, text: textAfterEndMark })
         }
       }
       return acc
@@ -364,8 +489,8 @@ export function parseFullMessage(
 
   // Reconstruct segments with emotes and URLs
   if (debug) {
-    const msg = segments.map((seg) => seg.text).join('')
-    if (msg.replace(PUI_UNICODE_REGEX, '') !== preSegmentedMessage.replace(PUI_UNICODE_REGEX, ''))
+    const msg = segments.map((seg) => seg.fullText).join('')
+    if (msg !== preSegmentedMessage)
       console.warn(`Failed to reconstruct segments: "${preSegmentedMessage}" -> "${msg}"`)
   }
 
@@ -375,31 +500,44 @@ export function parseFullMessage(
 
   // Carry open marks into following segments
   const markDepthMap = new Map<string, number>()
-  const populatedSegments: Segment[] = segments
-    .map((segment) => {
-      for (const [startMark, endMark] of markPairs) {
-        const openCount = (segment.text.match(startMark) || []).length
-        const closeCount = (segment.text.match(endMark) || []).length
-        const lastMarkDepth = markDepthMap.get(startMark) || 0
-        const markDepth = lastMarkDepth + openCount - closeCount
-        markDepthMap.set(startMark, markDepth)
-        if (lastMarkDepth > 0 && markDepth > 0) {
-          // The current segment is nested inside marks
-          segment.text = startMark + segment.text + endMark
-        }
+  segments = segments.map((segment) => {
+    for (const { start: startMark, end: endMark } of markData) {
+      const openCount = (segment.fullText.match(startMark) || []).length
+      const closeCount = (segment.fullText.match(endMark) || []).length
+      const lastMarkDepth = markDepthMap.get(startMark) || 0
+      const currentMarkDepth = openCount - closeCount
+      const totalMarkDepth = lastMarkDepth + currentMarkDepth
+      markDepthMap.set(startMark, totalMarkDepth)
+      if (lastMarkDepth > 0) {
+        segment.text = startMark.repeat(lastMarkDepth) + segment.text
       }
+    }
+    return segment
+  })
 
-      return segment
-    })
-    .map((segment: SegmentNoEscape): Segment => {
-      return {
-        ...segment,
-        escaped:
-          markIndices.length > 0
-            ? replaceMark(correctMarks(escapeHtml(segment.text)))
-            : segment.text
-      }
-    })
+  const populatedSegments: Segment[] = segments.map((segment: SegmentNoEscape): Segment => {
+    let escaped =
+      markIndices.length > 0
+        ? replaceMark(correctMarks(escapeHtml(segment.text))).replace(PUI_UNICODE_REGEX, '')
+        : segment.text
+
+    if (segment.type === 'highlight') escaped = `<mark>${escaped}</mark>`
+
+    const processedSegment = {
+      ...segment,
+      escaped
+    }
+
+    if (debug && PUI_UNICODE_REGEX.test(processedSegment.escaped)) {
+      console.warn(
+        `PUI unicode characters found in segment: "${processedSegment.escaped}" - ${JSON.stringify(
+          processedSegment
+        )}`
+      )
+    }
+
+    return processedSegment
+  })
 
   return {
     escapedUsername:

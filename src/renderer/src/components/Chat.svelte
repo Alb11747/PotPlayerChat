@@ -1,16 +1,23 @@
 <script lang="ts">
-  import type { TwitchMessage } from '@core/chat/twitch-msg'
+  import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import { CurrentVideoTimeHistory } from '@/utils/time'
+  import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { onMount } from 'svelte'
+  import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
   import {
-    chatService,
-    loadingState,
-    potplayerInstances,
-    selectedPotplayerInfo
+    chatService as chatServiceObject,
+    loadingState as loadingStateObject,
+    potplayerInstances as potplayerInstancesObject,
+    selectedPotplayerInfo as selectedPotplayerInfoObject
   } from '../state/chat-state.svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
+
+  const chatService: ChatService = chatServiceObject
+  const loadingState: LoadingState = loadingStateObject
+  const potplayerInstances: PotPlayerInfo[] = potplayerInstancesObject
+  const selectedPotplayerInfo: Partial<PotPlayerInfo> = selectedPotplayerInfoObject
 
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker()
@@ -19,6 +26,9 @@
   let messages: TwitchMessage[] = $state.raw([])
   let isMainPotPlayer = $state(true)
   let scrollToBottom = $state(true)
+
+  if (!chatService.usernameColorCache)
+    chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
   function scrollToBottomIfNeeded(): void {
     if (vlistRef && scrollToBottom) {
@@ -159,6 +169,7 @@
           videoStartTime={selectedPotplayerInfo.startTime}
           videoEndTime={selectedPotplayerInfo.endTime}
           {urlTracker}
+          usernameColorMap={chatService.usernameColorCache}
           onUrlClick={handleUrlClick}
           onEmoteLoad={scrollToBottomIfNeeded}
           enablePreviews={true}

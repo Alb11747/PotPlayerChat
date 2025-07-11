@@ -1,17 +1,18 @@
-import { ChatService, type LoadingState, type PotPlayerInfo } from '@core/chat/twitch-chat'
+import type { PotPlayerInstance } from '@/main/potplayer'
 import type { HWND } from '@/types/globals'
 import { updateArray, updateCache as updateCacheRemovingCollisions } from '@/utils/state'
 import { getStreamerFromUrl as getChannelFromUrl, getStartTimeFromTitle } from '@/utils/stream'
+import { ChatService, type LoadingState, type PotPlayerInfo } from '@core/chat/twitch-chat'
 import conf from './config'
 
-export const potplayerInstances: { hwnd: HWND; title: string }[] = $state([])
-export const selectedPotplayerInfo: Partial<PotPlayerInfo> = $state({})
+export const potplayerInstances: PotPlayerInstance[] = $state([])
+export const selectedPotplayerInfo: Partial<PotPlayerInstance> = $state({})
 export const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
 
-export const chatService = new ChatService(window.api, loadingState)
+export const chatService: ChatService = new ChatService(window.api, loadingState)
 
 async function onPotPlayerInstancesChanged(
-  instances: { hwnd: HWND; title: string; selected?: boolean }[]
+  instances: (PotPlayerInstance & { selected?: boolean })[]
 ): Promise<void> {
   if (instances.length === 0) {
     potplayerInstances.length = 0

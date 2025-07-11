@@ -32,6 +32,8 @@ export interface LoadingState {
 export class ChatService {
   private api: WindowApi
   private justLogApi: JustLogAPI
+
+  public usernameColorCache: Map<string, { color: string; timestamp: number }> | null = null
   public lastPotPlayerInfo: PotPlayerInfo | null = null
 
   private currentChatData: TwitchMessage[] = []
@@ -128,6 +130,8 @@ export class ChatService {
             }
 
             const newMessages = data.messages
+            this.updateUsernameColorCache(newMessages)
+
             let messages: TwitchMessage[]
             if (cachedMessages && lastTimestamp !== null) {
               messages = this.mergeMessageArrays(cachedMessages, newMessages, lastTimestamp)
@@ -139,6 +143,7 @@ export class ChatService {
               messages = newMessages
               console.debug(`Fetched ${newMessages.length} lines from ${year}/${month}/${day}`)
             }
+
             this.chatCache[cacheKey] = { messages, complete }
             return messages
           } catch (error) {
@@ -199,6 +204,19 @@ export class ChatService {
       d1.getUTCMonth() === d2.getUTCMonth() &&
       d1.getUTCDate() === d2.getUTCDate()
     )
+  }
+
+  private updateUsernameColorCache(messages: TwitchMessage[]): void {
+    if (!this.usernameColorCache) return
+    for (const msg of messages) {
+      if (msg.type !== 'chat' || !msg.username || !msg.color) continue
+      const last = this.usernameColorCache.get(msg.username)
+      if (last && last.timestamp > msg.timestamp) continue
+      this.usernameColorCache.set(msg.username, {
+        color: msg.color,
+        timestamp: msg.timestamp
+      })
+    }
   }
 
   private mergeMessageArrays(
@@ -276,6 +294,8 @@ export class ChatService {
         console.warn(`Failed to prefetch messages for ${channel} from ${startDate} to ${endDate}`)
         return
       }
+
+      this.updateUsernameColorCache(prefetchedMessages.messages)
 
       if (isCached()) {
         console.debug(`Messages for ${channel} from ${startDate} to ${endDate} are already cached`)

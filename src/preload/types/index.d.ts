@@ -31,10 +31,10 @@ export interface WindowApi {
   onSetCurrentTime: (callback: (event: Event, time: number) => void) => void
   offSetCurrentTime: (callback: (event: Event, time: number) => void) => void
   onPotPlayerInstancesChanged: (
-    callback: (event: Event, instances: { hwnd: HWND; title: string; selected?: boolean }[]) => void
+    callback: (event: Event, instances: (PotPlayerInstance & { selected?: boolean })[]) => void
   ) => void
   offPotPlayerInstancesChanged: (
-    callback: (event: Event, instances: { hwnd: HWND; title: string; selected?: boolean }[]) => void
+    callback: (event: Event, instances: (PotPlayerInstance & { selected?: boolean })[]) => void
   ) => void
 }
 

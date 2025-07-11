@@ -1,12 +1,16 @@
 <script lang="ts">
-  import { TwitchChatMessage } from '@core/chat/twitch-msg'
   import type { PotPlayerInstance } from '@/main/potplayer'
   import type {} from '@/preload/types/index.d.ts'
   import { chatService, updateSelectedPotPlayerInfo } from '@/renderer/src/state/chat-state.svelte'
+  import { TwitchChatMessage } from '@core/chat/twitch-msg'
   import { onMount } from 'svelte'
+  import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
+
+  if (!chatService.usernameColorCache)
+    chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
   class TwitchMessageFormatted extends TwitchChatMessage {
     formattedMessage: string
@@ -204,6 +208,7 @@
               videoStartTime={chatService?.lastPotPlayerInfo?.startTime}
               videoEndTime={chatService?.lastPotPlayerInfo?.endTime}
               {urlTracker}
+              usernameColorMap={chatService.usernameColorCache}
               searchQuery={searchPattern}
               onUrlClick={handleUrlClick}
               enablePreviews={true}
