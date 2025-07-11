@@ -25,11 +25,13 @@
   type TwitchMessageFormatted = TwitchMessage & { formattedMessage: string }
   function formattedTwitchMessageFactory(msg: TwitchMessage): TwitchMessageFormatted {
     if (msg.type === 'chat') {
-      const newObj = Object.create(msg, TwitchChatMessage.prototype)
+      const newObj = Object.create(TwitchChatMessage.prototype)
+      Object.assign(newObj, msg)
       newObj.formattedMessage = `${msg.username}: ${msg.message}`
       return newObj
     } else if (msg.type === 'system') {
-      const newObj = Object.create(msg, TwitchSystemMessage.prototype)
+      const newObj = Object.create(TwitchSystemMessage.prototype)
+      Object.assign(newObj, msg)
       newObj.formattedMessage = msg.getSystemText()
       return newObj
     }
