@@ -4,6 +4,7 @@ import type { HWND } from '@/types/globals'
 import { JustLogAPI } from './justlog'
 import type { TwitchMessage } from './twitch-msg'
 import AsyncLock from 'async-lock'
+import { userIdCache } from './twitch-api'
 
 export interface ChatSettings {
   getJustlogUrl: () => string
@@ -131,7 +132,7 @@ export class ChatService {
             }
 
             const newMessages = data.messages
-            this.updateUsernameColorCache(newMessages)
+            this.updateCaches(newMessages)
 
             let messages: TwitchMessage[]
             if (cachedMessages && lastTimestamp !== null) {
@@ -207,7 +208,7 @@ export class ChatService {
     )
   }
 
-  private updateUsernameColorCache(messages: TwitchMessage[]): void {
+  private updateCaches(messages: TwitchMessage[]): void {
     if (!this.usernameColorCache) return
     for (const msg of messages) {
       if (msg.type !== 'chat' || !msg.username || !msg.color) continue
@@ -217,6 +218,12 @@ export class ChatService {
         color: msg.color,
         timestamp: msg.timestamp
       })
+    }
+    for (const msg of messages) {
+      const channel = msg.channel
+      const roomId = msg.roomId
+      if (!channel || !roomId) continue
+      userIdCache.set(channel, roomId)
     }
   }
 
@@ -296,7 +303,7 @@ export class ChatService {
         return
       }
 
-      this.updateUsernameColorCache(prefetchedMessages.messages)
+      this.updateCaches(prefetchedMessages.messages)
 
       if (isCached()) {
         console.debug(`Messages for ${channel} from ${startDate} to ${endDate} are already cached`)

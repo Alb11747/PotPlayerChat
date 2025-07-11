@@ -13,7 +13,7 @@ const apiPromise = (async () => {
   })
 })()
 
-const userIdCache = new Map<string, string | null>()
+export const userIdCache = new Map<string, string | null>()
 const lock = new AsyncLock()
 
 /**
