@@ -1,31 +1,37 @@
 <script lang="ts">
+  import type { ChatService } from '@/core/chat/twitch-chat'
+  import {
+    TwitchChatMessage,
+    TwitchSystemMessage,
+    type TwitchMessage
+  } from '@/core/chat/twitch-msg'
   import type { PotPlayerInstance } from '@/main/potplayer'
   import type {} from '@/preload/types/index.d.ts'
-  import { chatService, updateSelectedPotPlayerInfo } from '@/renderer/src/state/chat-state.svelte'
-  import { TwitchChatMessage } from '@core/chat/twitch-msg'
+  import {
+    chatService as chatServiceObject,
+    updateSelectedPotPlayerInfo
+  } from '@/renderer/src/state/chat-state.svelte'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
+  const chatService = chatServiceObject as ChatService
+
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
-  class TwitchMessageFormatted extends TwitchChatMessage {
-    formattedMessage: string
-
-    constructor(message: TwitchChatMessage) {
-      super(
-        message.raw,
-        message.tags,
-        message.id,
-        message.timestamp,
-        message.channel,
-        message.username,
-        message.message
-      )
-      this.formattedMessage = `${message.username || ''}: ${message.message || ''}`
+  type TwitchMessageFormatted = TwitchMessage & { formattedMessage: string }
+  function formattedTwitchMessageFactory(msg: TwitchMessage): TwitchMessageFormatted {
+    if (msg.type === 'chat') {
+      const newObj = Object.create(msg, TwitchChatMessage.prototype)
+      newObj.formattedMessage = `${msg.username}: ${msg.message}`
+      return newObj
+    } else if (msg.type === 'system') {
+      const newObj = Object.create(msg, TwitchSystemMessage.prototype)
+      newObj.formattedMessage = msg.getSystemText()
+      return newObj
     }
   }
 
@@ -64,7 +70,7 @@
       // Get a wide time range to capture all messages
       const currentTime = await window.api.getCurrentTime(selectedPotplayerInfo.hwnd)
 
-      window.api.getPreloadedMessages().then((msgs?: TwitchChatMessage[]) => {
+      window.api.getPreloadedMessages().then((msgs?: TwitchMessage[]) => {
         if (!msgs || msgs.length === 0) return
         console.debug('Preloaded messages:', msgs.length)
         loadMessages(msgs)
@@ -76,7 +82,7 @@
           60 * 60 * 1000, // 1 hour before
           5 * 60 * 1000 // 5 minutes after
         )
-        .then((msgs: TwitchChatMessage[]) => {
+        .then((msgs: TwitchMessage[]) => {
           console.debug('Loaded messages:', msgs.length)
           loadMessages(msgs)
         })
@@ -85,12 +91,13 @@
     }
   }
 
-  function loadMessages(msgs: TwitchChatMessage[]): void {
+  function loadMessages(msgs: TwitchMessage[]): void {
     // Merge new messages with existing ones
     for (const msg of msgs) {
-      if (seenMessages.has(msg.id)) continue // Skip duplicates
-      seenMessages.add(msg.id)
-      messages.push(new TwitchMessageFormatted(msg))
+      const formattedMsg = formattedTwitchMessageFactory(msg)
+      if (seenMessages.has(formattedMsg.getId())) continue // Skip duplicates
+      seenMessages.add(formattedMsg.getId())
+      messages.push(formattedMsg)
     }
 
     // Sort messages by timestamp
@@ -119,9 +126,9 @@
         }
       }
       if (caseSensitive) {
-        return msg.formattedMessage.includes(searchQuery)
+        return msg.formattedMessage?.includes(searchQuery)
       } else {
-        return msg.formattedMessage.toLowerCase().includes(searchQuery.toLowerCase())
+        return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
       }
     })
   }
