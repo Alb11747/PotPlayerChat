@@ -1,10 +1,11 @@
-import type { TwitchMessage } from '@core/chat/twitch-msg'
 import type { HWND } from '@/types/globals'
 import { RecentValue } from '@/utils/state'
+import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import AsyncLock from 'async-lock'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { Conf } from 'electron-conf/main'
+import contextMenuModule from 'electron-context-menu'
 import { join } from 'path'
 import {
   getCurrentTime,
@@ -33,6 +34,17 @@ function setAccessControlHeaders(window: BrowserWindow): void {
     }
   })
 }
+
+// Fix typing for contextMenu
+const contextMenu = (contextMenuModule as unknown as { default: typeof contextMenuModule }).default
+
+contextMenu({
+  showSaveImageAs: true,
+  showCopyImage: true,
+  showCopyImageAddress: true,
+  showSaveImage: true,
+  showCopyLink: true
+})
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
