@@ -241,6 +241,7 @@
     font-size: 108%;
     box-sizing: border-box;
     user-select: text;
+    cursor: default;
   }
 
   .chat-time {
