@@ -468,7 +468,7 @@ export function parseFullMessage(
               console.warn(`No username found for unclosed segment: ${message} - ${segment}`)
             acc.push({
               type: type,
-              fullText: textAfterStartMark,
+              fullText: textAfterIncludingStartMark,
               text: textAfterStartMark,
               username: username || ''
             })
