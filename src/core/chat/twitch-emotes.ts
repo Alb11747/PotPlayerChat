@@ -69,20 +69,36 @@ export class TwitchEmoteService {
         if (channelId !== undefined) {
           tasks.push(
             ...[
-              this.fetcher.fetchTwitchEmotes(channelId),
-              this.fetcher.fetchBTTVEmotes(channelId),
-              this.fetcher.fetchSevenTVEmotes(channelId, 'avif'),
-              this.fetcher.fetchFFZEmotes(channelId)
+              this.fetcher.fetchTwitchEmotes(channelId).catch((error) => {
+                console.warn(`Failed to fetch Twitch emotes for channel ${channelId}:`, error)
+              }),
+              this.fetcher.fetchBTTVEmotes(channelId).catch((error) => {
+                console.warn(`Failed to fetch BTTV emotes for channel ${channelId}:`, error)
+              }),
+              this.fetcher.fetchSevenTVEmotes(channelId, 'avif').catch((error) => {
+                console.warn(`Failed to fetch 7TV emotes for channel ${channelId}:`, error)
+              }),
+              this.fetcher.fetchFFZEmotes(channelId).catch((error) => {
+                console.warn(`Failed to fetch FFZ emotes for channel ${channelId}:`, error)
+              })
             ]
           )
         }
 
         if (!this.globalEmotesFetchPromise) {
           this.globalEmotesFetchPromise = Promise.all([
-            this.fetcher.fetchTwitchEmotes(undefined),
-            this.fetcher.fetchBTTVEmotes(undefined),
-            this.fetcher.fetchSevenTVEmotes(undefined, 'avif'),
-            this.fetcher.fetchFFZEmotes(undefined)
+            this.fetcher.fetchTwitchEmotes(undefined).catch((error) => {
+              console.warn(`Failed to fetch Twitch emotes for global:`, error)
+            }),
+            this.fetcher.fetchBTTVEmotes(undefined).catch((error) => {
+              console.warn(`Failed to fetch BTTV emotes for global:`, error)
+            }),
+            this.fetcher.fetchSevenTVEmotes(undefined, 'avif').catch((error) => {
+              console.warn(`Failed to fetch 7TV emotes for global:`, error)
+            }),
+            this.fetcher.fetchFFZEmotes(undefined).catch((error) => {
+              console.warn(`Failed to fetch FFZ emotes for global:`, error)
+            })
           ])
         }
 
