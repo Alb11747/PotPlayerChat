@@ -100,7 +100,7 @@ const markEnds = Object.fromEntries(markData.map(({ start, end }) => [end, start
   string
 >
 
-const PUI_UNICODE_REGEX = new RegExp('[\u{E000}-\u{F8FF}]+', 'gu')
+const PUA_UNICODE_REGEX = new RegExp('[\u{E000}-\u{F8FF}]+', 'gu')
 const URL_REGEX = /https?:\/\/(?:[-\w.])+(?::[0-9]+)?(?:\/(?:[\w._~:/?#[\]@!$&'()*+,;=-])*)?/gi
 
 const highlightStartRegex = new RegExp(MarkType.HighlightStart, 'gu')
@@ -169,7 +169,7 @@ const basicTextTypes = ['text', 'action'] as const
 // const partialTextTypes = ['mention', 'url'] as const
 type SegmentNoEscape = { fullText: string; text: string } & (
   | { type: 'text' | 'action' | 'highlight' }
-  | { type: 'emote'; url: string; emote: TwitchEmote | NativeTwitchEmote }
+  | { type: 'emote'; source: string; url: string; emote: TwitchEmote | NativeTwitchEmote }
   | { type: 'mention'; username: string }
   | { type: 'url'; url: string }
 )
@@ -201,11 +201,10 @@ export function parseFullMessage(
   const isAction = isActionMessage(processedMessage)
   if (isAction) processedMessage = stripActionMessage(processedMessage)
 
-  // Strip PUI unicode characters from username and message
-  processedUsername = processedUsername.replace(PUI_UNICODE_REGEX, '')
-  processedMessage = processedMessage.replace(PUI_UNICODE_REGEX, '')
+  // Strip PUA unicode characters from username and message
+  processedUsername = processedUsername.replace(PUA_UNICODE_REGEX, '')
+  processedMessage = processedMessage.replace(PUA_UNICODE_REGEX, '')
 
-  const nativeEmotes = new Map<string, NativeTwitchEmote>()
   type CharIndex = {
     index: number
     char: string
@@ -238,8 +237,31 @@ export function parseFullMessage(
   }
   markedUrls.reverse()
 
+  // Process Twitch emotes
+  const markedTwitchEmotes: { index: number; name: string; id?: string }[] = []
+  if (emotesEnabled && twitchMessage) {
+    const twitchEmotes = twitchMessage.emotes
+    if (twitchEmotes) {
+      for (const { id, startIndex, endIndex } of twitchEmotes) {
+        const endIndexAdjusted = endIndex + 1 // Adjust for inclusive end index
+        const emoteName = message.slice(startIndex, endIndexAdjusted)
+        markIndices.push({
+          index: startIndex,
+          char: MarkType.TwitchEmoteStart,
+          otherIndex: endIndex
+        })
+        markIndices.push({
+          index: endIndexAdjusted,
+          char: MarkType.TwitchEmoteEnd,
+          otherIndex: startIndex
+        })
+        markedTwitchEmotes.push({ index: startIndex, name: emoteName, id })
+      }
+    }
+  }
+  markedTwitchEmotes.sort((a, b) => b.index - a.index)
+
   // Process external emotes
-  const markedEmotes: { name: string; id?: string }[] = []
   if (emotesEnabled && emotes) {
     processedMessage.matchAll(/\S+/g).forEach((word) => {
       const emoteName = word[0]
@@ -247,30 +269,8 @@ export function parseFullMessage(
       const endIndex = word.index + emoteName.length
       markIndices.push({ index: word.index, char: MarkType.EmoteStart, otherIndex: endIndex })
       markIndices.push({ index: endIndex, char: MarkType.EmoteEnd, otherIndex: word.index })
-      markedEmotes.push({ name: emoteName })
     })
   }
-
-  // Process Twitch emotes
-  if (emotesEnabled && twitchMessage) {
-    const twitchEmotes = twitchMessage.emotes
-    if (twitchEmotes) {
-      for (const { id, startIndex, endIndex } of twitchEmotes) {
-        const endIndexAdjusted = endIndex + 1 // Adjust for inclusive end index
-        const emoteName = message.slice(startIndex, endIndexAdjusted)
-        const emote = new NativeTwitchEmote(id, emoteName)
-        nativeEmotes.set(emoteName, emote)
-        markIndices.push({ index: startIndex, char: MarkType.EmoteStart, otherIndex: endIndex })
-        markIndices.push({
-          index: endIndexAdjusted,
-          char: MarkType.EmoteEnd,
-          otherIndex: startIndex
-        })
-        markedEmotes.push({ name: emoteName, id })
-      }
-    }
-  }
-  markedEmotes.reverse()
 
   // Process mentions in the message
   const markedMentions: string[] = []
@@ -372,31 +372,40 @@ export function parseFullMessage(
     segment: SegmentNoEscape,
     type: string,
     fullText: string,
-    text: string
+    text: string,
+    opts: { source?: string } = {}
   ): boolean {
     if (type === 'emote') {
-      let emoteName = markedEmotes.pop()?.name
-      if (!emoteName) {
-        console.warn(`No emote name found for marked segment: ${message} - ${segment}`)
-        emoteName = text.replace(PUI_UNICODE_REGEX, '') // Fallback to text if no emote name found
-      } else {
+      let emoteName: string | undefined
+      let emoteId: string | undefined
+
+      if (opts?.source === 'twitch') {
+        const emoteData = markedTwitchEmotes.pop()
+        emoteName = emoteData?.name
+        emoteId = emoteData?.id
+
         console.assert(
-          emoteName === text.replace(PUI_UNICODE_REGEX, ''),
-          `Emote name mismatch: ${text}`,
-          markedEmotes
+          emoteName === text.replace(PUA_UNICODE_REGEX, ''),
+          `Emote name mismatch: ${text}`
         )
+      } else {
+        emoteName = text.replace(PUA_UNICODE_REGEX, '')
       }
-      const emote = nativeEmotes.get(emoteName) || emotes?.get(emoteName)
+
+      const emote = emoteId
+        ? new NativeTwitchEmote(emoteId, emoteName)
+        : emotes?.get(emoteName || '')
+
       if (!emote) {
-        console.warn(`No emote found for marked segment: ${message} - ${segment}`)
+        console.warn(`No emote found for marked segment: ${message}`, segment)
         return false
       }
       const url = emote.toLink(emote.sizes?.length - 1 || 2)
-      acc.push({ type, fullText, text, url, emote })
+      acc.push({ type, source: opts?.source || '', fullText, text, url, emote })
     } else if (type === 'url') {
       const url = markedUrls.pop()
       if (!url) {
-        console.warn(`No URL found for marked segment: ${message} - ${segment}`)
+        console.warn(`No URL found for marked segment: ${message}`, segment)
         return false
       }
       acc.push({ type, fullText, text, url })
@@ -405,22 +414,28 @@ export function parseFullMessage(
     } else if (type === 'mention') {
       let username = markedMentions.pop()
       if (!username) {
-        console.warn(`No username found for marked segment: ${message} - ${segment}`)
+        console.warn(`No username found for marked segment: ${message}`, segment)
         username = removePrefix(text, '@') // Fallback to text if no mention found
       }
       acc.push({ type, fullText, text, username })
     } else {
-      console.warn(`Unknown type: ${type} in segment: ${segment.text}`)
+      console.warn(`Unknown type: ${type} in segment: ${segment.text}`, segment)
       return false
     }
     return true
   }
 
-  for (const [type, startMark, endMark] of [
-    ['emote', MarkType.EmoteStart, MarkType.EmoteEnd],
-    ['url', MarkType.UrlStart, MarkType.UrlEnd],
-    ['highlight', MarkType.HighlightStart, MarkType.HighlightEnd],
-    ['mention', MarkType.MentionStart, MarkType.MentionEnd]
+  for (const { t: type, s: startMark, e: endMark, o: opts } of [
+    {
+      t: 'emote',
+      s: MarkType.TwitchEmoteStart,
+      e: MarkType.TwitchEmoteEnd,
+      o: { source: 'twitch' }
+    },
+    { t: 'emote', s: MarkType.EmoteStart, e: MarkType.EmoteEnd, o: { source: 'external' } },
+    { t: 'url', s: MarkType.UrlStart, e: MarkType.UrlEnd },
+    { t: 'highlight', s: MarkType.HighlightStart, e: MarkType.HighlightEnd },
+    { t: 'mention', s: MarkType.MentionStart, e: MarkType.MentionEnd }
   ]) {
     if (!type || !startMark || !endMark) throw new Error(`Invalid mark type: ${type}`)
     segments = segments.reduce<SegmentNoEscape[]>((acc, segment): SegmentNoEscape[] => {
@@ -448,7 +463,7 @@ export function parseFullMessage(
           }
           const fullText = segment.text.slice(start ?? 0, end + endMark.length)
           const text = fullText.slice(start === null ? 0 : startMark.length, end - (start ?? 0))
-          if (!processSegment(acc, segment, type, fullText, text))
+          if (!processSegment(acc, segment, type, fullText, text, opts))
             acc.push({ type: segment.type, fullText, text })
           lastIndex = end + MarkType.HighlightEnd.length
         }
@@ -464,7 +479,7 @@ export function parseFullMessage(
           if (type === 'url') {
             // We have an unclosed url, just push the remaining text
             const url = markedUrls[markedUrls.length - 1] // Peek the last URL
-            if (!url) console.warn(`No URL found for unclosed segment: ${message} - ${segment}`)
+            if (!url) console.warn(`No URL found for unclosed segment: ${message}`, segment)
             acc.push({
               type: type,
               fullText: textAfterIncludingStartMark,
@@ -475,7 +490,7 @@ export function parseFullMessage(
             // We have an unclosed mention, just push the remaining text
             const username = markedMentions[markedMentions.length - 1] // Peek the last mention
             if (!username)
-              console.warn(`No username found for unclosed segment: ${message} - ${segment}`)
+              console.warn(`No username found for unclosed segment: ${message}`, segment)
             acc.push({
               type: type,
               fullText: textAfterIncludingStartMark,
@@ -527,7 +542,7 @@ export function parseFullMessage(
   }
 
   // Carry closing marks into previous segments
-  for (let i = 1; i < segments.length; i++) {
+  for (let i = segments.length - 1; i > 0; i--) {
     const prevSegment = segments[i - 1]
     const segment = segments[i]
     if (!prevSegment || !segment) continue
@@ -570,7 +585,7 @@ export function parseFullMessage(
   const populatedSegments: Segment[] = segments.map((segment: SegmentNoEscape): Segment => {
     let escaped =
       markIndices.length > 0
-        ? replaceMark(correctMarks(escapeHtml(segment.text))).replace(PUI_UNICODE_REGEX, '')
+        ? replaceMark(correctMarks(escapeHtml(segment.text))).replace(PUA_UNICODE_REGEX, '')
         : segment.text
 
     if (segment.type === 'highlight') escaped = `<mark>${escaped}</mark>`
@@ -580,9 +595,9 @@ export function parseFullMessage(
       escaped
     }
 
-    if (debug && PUI_UNICODE_REGEX.test(processedSegment.escaped)) {
+    if (debug && PUA_UNICODE_REGEX.test(processedSegment.escaped)) {
       console.warn(
-        `PUI unicode characters found in segment: "${processedSegment.escaped}" - ${JSON.stringify(
+        `PUA unicode characters found in segment: "${processedSegment.escaped}" - ${JSON.stringify(
           processedSegment
         )}`
       )
