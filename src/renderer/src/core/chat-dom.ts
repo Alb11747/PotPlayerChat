@@ -169,7 +169,13 @@ const basicTextTypes = ['text', 'action'] as const
 // const partialTextTypes = ['mention', 'url'] as const
 type SegmentNoEscape = { fullText: string; text: string } & (
   | { type: 'text' | 'action' | 'highlight' }
-  | { type: 'emote'; source: string; url: string; emote: TwitchEmote | NativeTwitchEmote }
+  | {
+      type: 'emote'
+      source: string
+      url: string
+      emote: TwitchEmote | NativeTwitchEmote
+      name: string
+    }
   | { type: 'mention'; username: string }
   | { type: 'url'; url: string }
 )
@@ -401,7 +407,9 @@ export function parseFullMessage(
         return false
       }
       const url = emote.toLink(emote.sizes?.length - 1 || 2)
-      acc.push({ type, source: opts?.source || '', fullText, text, url, emote })
+      const source = opts?.source || ''
+      const name = emoteName || text.replace(PUA_UNICODE_REGEX, '')
+      acc.push({ type, source, fullText, text, url, emote, name })
     } else if (type === 'url') {
       const url = markedUrls.pop()
       if (!url) {

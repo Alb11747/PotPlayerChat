@@ -105,8 +105,8 @@
           <img
             class="chat-emote"
             src={segment.url}
-            alt={segment.text}
-            title={segment.text}
+            alt={segment.name}
+            title={segment.name}
             onload={() => {
               if (onEmoteLoad) onEmoteLoad(segment.emote)
             }}
