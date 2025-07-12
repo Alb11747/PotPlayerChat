@@ -30,7 +30,7 @@
     } else if (msg.type === 'system') {
       const newObj = Object.create(TwitchSystemMessage.prototype)
       Object.assign(newObj, msg)
-      newObj.formattedMessage = msg.getSystemText()
+      newObj.formattedMessage = newObj.getSystemText()
       return newObj
     }
   }
