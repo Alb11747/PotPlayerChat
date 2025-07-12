@@ -6,7 +6,7 @@
   let previewStyle = $state('')
 
   $effect(() => {
-    if (!previewElement || !previewState.url) return
+    if (!previewElement || (!previewState.url && !emoteSegment)) return
 
     const rect = previewElement.getBoundingClientRect()
     const windowHeight = window.innerHeight
@@ -27,10 +27,11 @@
     previewStyle = `top: ${top}px; left: ${left}px;`
   })
 
-  const preview = $derived(previewState.urlTrackerInstance.getCachedPreview(previewState.url))
+  const preview = $derived(previewState.urlTrackerInstance?.getCachedPreview(previewState.url))
+  const emoteSegment = $derived(previewState.emoteSegment)
 </script>
 
-{#if previewState.url && previewState.urlTrackerInstance}
+{#if (previewState.url && previewState.urlTrackerInstance) || emoteSegment}
   <div
     class="link-preview"
     role="dialog"
@@ -39,43 +40,73 @@
     bind:this={previewElement}
     style={previewStyle}
   >
-    {#if previewState.urlTrackerInstance.hasPreview(previewState.url)}
-      {#if preview && preview.status === 200}
-        {#if preview.thumbnail}
-          {#if !previewState.urlTrackerInstance.isFailedUrl(preview.link)}
-            <img
-              src={preview.thumbnail}
-              onerror={() => {
-                previewState.urlTrackerInstance.markFailedUrl(preview.link)
-              }}
-              alt="Link preview"
-              class="preview-thumbnail"
-            />
-          {:else}
-            <span class="preview-error-text">Image failed to load</span>
+    {#if previewState.url && previewState.urlTrackerInstance}
+      {#if previewState.urlTrackerInstance.hasPreview(previewState.url)}
+        {#if preview && preview.status === 200}
+          {#if preview.thumbnail}
+            {#if !previewState.urlTrackerInstance.isFailedUrl(preview.link)}
+              <img
+                src={preview.thumbnail}
+                onerror={() => {
+                  previewState.urlTrackerInstance.markFailedUrl(preview.link)
+                }}
+                alt="Link preview"
+                class="preview-thumbnail"
+              />
+            {:else}
+              <span class="preview-error-text">Image failed to load</span>
+            {/if}
           {/if}
+          <div class="preview-content">
+            {#if preview.tooltip}
+              <div class="preview-tooltip">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html sanitizeHtml(preview.tooltip)}
+              </div>
+            {/if}
+            <div class="preview-url">{preview.link}</div>
+          </div>
+        {:else if preview && preview.status === 0}
+          <div class="preview-error-content">
+            <div class="preview-error-icon">⚠️</div>
+            <div class="preview-error-text">Failed to load preview</div>
+            <div class="preview-url">{preview.link}</div>
+          </div>
         {/if}
-        <div class="preview-content">
-          {#if preview.tooltip}
-            <div class="preview-tooltip">
-              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-              {@html sanitizeHtml(preview.tooltip)}
-            </div>
-          {/if}
-          <div class="preview-url">{preview.link}</div>
-        </div>
-      {:else if preview && preview.status === 0}
-        <div class="preview-error-content">
-          <div class="preview-error-icon">⚠️</div>
-          <div class="preview-error-text">Failed to load preview</div>
-          <div class="preview-url">{preview.link}</div>
+      {:else if previewState.urlTrackerInstance.isPreviewLoading(previewState.url)}
+        <div class="preview-loading-content">
+          <div class="preview-loading-spinner">⏳</div>
+          <div class="preview-loading-text">Loading preview...</div>
+          <div class="preview-url">{previewState.url}</div>
         </div>
       {/if}
-    {:else if previewState.urlTrackerInstance.isPreviewLoading(previewState.url)}
-      <div class="preview-loading-content">
-        <div class="preview-loading-spinner">⏳</div>
-        <div class="preview-loading-text">Loading preview...</div>
-        <div class="preview-url">{previewState.url}</div>
+    {:else if emoteSegment}
+      <div class="emote-preview-content">
+        <img src={emoteSegment.url} alt={emoteSegment.name} class="emote-preview-image" />
+        <div class="emote-preview-name">{emoteSegment.name}</div>
+        <div class="emote-preview-source">
+          Source: {emoteSegment.emote.type || emoteSegment.source}
+        </div>
+        {#if emoteSegment.emote.ownerName}
+          <div class="emote-preview-author">
+            Author: {emoteSegment.emote.ownerName}
+          </div>
+        {/if}
+        {#if emoteSegment.attachedEmotes && emoteSegment.attachedEmotes.length > 0}
+          <span class="emote-preview-divider"></span>
+          <div class="zero-width-emotes-grid">
+            {#each emoteSegment.attachedEmotes?.entries() || [] as [index, attachedEmote] (index)}
+              <div class="zero-width-emote-item">
+                <img
+                  src={attachedEmote.url}
+                  alt={attachedEmote.name}
+                  class="zero-width-emote-image"
+                />
+                <div class="zero-width-emote-name">{attachedEmote.name}</div>
+              </div>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/if}
   </div>
@@ -164,6 +195,70 @@
   .preview-url {
     color: #a9a9a9;
     font-size: 12px;
+    word-break: break-all;
+  }
+
+  .emote-preview-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .emote-preview-image {
+    max-width: 150px;
+    max-height: 150px;
+    object-fit: contain;
+  }
+
+  .emote-preview-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #efeff1;
+  }
+
+  .emote-preview-source,
+  .emote-preview-author {
+    font-size: 12px;
+    color: #a9a9a9;
+    line-height: 0.8;
+  }
+
+  .emote-preview-divider {
+    width: 95%;
+    height: 1px;
+    background-color: #444;
+    margin: 2px 0;
+  }
+
+  .zero-width-emotes-grid {
+    display: block;
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    gap: 5px;
+    justify-content: space-evenly;
+    justify-items: stretch;
+    align-items: center;
+    width: 100%;
+  }
+
+  .zero-width-emote-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .zero-width-emote-image {
+    max-width: 40px;
+    max-height: 40px;
+    object-fit: contain;
+  }
+
+  .zero-width-emote-name {
+    font-size: 10px;
+    color: #a9a9a9;
+    text-align: center;
     word-break: break-all;
   }
 </style>

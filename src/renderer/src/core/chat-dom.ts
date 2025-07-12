@@ -165,26 +165,28 @@ export function correctMarks(str: string): string {
   return prefix + str + suffix
 }
 
+export type EmoteSegment = {
+  type: 'emote'
+  source: string
+  url: string
+  emote: TwitchEmote | NativeTwitchEmote
+  name: string
+  zeroWidth?: boolean
+  attachedEmotes?: {
+    url: string
+    emote: TwitchEmote | NativeTwitchEmote
+    name: string
+    alt: string
+  }[]
+}
+
 const basicTextTypes = ['text', 'action'] as const
 // const partialTextTypes = ['mention', 'url'] as const
 type SegmentNoEscape = { fullText: string; text: string } & (
   | { type: 'text' | 'action' | 'highlight' }
-  | {
-      type: 'emote'
-      source: string
-      url: string
-      emote: TwitchEmote | NativeTwitchEmote
-      name: string
-      zeroWidth?: boolean
-      attachedEmotes?: {
-        url: string
-        emote: TwitchEmote | NativeTwitchEmote
-        name: string
-        alt: string
-      }[]
-    }
   | { type: 'mention'; username: string }
   | { type: 'url'; url: string }
+  | EmoteSegment
 )
 type Segment = SegmentNoEscape & { escaped: string }
 

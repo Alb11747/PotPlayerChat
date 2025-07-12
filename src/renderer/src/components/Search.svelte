@@ -11,6 +11,7 @@
   import { VList } from 'virtua/svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
+  import LinkPreview from '@/renderer/src/components/LinkPreview.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState)
@@ -165,6 +166,8 @@
   }
 </script>
 
+<LinkPreview />
+
 <div class="search-container" role="presentation" onkeydown={handleKeydown}>
   <div class="search-header">
     <h2>Search Chat Messages</h2>
@@ -218,7 +221,6 @@
               usernameColorMap={chatService.usernameColorCache}
               searchQuery={searchPattern}
               onUrlClick={handleUrlClick}
-              enablePreviews={true}
             />
           </button>
         {/snippet}

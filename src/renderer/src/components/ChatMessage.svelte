@@ -18,7 +18,8 @@
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
     onEmoteLoad?: (emote: TwitchEmote) => void
-    enablePreviews?: boolean
+    enableLinkPreviews?: boolean
+    enableEmotePreviews?: boolean
     enableEmotes?: boolean
   }
 
@@ -31,7 +32,8 @@
     searchQuery,
     onUrlClick,
     onEmoteLoad,
-    enablePreviews = true,
+    enableLinkPreviews = true,
+    enableEmotePreviews = true,
     enableEmotes = true
   }: Props = $props()
 
@@ -47,7 +49,7 @@
 
   // Handle URL hover to preload preview
   async function handleUrlHover(url: string): Promise<void> {
-    if (!enablePreviews || !urlTracker.isPreviewLoading(url)) {
+    if (!enableLinkPreviews || !urlTracker.isPreviewLoading(url)) {
       await urlTracker.getPreview(url)
     }
   }
@@ -112,6 +114,18 @@
               onerror={() => {
                 urlTracker.markFailedUrl(segment.url)
               }}
+              onmouseenter={(e) => {
+                if (enableEmotePreviews) {
+                  previewState.emoteSegment = segment
+                  previewState.mousePosition = { x: e.clientX, y: e.clientY }
+                }
+              }}
+              onmousemove={(e) => {
+                if (enableEmotePreviews) previewState.mousePosition = { x: e.clientX, y: e.clientY }
+              }}
+              onmouseleave={() => {
+                if (enableEmotePreviews) previewState.emoteSegment = null
+              }}
             />
             {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), index, attachedIndex))}
               {#if !urlTracker.isFailedUrl(segment.url)}
@@ -137,7 +151,7 @@
             class:visited={urlTracker.isVisitedUrl(segment.url)}
             onclick={() => handleUrlClick(segment.url)}
             onmouseenter={(e) => {
-              if (enablePreviews) {
+              if (enableLinkPreviews) {
                 previewState.url = segment.url
                 previewState.mousePosition = { x: e.clientX, y: e.clientY }
                 previewState.urlTrackerInstance = urlTracker
@@ -145,14 +159,10 @@
               }
             }}
             onmousemove={(e) => {
-              if (enablePreviews) {
-                previewState.mousePosition = { x: e.clientX, y: e.clientY }
-              }
+              if (enableLinkPreviews) previewState.mousePosition = { x: e.clientX, y: e.clientY }
             }}
             onmouseleave={() => {
-              if (enablePreviews) {
-                previewState.url = null
-              }
+              if (enableLinkPreviews) previewState.url = null
             }}
             type="button"
           >

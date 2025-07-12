@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import type { PotPlayerInstance } from '@/main/potplayer'
+  import LinkPreview from '@/renderer/src/components/LinkPreview.svelte'
   import { getPotplayerExtraInfo } from '@/renderer/src/state/potplayer'
   import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
@@ -179,6 +180,8 @@
   })
 </script>
 
+<LinkPreview />
+
 <div class="header" role="presentation" onkeydown={handleKeydown}>
   <div class="instances">
     <button
@@ -220,7 +223,6 @@
           usernameColorMap={chatService.usernameColorCache}
           onUrlClick={handleUrlClick}
           onEmoteLoad={scrollToBottomIfNeeded}
-          enablePreviews={true}
         />
       {/snippet}
     </VList>
