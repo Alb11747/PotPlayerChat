@@ -45,19 +45,16 @@ export const regExpEscape: (str: string) => string =
 
 /**
  * Formats a time value relative to a given start time.
- * - If startTime is null or the result is invalid, returns "[0:00]".
- * - If the time is before the startTime, returns the absolute local date/time in a readable format.
- * - Otherwise, returns the elapsed time as "[H:MM:SS]" or "[M:SS]".
+ * - During playback time, returns the elapsed time as "[H:MM:SS]" or "[M:SS]".
+ * - Otherwise, returns the absolute local date/time in a readable format.
  * @param timeMs The current time in milliseconds.
  * @param startTime The reference start time in milliseconds, or null.
  * @param endTime Optional end time in milliseconds to limit the maximum time.
  * @returns A formatted string representing the relative or absolute time.
  */
 export function formatTime(timeMs: number, startTime?: number, endTime?: number): string {
-  if (startTime === undefined || startTime === null) return '[0:00]'
-  const totalSeconds = Math.floor((timeMs - startTime) / 1000)
-  if (isNaN(totalSeconds)) return '[0:00]'
-  if (totalSeconds < 0 || (endTime !== undefined && timeMs > endTime)) {
+  const totalSeconds = startTime ? Math.floor((timeMs - startTime) / 1000) : null
+  if (totalSeconds === null || totalSeconds < 0 || (endTime !== undefined && timeMs > endTime)) {
     const realTime = new Date(timeMs)
     const now = new Date()
     const sameDayYear = realTime.getFullYear() === now.getFullYear()

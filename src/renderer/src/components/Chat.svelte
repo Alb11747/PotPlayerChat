@@ -1,44 +1,62 @@
 <script lang="ts">
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
+  import type { PotPlayerInstance } from '@/main/potplayer'
+  import { getPotplayerExtraInfo } from '@/renderer/src/state/chat-state.svelte'
+  import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
-  import {
-    chatService as chatServiceObject,
-    loadingState as loadingStateObject,
-    potplayerInstances as potplayerInstancesObject,
-    selectedPotplayerInfo as selectedPotplayerInfoObject
-  } from '../state/chat-state.svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
-  const chatService: ChatService = chatServiceObject
-  const loadingState: LoadingState = loadingStateObject
-  const potplayerInstances: PotPlayerInfo[] = potplayerInstancesObject
-  const selectedPotplayerInfo: Partial<PotPlayerInfo> = selectedPotplayerInfoObject
-
+  const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
+  const chatService = new ChatService(window.api, loadingState)
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker()
 
-  let vlistRef: VList<unknown> | null = $state(null)
+  let potplayerInstances: PotPlayerInstance[] = $state([])
+  let selectedPotplayerInfo: PotPlayerInfo = $state({})
+
   let messages: TwitchMessage[] = $state.raw([])
-  let isMainPotPlayer = $state(true)
+  let autoSelectPotPlayer = $state(true)
   let scrollToBottom = $state(true)
+
+  let changingPotPlayerPromise: Promise<PotPlayerInfo | null> | null = $state(null)
+
+  let vlistRef: VList<unknown> | null = $state(null)
 
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
-  function scrollToBottomIfNeeded(): void {
-    if (vlistRef && scrollToBottom) {
-      vlistRef.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
+  window.api.onPotPlayerInstancesChanged(async (_: Event, instances) => {
+    let newSelectedPotplayerInstanceInfo: PotPlayerInfo | null = null
+    if (changingPotPlayerPromise) newSelectedPotplayerInstanceInfo = await changingPotPlayerPromise
+    potplayerInstances = instances
+
+    if (!newSelectedPotplayerInstanceInfo) {
+      const selectedPotplayerInstance = instances.find((i) => i.selected)
+      if (!selectedPotplayerInstance) return
+      newSelectedPotplayerInstanceInfo = await getPotplayerExtraInfo(selectedPotplayerInstance)
     }
+
+    selectedPotplayerInfo = newSelectedPotplayerInstanceInfo
+    await chatService.updateVideoInfo(selectedPotplayerInfo)
+  })
+
+  function scrollToBottomIfNeeded(): void {
+    if (vlistRef && scrollToBottom)
+      vlistRef.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
   }
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
-  async function updateChatMessages(): Promise<void> {
+  async function updateChatMessages(potplayerInfo?: PotPlayerInfo): Promise<void> {
     if (chatIntervalId) clearTimeout(chatIntervalId)
+    chatIntervalId = null
+
+    if (!potplayerInfo && changingPotPlayerPromise) potplayerInfo = await changingPotPlayerPromise
+    if (!potplayerInfo) potplayerInfo = selectedPotplayerInfo
 
     const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
     if (predictedTime === null) return
@@ -48,8 +66,9 @@
     const nextMessage =
       lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
 
-    if (messages !== newMessages) {
+    if (!isEqual(messages, newMessages) || !isEqual(selectedPotplayerInfo, potplayerInfo)) {
       messages = newMessages
+      selectedPotplayerInfo = potplayerInfo
       scrollToBottomIfNeeded()
     }
 
@@ -60,16 +79,15 @@
     }
   }
 
+  $effect(() => {
+    // Trigger reactivity when chat service state changes
+    if (loadingState.state) updateChatMessages()
+  })
+
   function onCurrentTime(_: Event, time: number): void {
     videoTimeHistory.addSample(time)
     updateChatMessages()
   }
-
-  $effect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    chatService?.state.state // Trigger reactivity when chat service state changes
-    updateChatMessages()
-  })
 
   onMount(() => {
     updateChatMessages()
@@ -102,6 +120,34 @@
     }
   }
 
+  function setPotPlayerInstance(instance: PotPlayerInstance | null): void {
+    async function resetVideoTimeHistory(): Promise<void> {
+      videoTimeHistory.clear()
+      videoTimeHistory.addSample(await window.api.getCurrentVideoTime(instance.hwnd))
+    }
+
+    changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
+      scrollToBottom = true
+      if (!instance) {
+        autoSelectPotPlayer = true
+        window.api.setSelectedPotPlayerHWND(null)
+        return null
+      }
+      autoSelectPotPlayer = false
+      selectedPotplayerInfo.hwnd = instance.hwnd
+      window.api.setSelectedPotPlayerHWND(instance.hwnd).then(resetVideoTimeHistory)
+
+      const currentSelectedPotPlayerInfo = await getPotplayerExtraInfo(instance)
+
+      await resetVideoTimeHistory()
+      await chatService.updateVideoInfo(currentSelectedPotPlayerInfo)
+      await updateChatMessages(currentSelectedPotPlayerInfo)
+
+      await resetVideoTimeHistory()
+      return currentSelectedPotPlayerInfo
+    })()
+  }
+
   // Handle URL click
   function handleUrlClick(url: string): void {
     urlTracker.markVisitedUrl(url)
@@ -128,12 +174,9 @@
 <div class="header" role="presentation" onkeydown={handleKeydown}>
   <div class="instances">
     <button
-      class:main={isMainPotPlayer}
-      onclick={() => {
-        isMainPotPlayer = true
-        window.api.setSelectedPotPlayerHWND(null)
-      }}
-      aria-pressed={isMainPotPlayer}
+      class:main={autoSelectPotPlayer}
+      onclick={() => setPotPlayerInstance(null)}
+      aria-pressed={autoSelectPotPlayer}
     >
       Main
     </button>
@@ -141,10 +184,7 @@
     {#each potplayerInstances as inst (inst.hwnd)}
       <button
         class:main={inst.hwnd === selectedPotplayerInfo.hwnd}
-        onclick={() => {
-          isMainPotPlayer = false
-          window.api.setSelectedPotPlayerHWND(inst.hwnd)
-        }}
+        onclick={() => setPotPlayerInstance(inst)}
         aria-pressed={inst.hwnd === selectedPotplayerInfo.hwnd}
       >
         {inst.title}

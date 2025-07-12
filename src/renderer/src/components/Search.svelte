@@ -1,23 +1,19 @@
 <script lang="ts">
-  import type { ChatService } from '@/core/chat/twitch-chat'
+  import type { ChatService, LoadingState } from '@/core/chat/twitch-chat'
   import {
     TwitchChatMessage,
     TwitchSystemMessage,
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
-  import type { PotPlayerInstance } from '@/main/potplayer'
   import type {} from '@/preload/types/index.d.ts'
-  import {
-    chatService as chatServiceObject,
-    updateSelectedPotPlayerInfo
-  } from '@/renderer/src/state/chat-state.svelte'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
-  const chatService = chatServiceObject as ChatService
+  const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
+  const chatService: ChatService = new ChatService(window.api, loadingState)
 
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
@@ -42,12 +38,13 @@
   let searchQuery = $state('')
   let caseSensitive = $state(false)
   let useRegex = $state(false)
+
   const seenMessages = new Set()
   let messages: TwitchMessageFormatted[] = $state.raw([])
   let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
-  let vlistRef: VList<unknown> | null = $state(null)
+
   let searchInputRef: HTMLInputElement | null = $state(null)
-  let selectedPotplayerInfo: PotPlayerInstance | null = $state(null)
+  let vlistRef: VList<unknown> | null = $state(null)
 
   // Load all messages when component mounts
   onMount(loadAllMessages)
@@ -59,35 +56,19 @@
 
   async function loadAllMessages(): Promise<void> {
     try {
-      const selectedPotplayerHwnd = await window.api.getSelectedPotPlayerHWND()
-      const potplayerInstances = await window.api.getPotPlayers()
-      selectedPotplayerInfo =
-        potplayerInstances.find((p) => p.hwnd === selectedPotplayerHwnd) ?? null
-      if (!selectedPotplayerInfo) {
-        console.warn('No selected PotPlayer instance found')
-        return
-      }
-      await updateSelectedPotPlayerInfo(selectedPotplayerInfo)
+      const { potplayerInfo, msgs } = await window.api.getSearchInfo()
+      console.debug('Preloaded messages:', msgs.length)
+      loadMessages(msgs)
 
-      // Get a wide time range to capture all messages
-      const currentTime = await window.api.getCurrentTime(selectedPotplayerInfo.hwnd)
-
-      window.api.getPreloadedMessages().then((msgs?: TwitchMessage[]) => {
-        if (!msgs || msgs.length === 0) return
-        console.debug('Preloaded messages:', msgs.length)
-        loadMessages(msgs)
-      })
-
-      chatService
-        .getMessagesAroundTime(
-          currentTime,
-          60 * 60 * 1000, // 1 hour before
-          5 * 60 * 1000 // 5 minutes after
-        )
-        .then((msgs: TwitchMessage[]) => {
-          console.debug('Loaded messages:', msgs.length)
-          loadMessages(msgs)
-        })
+      const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
+      chatService.updateVideoInfo(potplayerInfo)
+      const loadedMsgs: TwitchMessage[] = await chatService.getMessagesAroundTime(
+        currentTime,
+        60 * 60 * 1000, // 1 hour before
+        5 * 60 * 1000 // 5 minutes after
+      )
+      console.debug('Loaded messages:', loadedMsgs.length)
+      loadMessages(loadedMsgs)
     } catch (error) {
       console.error('Failed to load messages for search:', error)
     }
@@ -136,7 +117,7 @@
   }
 
   // Computed search pattern for highlighting
-  let searchPattern = $derived.by(() => {
+  const searchPattern = $derived.by(() => {
     if (!searchQuery.trim()) return undefined
     if (useRegex || !caseSensitive) {
       try {
@@ -155,9 +136,8 @@
     if (event.key === 'Escape') window.close()
   }
 
-  function jumpToMessage(timestamp: number): void {
-    // Send message to main window to jump to specific time
-    window.api.jumpToTime?.(timestamp)
+  function jumpToMessage(): void {
+    // TODO: Send message to main window to jump to specific time
   }
 
   // Handle URL click
@@ -214,8 +194,8 @@
           >
             <ChatMessage
               message={msg}
-              videoStartTime={chatService?.lastPotPlayerInfo?.startTime}
-              videoEndTime={chatService?.lastPotPlayerInfo?.endTime}
+              videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
+              videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
               {urlTracker}
               usernameColorMap={chatService.usernameColorCache}
               searchQuery={searchPattern}

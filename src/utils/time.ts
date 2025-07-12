@@ -8,6 +8,11 @@ export class CurrentVideoTimeHistory {
     if (this.history.length > 2) this.history.shift()
   }
 
+  clear(): void {
+    this.history = []
+    this.lastPredictedTime = null
+  }
+
   getPredictedRate(): number | null {
     const history = this.history
     const prev = history[history.length - 2]

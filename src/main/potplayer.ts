@@ -19,11 +19,11 @@ export enum PotPlayerWParams {
   SEND_VIRTUAL_KEY = 20496
 }
 
-export function getCurrentTime(hwnd: HWND): Promise<number> {
+export function getCurrentVideoTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_CURRENT_TIME, 0)
 }
 
-export function getTotalTime(hwnd: HWND): Promise<number> {
+export function getTotalVideoTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_TOTAL_TIME, 0)
 }
 
@@ -60,7 +60,7 @@ export enum PlayStatus {
   Undefined = 'Undefined'
 }
 
-export async function getPlayStatus(hwnd: HWND): Promise<PlayStatus> {
+export async function getVideoPlayStatus(hwnd: HWND): Promise<PlayStatus> {
   const i = await sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_PLAY_STATUS, 0)
   switch (i) {
     case -1:

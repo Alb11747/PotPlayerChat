@@ -1,3 +1,4 @@
+import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type { HWND } from '@/types/globals'
 import { RecentValue } from '@/utils/state'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
@@ -8,10 +9,10 @@ import { Conf } from 'electron-conf/main'
 import contextMenuModule from 'electron-context-menu'
 import { join } from 'path'
 import {
-  getCurrentTime,
+  getCurrentVideoTime,
   getPotPlayerInstances,
   getStreamHistory,
-  getTotalTime,
+  getTotalVideoTime,
   type PotPlayerInstance
 } from './potplayer'
 import { loadDataFile, saveDataFile } from './storage'
@@ -170,7 +171,7 @@ function createWindow(): void {
       currentTimeIntervalId = setInterval(async () => {
         const potplayerHwnd = getPotplayerHwnd()
         if (potplayerHwnd) {
-          const currentTime = await getCurrentTime(potplayerHwnd)
+          const currentTime = await getCurrentVideoTime(potplayerHwnd)
           mainWindow.webContents.send('set-current-time', currentTime)
         }
       }, 1000)
@@ -241,11 +242,11 @@ function createWindow(): void {
   })
 
   ipcMain.handle('get-current-time', async (_event, hwnd: HWND) => {
-    return getCurrentTime(hwnd)
+    return getCurrentVideoTime(hwnd)
   })
 
   ipcMain.handle('get-total-time', async (_event, hwnd: HWND) => {
-    return getTotalTime(hwnd)
+    return getTotalVideoTime(hwnd)
   })
 
   ipcMain.handle('get-stream-history', async () => {
@@ -300,7 +301,10 @@ function createWindow(): void {
   })
 
   // Create search window
-  function createSearchWindow(messages?: TwitchMessage[]): BrowserWindow {
+  function createSearchWindow(
+    potplayerInfo: PotPlayerInfo,
+    messages?: TwitchMessage[]
+  ): BrowserWindow {
     const searchWindow = new BrowserWindow({
       width: 400,
       height: 600,
@@ -322,7 +326,7 @@ function createWindow(): void {
       searchWindow.loadFile(join(__dirname, '../renderer/search.html'))
     }
 
-    searchWindow.webContents.send('preload-messages', messages ?? null)
+    searchWindow.webContents.send('search-info', potplayerInfo, messages ?? null)
 
     searchWindow.once('ready-to-show', () => {
       searchWindow.show()
@@ -336,9 +340,12 @@ function createWindow(): void {
     return searchWindow
   }
 
-  ipcMain.handle('open-search-window', async (_event, messages?: TwitchMessage[]) => {
-    createSearchWindow(messages)
-  })
+  ipcMain.handle(
+    'open-search-window',
+    async (_event, potplayerInfo: PotPlayerInfo, messages?: TwitchMessage[]) => {
+      createSearchWindow(potplayerInfo, messages)
+    }
+  )
 }
 
 app.whenReady().then(() => {

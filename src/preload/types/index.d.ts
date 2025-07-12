@@ -1,6 +1,7 @@
-import type { TwitchMessage } from '@core/chat/twitch-msg'
+import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type { PotPlayerInstance } from '@/main/potplayer'
 import type { HWND } from '@/types/globals'
+import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { IpcRenderer } from 'electron/renderer'
 
 declare global {
@@ -16,15 +17,18 @@ export interface WindowApi {
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
   loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
-  getPreloadedMessages: () => Promise<TwitchMessage[] | null>
+  getSearchInfo: () => Promise<{
+    potplayerInfo: PotPlayerInfo
+    messages: TwitchMessage[]
+  } | null>
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>
-  getCurrentTime: (hwnd: HWND) => Promise<number>
-  getTotalTime: (hwnd: HWND) => Promise<number>
+  getCurrentVideoTime: (hwnd: HWND) => Promise<number>
+  getTotalVideoTime: (hwnd: HWND) => Promise<number>
   getStreamHistory: () => Promise<({ url: string; title: string } | null)[]>
   openUrl: (url: string) => Promise<void>
-  openSearchWindow: (messages?: TwitchMessage[]) => Promise<void>
+  openSearchWindow: (potplayerInfo: PotPlayerInfo, messages?: TwitchMessage[]) => Promise<void>
   getLinkPreview: (
     url: string
   ) => Promise<{ status: number; thumbnail?: string; tooltip?: string; link: string } | null>

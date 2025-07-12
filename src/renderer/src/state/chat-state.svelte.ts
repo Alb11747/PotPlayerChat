@@ -1,92 +1,78 @@
-import type { PotPlayerInstance } from '@/main/potplayer'
 import type { HWND } from '@/types/globals'
-import { updateArray, updateCache as updateCacheRemovingCollisions } from '@/utils/state'
 import { getStreamerFromUrl as getChannelFromUrl, getStartTimeFromTitle } from '@/utils/stream'
-import { ChatService, type LoadingState, type PotPlayerInfo } from '@core/chat/twitch-chat'
 import conf from './config'
 
-export const potplayerInstances: PotPlayerInstance[] = $state([])
-export const selectedPotplayerInfo: Partial<PotPlayerInstance> = $state({})
-export const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
+const titleCache: Map<string, { channel: string; startTime: number; endTime?: number } | null> =
+  new Map()
+conf.get('cache:title').then((cache) => {
+  if (cache) for (const [key, value] of Object.entries(cache)) titleCache.set(key, value)
+})
 
-export const chatService: ChatService = new ChatService(window.api, loadingState)
-
-async function onPotPlayerInstancesChanged(
-  instances: (PotPlayerInstance & { selected?: boolean })[]
-): Promise<void> {
-  if (instances.length === 0) {
-    potplayerInstances.length = 0
-    return
+export async function getPotplayerExtraInfo<
+  T extends {
+    hwnd: HWND
+    title: string
   }
-
-  updateArray(potplayerInstances, instances)
-
-  const currentMainInstance = instances.find((i) => i.selected)
-  if (!currentMainInstance) return
-  selectedPotplayerInfo.hwnd = currentMainInstance.hwnd
-  await updateSelectedPotPlayerInfo(currentMainInstance)
-}
-
-window.api.onPotPlayerInstancesChanged((_: Event, instances) => {
-  onPotPlayerInstancesChanged(instances)
-})
-
-const titleCache: Record<string, { channel: string; startTime: number } | null> = {}
-conf.get('titleCache').then((cache) => {
-  if (cache) Object.assign(titleCache, cache)
-})
-
-export async function updateSelectedPotPlayerInfo(instance: {
-  hwnd: HWND
-  title: string
-}): Promise<void> {
-  const hwnd = instance.hwnd
+>(instance: T): Promise<(T & { channel: string; startTime: number; endTime: number }) | null> {
   const title = instance.title
-
-  let streamHistory: Awaited<ReturnType<typeof window.api.getStreamHistory>> = []
-  let newPotPlayerInfo: PotPlayerInfo | null = null
-
-  const cachedInfo = titleCache[title] || null
-  if (!cachedInfo) {
-    streamHistory = await window.api.getStreamHistory()
-    for (const stream of streamHistory) {
-      if (!stream || !stream.url || !stream.title) continue
-      const isCurrentStream = stream.title === title
-      const channel = getChannelFromUrl(stream.url)
-      if (!channel) {
-        if (isCurrentStream) console.warn('No channel found for URL:', stream.url)
-        continue
-      }
-      const startTime = getStartTimeFromTitle(stream.title)?.getTime()
-      if (!startTime) {
-        if (isCurrentStream) console.warn('No start time found for title:', stream.title)
-        continue
-      }
-      const data = { channel, startTime }
-
-      const collisionMsg = 'Title cache collision'
-      if (updateCacheRemovingCollisions(titleCache, stream.title, data, collisionMsg))
-        conf.set('titleCache', titleCache)
-
-      if (isCurrentStream && !newPotPlayerInfo)
-        newPotPlayerInfo = { hwnd, title, channel, startTime }
+  const cachedInfo = titleCache.get(title) || null
+  if (cachedInfo) {
+    if (cachedInfo.endTime === undefined) {
+      const videoDuration = await window.api.getTotalVideoTime(instance.hwnd)
+      cachedInfo.endTime = cachedInfo.startTime + videoDuration
+      titleCache.set(title, cachedInfo)
+      conf.set('titleCache', titleCache)
     }
-    if (!newPotPlayerInfo) {
-      console.warn('No valid stream found for title:', title)
-      console.debug('Available streams:', streamHistory)
-      return
-    }
-  } else {
-    newPotPlayerInfo = {
-      hwnd,
-      title,
+    return {
+      ...instance,
       channel: cachedInfo.channel,
-      startTime: cachedInfo.startTime
+      startTime: cachedInfo.startTime,
+      endTime: cachedInfo.endTime
     }
   }
 
-  if (newPotPlayerInfo && newPotPlayerInfo !== selectedPotplayerInfo) {
-    Object.assign(selectedPotplayerInfo, newPotPlayerInfo)
-    await chatService.updateVideoInfo(selectedPotplayerInfo as PotPlayerInfo)
+  let newPotPlayerInfo: (T & { channel: string; startTime: number; endTime: number }) | null = null
+
+  const streamHistory = await window.api.getStreamHistory()
+  for (const stream of streamHistory.reverse()) {
+    if (!stream || !stream.url || !stream.title) continue
+    const isCurrentStream = stream.title === title
+
+    const channel = getChannelFromUrl(stream.url)
+    if (!channel) {
+      if (isCurrentStream) console.warn('No channel found for URL:', stream.url)
+      continue
+    }
+
+    const startTime = getStartTimeFromTitle(stream.title)?.getTime()
+    if (!startTime) {
+      if (isCurrentStream) console.warn('No start time found for title:', stream.title)
+      continue
+    }
+
+    let endTime: number | undefined
+    if (isCurrentStream) {
+      const videoDuration = await window.api.getTotalVideoTime(instance.hwnd)
+      endTime = startTime + videoDuration
+    }
+
+    const data = { channel, startTime, endTime }
+    const existing = titleCache.get(stream.title)
+    if (existing && (existing.channel !== data.channel || existing.startTime !== data.startTime))
+      console.warn('Title cache collision', stream.title, existing, data)
+    titleCache.set(stream.title, data)
+
+    if (isCurrentStream && !newPotPlayerInfo && endTime)
+      newPotPlayerInfo = { ...instance, channel, startTime, endTime }
   }
+
+  conf.set('titleCache', titleCache)
+
+  if (!newPotPlayerInfo) {
+    console.warn('No valid stream found for title:', title)
+    console.debug('Available streams:', streamHistory)
+    return null
+  }
+
+  return newPotPlayerInfo
 }
