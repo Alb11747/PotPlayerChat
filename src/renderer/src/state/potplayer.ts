@@ -4,7 +4,9 @@ import conf from './config'
 
 const titleCache: Map<string, { channel: string; startTime: number; endTime?: number } | null> =
   new Map()
-conf.get('cache:title').then((cache) => {
+
+const configKey = 'cache:title'
+conf.get(configKey).then((cache) => {
   if (cache) for (const [key, value] of Object.entries(cache)) titleCache.set(key, value)
 })
 
@@ -21,7 +23,7 @@ export async function getPotplayerExtraInfo<
       const videoDuration = await window.api.getTotalVideoTime(instance.hwnd)
       cachedInfo.endTime = cachedInfo.startTime + videoDuration
       titleCache.set(title, cachedInfo)
-      conf.set('titleCache', titleCache)
+      conf.set(configKey, titleCache)
     }
     return {
       ...instance,
@@ -66,7 +68,7 @@ export async function getPotplayerExtraInfo<
       newPotPlayerInfo = { ...instance, channel, startTime, endTime }
   }
 
-  conf.set('titleCache', titleCache)
+  conf.set(configKey, titleCache)
 
   if (!newPotPlayerInfo) {
     console.warn('No valid stream found for title:', title)
