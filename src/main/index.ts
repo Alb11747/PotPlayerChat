@@ -1,4 +1,5 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
+import type { PollingIntervals } from '@/preload/types'
 import type { HWND } from '@/types/globals'
 import { isEqual } from '@/utils/objects'
 import { RecentValue } from '@/utils/state'
@@ -129,9 +130,44 @@ function createWindow(): void {
     await updatePotplayerInstances()
   })
 
+  const pollingIntervals: PollingIntervals = {
+    potplayerInstances: 5 * 60 * 1000,
+    videoTime: 1000,
+    activeWindow: 1000
+  }
+
+  ipcMain.handle('getPollingIntervals', () => pollingIntervals)
+  ipcMain.handle('setPollingIntervals', (_event, args: Partial<PollingIntervals>) => {
+    if (
+      args.potplayerInstances &&
+      args.potplayerInstances !== pollingIntervals.potplayerInstances
+    ) {
+      console.debug(
+        `Updating pollingIntervals.potplayerInstances: ${pollingIntervals.potplayerInstances} -> ${args.potplayerInstances}`
+      )
+      pollingIntervals.potplayerInstances = args.potplayerInstances
+      updatePotplayerInstances()
+    }
+    if (args.videoTime && args.videoTime !== pollingIntervals.videoTime) {
+      console.debug(
+        `Updating pollingIntervals.videoTime: ${pollingIntervals.videoTime} -> ${args.videoTime}`
+      )
+      pollingIntervals.videoTime = args.videoTime
+      updateCurrentVideoTime()
+    }
+    if (args.activeWindow && args.activeWindow !== pollingIntervals.activeWindow) {
+      console.debug(
+        `Updating pollingIntervals.activeWindow: ${pollingIntervals.activeWindow} -> ${args.activeWindow}`
+      )
+      pollingIntervals.activeWindow = args.activeWindow
+      updateActivePotplayerInstance()
+    }
+  })
+
   let potplayerInstancesDebounceTimeoutId: NodeJS.Timeout | null = null
   let potplayerInstances: PotPlayerInstance[] = []
 
+  let potplayerIntervalId: NodeJS.Timeout | null = null
   async function updatePotplayerInstances(): Promise<void> {
     if (potplayerInstancesDebounceTimeoutId) return
     potplayerInstancesDebounceTimeoutId = setTimeout(() => {
@@ -160,65 +196,65 @@ function createWindow(): void {
     }
 
     if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
-    potplayerIntervalId = setTimeout(updatePotplayerInstances, 5 * 60 * 1000) // Update every 5 minutes
+    potplayerIntervalId = setTimeout(updatePotplayerInstances, pollingIntervals.potplayerInstances)
   }
 
-  let currentTimeIntervalId: NodeJS.Timeout | null = null
-  let potplayerIntervalId: NodeJS.Timeout | null = null
-  let activePotplayerIntervalId: NodeJS.Timeout | null = null
+  let lastCurrentTimeSend: number = 0
+  let currentTimeTimeoutId: NodeJS.Timeout | null = null
+  async function updateCurrentVideoTime(): Promise<void> {
+    if (currentTimeTimeoutId) clearTimeout(currentTimeTimeoutId)
+    const potplayerHwnd = getPotplayerHwnd()
+    if (potplayerHwnd) {
+      const currentTime = await getCurrentVideoTime(potplayerHwnd)
+      const now = new Date().getTime()
+      if (now - lastCurrentTimeSend > pollingIntervals.videoTime) {
+        mainWindow.webContents.send('updateCurrentVideoTime', currentTime)
+        lastCurrentTimeSend = now
+      }
+    }
+    if (currentTimeTimeoutId) clearTimeout(currentTimeTimeoutId)
+    currentTimeTimeoutId = setTimeout(updateCurrentVideoTime, pollingIntervals.videoTime)
+  }
+
+  let activePotplayerTimeoutId: NodeJS.Timeout | null = null
+  async function updateActivePotplayerInstance(): Promise<void> {
+    const focusedWindow = await getForegroundWindow()
+    if (!focusedWindow) return
+    // Check if the focused window is a PotPlayer instance
+    for (const instance of potplayerInstances) {
+      if (focusedWindow === instance.hwnd) {
+        if (lastActivePotplayerHwnd.getRecent() !== instance.hwnd) {
+          lastActivePotplayerHwnd.add(instance.hwnd)
+
+          // If the selected PotPlayer instance is not set, that means we are using the last active one
+          if (selectedPotplayerHwnd === null)
+            await sendPotplayerInstancesChanged(
+              potplayerInstances,
+              lastActivePotplayerHwnd.getRecent()
+            )
+        }
+      }
+    }
+    if (activePotplayerTimeoutId) clearTimeout(activePotplayerTimeoutId)
+    activePotplayerTimeoutId = setTimeout(
+      updateActivePotplayerInstance,
+      pollingIntervals.activeWindow
+    )
+  }
 
   function startInterval(): void {
-    if (!currentTimeIntervalId) {
-      currentTimeIntervalId = setInterval(async () => {
-        const potplayerHwnd = getPotplayerHwnd()
-        if (potplayerHwnd) {
-          const currentTime = await getCurrentVideoTime(potplayerHwnd)
-          mainWindow.webContents.send('setCurrentTime', currentTime)
-        }
-      }, 1000)
-    }
-
-    if (!potplayerIntervalId) {
-      updatePotplayerInstances()
-    }
-
-    // Poll for active PotPlayer instance
-    if (!activePotplayerIntervalId) {
-      activePotplayerIntervalId = setInterval(async () => {
-        const focusedWindow = await getForegroundWindow()
-        if (!focusedWindow) return
-        // Check if the focused window is a PotPlayer instance
-        for (const instance of potplayerInstances) {
-          if (focusedWindow === instance.hwnd) {
-            if (lastActivePotplayerHwnd.getRecent() !== instance.hwnd) {
-              lastActivePotplayerHwnd.add(instance.hwnd)
-
-              // If the selected PotPlayer instance is not set, that means we are using the last active one
-              if (selectedPotplayerHwnd === null)
-                await sendPotplayerInstancesChanged(
-                  potplayerInstances,
-                  lastActivePotplayerHwnd.getRecent()
-                )
-            }
-          }
-        }
-      }, 1000)
-    }
+    if (!potplayerIntervalId) updatePotplayerInstances()
+    if (!currentTimeTimeoutId) updateCurrentVideoTime()
+    if (!activePotplayerTimeoutId) updateActivePotplayerInstance()
   }
 
   function stopInterval(): void {
-    if (currentTimeIntervalId) {
-      clearInterval(currentTimeIntervalId)
-      currentTimeIntervalId = null
-    }
-    if (potplayerIntervalId) {
-      clearInterval(potplayerIntervalId)
-      potplayerIntervalId = null
-    }
-    if (activePotplayerIntervalId) {
-      clearInterval(activePotplayerIntervalId)
-      activePotplayerIntervalId = null
-    }
+    if (currentTimeTimeoutId) clearTimeout(currentTimeTimeoutId)
+    currentTimeTimeoutId = null
+    if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
+    potplayerIntervalId = null
+    if (activePotplayerTimeoutId) clearTimeout(activePotplayerTimeoutId)
+    activePotplayerTimeoutId = null
   }
 
   mainWindow.on('ready-to-show', startInterval)

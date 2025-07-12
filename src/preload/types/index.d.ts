@@ -13,10 +13,18 @@ declare global {
   }
 }
 
+export type PollingIntervals = {
+  potplayerInstances: number
+  videoTime: number
+  activeWindow: number
+}
+
 export interface WindowApi {
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
   loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
+  getPollingIntervals: () => Promise<PollingIntervals>
+  setPollingIntervals: (args: Partial<PollingIntervals>) => Promise<void>
   getSearchInfo: () => Promise<{
     potplayerInfo: PotPlayerInfo
     messages?: TwitchMessage[]

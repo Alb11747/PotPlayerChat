@@ -5,6 +5,10 @@
   $effect(() => {
     conf.set(settingsConfigKey, $state.snapshot(settings))
   })
+
+  $effect(() => {
+    window.api.setPollingIntervals($state.snapshot(settings.intervals))
+  })
 </script>
 
 <div class="settings-panel">
@@ -39,6 +43,22 @@
     <label>
       <input type="checkbox" bind:checked={settings.interface.showTimestamps} />
       Show Timestamps
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Interval Settings</legend>
+    <label>
+      <span class="label-text">Video Time:</span>
+      <input type="number" bind:value={settings.intervals.videoTime} min="500" />
+    </label>
+    <label>
+      <span class="label-text">Active Window:</span>
+      <input type="number" bind:value={settings.intervals.activeWindow} min="100" />
+    </label>
+    <label>
+      <span class="label-text">PotPlayer Instances:</span>
+      <input type="number" bind:value={settings.intervals.potplayerInstances} min="500" />
     </label>
   </fieldset>
 </div>

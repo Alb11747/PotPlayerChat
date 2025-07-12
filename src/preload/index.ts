@@ -44,6 +44,8 @@ const api: WindowApi = {
   saveDataFile: (subpath: string, value: unknown) =>
     ipcRenderer.invoke('saveDataFile', subpath, value),
   loadKeys: () => ipcRenderer.invoke('loadKeys'),
+  getPollingIntervals: () => ipcRenderer.invoke('getPollingIntervals'),
+  setPollingIntervals: (args) => ipcRenderer.invoke('setPollingIntervals', args),
   getSearchInfo: async () => await searchInfo,
   getPotPlayers: () => ipcRenderer.invoke('getPotplayers'),
   getSelectedPotPlayerHWND: () => ipcRenderer.invoke('getPotplayerHwnd'),
@@ -54,8 +56,8 @@ const api: WindowApi = {
   openUrl: (url: string) => ipcRenderer.invoke('openUrl', url),
   openSearchWindow: (args) => ipcRenderer.invoke('openSearchWindow', args),
   getLinkPreview: (url: string) => ipcRenderer.invoke('getLinkPreview', url),
-  onSetCurrentTime: (callback) => ipcRenderer.on('setCurrentTime', callback as never),
-  offSetCurrentTime: (callback) => ipcRenderer.off('setCurrentTime', callback as never),
+  onSetCurrentTime: (callback) => ipcRenderer.on('updateCurrentVideoTime', callback as never),
+  offSetCurrentTime: (callback) => ipcRenderer.off('updateCurrentVideoTime', callback as never),
   onPotPlayerInstancesChanged: (callback) => {
     ipcRenderer.on('potplayerInstancesChanged', callback as never)
   },
