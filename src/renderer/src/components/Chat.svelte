@@ -15,7 +15,7 @@
   import ChatMessage from './ChatMessage.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
-  const chatService = new ChatService(window.api, loadingState, settings.chat)
+  const chatService = new ChatService(window.api, loadingState, settings)
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker()
 

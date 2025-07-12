@@ -38,7 +38,7 @@ export class ChatService {
 
   private api: WindowApi
   private justLogApi: JustLogAPI
-  private settings: ChatSettings
+  private settings: { chat: ChatSettings }
 
   public usernameColorCache: Map<string, { color: string; timestamp: number }> | null = null
   public currentPotPlayerInfo: PotPlayerInfo | null = null
@@ -55,7 +55,7 @@ export class ChatService {
   // state for UI
   public state: LoadingState
 
-  constructor(api: WindowApi, state: LoadingState, settings: ChatSettings) {
+  constructor(api: WindowApi, state: LoadingState, settings: { chat: ChatSettings }) {
     this.api = api
     this.state = state
     this.settings = settings
@@ -169,7 +169,7 @@ export class ChatService {
                 month,
                 day
               },
-              { baseUrl: this.settings.justlogUrl }
+              { baseUrl: this.settings.chat.justlogUrl }
             )
             console.timeEnd(timeLabel)
             if (data == null) {
@@ -373,7 +373,7 @@ export class ChatService {
           fromTime: startDate,
           toTime: endDate
         },
-        { baseUrl: this.settings.justlogUrl }
+        { baseUrl: this.settings.chat.justlogUrl }
       )
       console.timeEnd(timeLabel)
       if (prefetchedMessages == null) {
@@ -438,7 +438,7 @@ export class ChatService {
     return getMessagesForTime(
       this.currentChatData,
       this.currentPotPlayerInfo.startTime + currentVideoTime,
-      this.settings.chatMessageLimit,
+      this.settings.chat.chatMessageLimit,
       next
     )
   }
