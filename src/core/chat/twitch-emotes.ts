@@ -1,9 +1,10 @@
 import {
+  Emote,
   EmoteFetcher,
+  SevenTVEmote as SevenTVEmoteBase,
   type TwitchEmote as BaseTwitchEmote,
   type Channel,
-  type Collection,
-  type Emote
+  type Collection
 } from '@mkody/twitch-emoticons'
 import { buildEmoteImageUrl, type EmoteSize } from '@twurple/chat'
 import AsyncLock from 'async-lock'
@@ -30,6 +31,23 @@ export class NativeTwitchEmote {
       size: this.sizes[size] || '1.0'
     })
   }
+}
+
+export interface SevenTVEmote extends SevenTVEmoteBase {
+  zeroWidth?: boolean
+}
+
+// Monkey patch SevenTVEmote to support extra data
+const sevenTVEmotePrototype = SevenTVEmoteBase.prototype as unknown as {
+  _setup: (this: SevenTVEmote, data: Record<string, unknown>) => void
+}
+
+const originalSevenTVEmoteSetup = sevenTVEmotePrototype._setup
+sevenTVEmotePrototype._setup = function (data) {
+  originalSevenTVEmoteSetup.call(this, data)
+  const emote = this as SevenTVEmote
+  const flags = typeof data['flags'] === 'number' ? data['flags'] : 0
+  emote.zeroWidth = flags & 0b00000001 ? true : false
 }
 
 /**

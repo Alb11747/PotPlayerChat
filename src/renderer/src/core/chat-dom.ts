@@ -175,6 +175,13 @@ type SegmentNoEscape = { fullText: string; text: string } & (
       url: string
       emote: TwitchEmote | NativeTwitchEmote
       name: string
+      zeroWidth?: boolean
+      attachedEmotes?: {
+        url: string
+        emote: TwitchEmote | NativeTwitchEmote
+        name: string
+        alt: string
+      }[]
     }
   | { type: 'mention'; username: string }
   | { type: 'url'; url: string }
@@ -188,12 +195,14 @@ export function parseFullMessage(
     twitchMessage,
     twitchEmotes: emotes,
     emotesEnabled = true,
+    enableZeroWidthEmotes = true,
     searchQuery,
     debug = true
   }: {
     twitchMessage?: TwitchChatMessage
     twitchEmotes?: Collection<string, TwitchEmote>
     emotesEnabled?: boolean
+    enableZeroWidthEmotes?: boolean
     searchQuery?: string | RegExp
     debug?: boolean
   } = {}
@@ -271,7 +280,8 @@ export function parseFullMessage(
   if (emotesEnabled && emotes) {
     processedMessage.matchAll(/\S+/g).forEach((word) => {
       const emoteName = word[0]
-      if (!emoteName || !emotes.has(emoteName)) return
+      const emote = emotes.get(emoteName)
+      if (!emoteName || !emote) return
       const endIndex = word.index + emoteName.length
       markIndices.push({ index: word.index, char: MarkType.EmoteStart, otherIndex: endIndex })
       markIndices.push({ index: endIndex, char: MarkType.EmoteEnd, otherIndex: word.index })
@@ -384,6 +394,7 @@ export function parseFullMessage(
     if (type === 'emote') {
       let emoteName: string | undefined
       let emoteId: string | undefined
+      let zeroWidth: boolean | undefined
 
       if (opts?.source === 'twitch') {
         const emoteData = markedTwitchEmotes.pop()
@@ -396,6 +407,12 @@ export function parseFullMessage(
         )
       } else {
         emoteName = text.replace(PUA_UNICODE_REGEX, '')
+        const emote = emotes?.get(emoteName)
+        if (emote) {
+          zeroWidth = 'zeroWidth' in emote ? !!emote.zeroWidth : undefined
+        } else {
+          console.warn(`Emote not found in collection: ${emoteName}`, segment)
+        }
       }
 
       const emote = emoteId
@@ -409,7 +426,7 @@ export function parseFullMessage(
       const url = emote.toLink(emote.sizes?.length - 1 || 2)
       const source = opts?.source || ''
       const name = emoteName || text.replace(PUA_UNICODE_REGEX, '')
-      acc.push({ type, source, fullText, text, url, emote, name })
+      acc.push({ type, source, fullText, text, url, emote, name, zeroWidth })
     } else if (type === 'url') {
       const url = markedUrls.pop()
       if (!url) {
@@ -518,6 +535,42 @@ export function parseFullMessage(
       }
       return acc
     }, [])
+  }
+
+  if (enableZeroWidthEmotes) {
+    for (let i = 0; i < segments.length - 2; i++) {
+      // Segment 1: Emote
+      const segment = segments[i]
+      if (!segment || segment.type !== 'emote') continue
+
+      // Segment 3: Zero-width Emote
+      const next2Segment = segments[i + 2]
+      if (!next2Segment || next2Segment.type !== 'emote' || !next2Segment.zeroWidth) continue
+
+      // Segment 2: Whitespace
+      const next1Segment = segments[i + 1]
+      if (
+        !next1Segment ||
+        !basicTextTypes.includes(next1Segment.type as (typeof basicTextTypes)[number])
+      )
+        continue
+      if (next1Segment.text.replace(PUA_UNICODE_REGEX, '').trim() !== '') continue
+
+      // Merge zero-width emote with current segment
+      segment.fullText += next1Segment.fullText + next2Segment.fullText
+      segment.text += next1Segment.text + next2Segment.text
+      segment.attachedEmotes = segment.attachedEmotes || []
+      segment.attachedEmotes.push({
+        url: next2Segment.url,
+        emote: next2Segment.emote,
+        name: next2Segment.name,
+        alt:
+          next1Segment.text.replace(PUA_UNICODE_REGEX, '') +
+          next2Segment.text.replace(PUA_UNICODE_REGEX, '')
+      })
+      segments.splice(i + 1, 2) // Remove the whitespace and zero-width emote segments
+      i-- // Adjust index after removal
+    }
   }
 
   // Reconstruct segments with emotes and URLs

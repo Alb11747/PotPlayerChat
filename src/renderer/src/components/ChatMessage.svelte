@@ -1,9 +1,9 @@
 <script lang="ts">
+  import { isActionMessage, parseFullMessage } from '@/renderer/src/core/chat-dom'
+  import { formatTime } from '@/utils/strings'
   import { getTwitchUserIdByName } from '@core/chat/twitch-api'
   import { mainEmoteService, type TwitchEmoteService } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
-  import { parseFullMessage, isActionMessage } from '@/renderer/src/core/chat-dom'
-  import { formatTime } from '@/utils/strings'
   import type { TwitchEmote } from '@mkody/twitch-emoticons'
   import sanitizeHtml from 'sanitize-html'
   import { UrlTracker } from '../state/url-tracker'
@@ -102,18 +102,38 @@
     >
       {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.getId(), index))}
         {#if segment.type === 'emote' && !urlTracker.isFailedUrl(segment.url)}
-          <img
-            class="chat-emote"
-            src={segment.url}
-            alt={segment.name}
-            title={segment.name}
-            onload={() => {
-              if (onEmoteLoad) onEmoteLoad(segment.emote)
-            }}
-            onerror={() => {
-              urlTracker.markFailedUrl(segment.url)
-            }}
-          />
+          <span class="emote-group">
+            <img
+              class="chat-emote"
+              src={segment.url}
+              alt={segment.name}
+              loading="lazy"
+              decoding="async"
+              onload={() => {
+                if (onEmoteLoad) onEmoteLoad(segment.emote)
+              }}
+              onerror={() => {
+                urlTracker.markFailedUrl(segment.url)
+              }}
+            />
+            {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), index, attachedIndex))}
+              {#if !urlTracker.isFailedUrl(segment.url)}
+                <img
+                  class="chat-emote zero-width-emote"
+                  src={attachedEmote.url}
+                  alt={attachedEmote.name}
+                  loading="lazy"
+                  decoding="async"
+                  onload={() => {
+                    if (onEmoteLoad) onEmoteLoad(attachedEmote.emote)
+                  }}
+                  onerror={() => {
+                    urlTracker.markFailedUrl(attachedEmote.url)
+                  }}
+                />
+              {/if}
+            {/each}
+          </span>
         {:else if segment.type === 'url'}
           <button
             class="chat-url"
@@ -262,10 +282,36 @@
 
   .chat-emote {
     display: inline-block;
+    justify-self: center;
+    align-self: center;
     vertical-align: middle;
     max-height: 2.6rem;
     max-width: 9rem;
     margin-right: 0.25rem;
+    object-fit: contain;
+    font-weight: 900;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .emote-group {
+    display: inline-grid;
+    position: relative;
+    vertical-align: middle;
+  }
+
+  .emote-group > .chat-emote,
+  .emote-group > .zero-width-emote {
+    grid-area: 1 / 1;
+  }
+
+  .zero-width-emote {
+    grid-area: 1 / 1;
+    width: auto;
+    height: 100%;
+    margin: 0;
+    pointer-events: none;
+    z-index: 1;
   }
 
   .chat-url {
