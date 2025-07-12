@@ -66,18 +66,18 @@ function createWindow(): void {
 
   conf.registerRendererListener()
 
-  ipcMain.handle('load-data-file', async (_event, subpath: string) => {
+  ipcMain.handle('loadDataFile', async (_event, subpath: string) => {
     return await loadDataFile(subpath)
   })
 
-  ipcMain.handle('save-data-file', async (_event, subpath: string, value: unknown) => {
+  ipcMain.handle('saveDataFile', async (_event, subpath: string, value: unknown) => {
     await saveDataFile(subpath, value)
     return true
   })
 
   const keysCache: { twitch?: { clientId: string; clientSecret: string } | null } = {}
 
-  ipcMain.handle('load-keys', async () => {
+  ipcMain.handle('loadKeys', async () => {
     return await lock.acquire('keysCache', async () => {
       if (keysCache.twitch === undefined) {
         const twitchKeys = (await loadDataFile<{ clientId: string; clientSecret: string }>(
@@ -102,7 +102,7 @@ function createWindow(): void {
   ): Promise<void> {
     console.debug('Updating PotPlayer instances list')
     await mainWindow.webContents.send(
-      'potplayer-instances-changed',
+      'potplayerInstancesChanged',
       potplayerInstances.map((instance) => ({
         ...instance,
         selected: instance.hwnd === selectedPotplayerHwnd
@@ -114,11 +114,11 @@ function createWindow(): void {
     return selectedPotplayerHwnd || lastActivePotplayerHwnd.getRecent()
   }
 
-  ipcMain.handle('get-potplayer-hwnd', async () => {
+  ipcMain.handle('getPotplayerHwnd', async () => {
     return getPotplayerHwnd()
   })
 
-  ipcMain.handle('set-potplayer-hwnd', async (_event, hwnd: HWND) => {
+  ipcMain.handle('setPotplayerHwnd', async (_event, hwnd: HWND) => {
     if (selectedPotplayerHwnd !== hwnd) {
       const lastSelected = getPotplayerHwnd()
       selectedPotplayerHwnd = hwnd
@@ -172,7 +172,7 @@ function createWindow(): void {
         const potplayerHwnd = getPotplayerHwnd()
         if (potplayerHwnd) {
           const currentTime = await getCurrentVideoTime(potplayerHwnd)
-          mainWindow.webContents.send('set-current-time', currentTime)
+          mainWindow.webContents.send('setCurrentTime', currentTime)
         }
       }, 1000)
     }
@@ -236,24 +236,24 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  ipcMain.handle('get-potplayers', async () => {
+  ipcMain.handle('getPotplayers', async () => {
     await updatePotplayerInstances()
     return potplayerInstances
   })
 
-  ipcMain.handle('get-current-time', async (_event, hwnd: HWND) => {
+  ipcMain.handle('getCurrentTime', async (_event, hwnd: HWND) => {
     return getCurrentVideoTime(hwnd)
   })
 
-  ipcMain.handle('get-total-time', async (_event, hwnd: HWND) => {
+  ipcMain.handle('getTotalTime', async (_event, hwnd: HWND) => {
     return getTotalVideoTime(hwnd)
   })
 
-  ipcMain.handle('get-stream-history', async () => {
+  ipcMain.handle('getStreamHistory', async () => {
     return await getStreamHistory()
   })
 
-  ipcMain.handle('open-url', async (_event, url: string) => {
+  ipcMain.handle('openUrl', async (_event, url: string) => {
     if (
       url &&
       typeof url === 'string' &&
@@ -265,7 +265,7 @@ function createWindow(): void {
     }
   })
 
-  ipcMain.handle('get-link-preview', async (_event, url: string) => {
+  ipcMain.handle('getLinkPreview', async (_event, url: string) => {
     try {
       if (
         !url ||
@@ -326,7 +326,7 @@ function createWindow(): void {
       searchWindow.loadFile(join(__dirname, '../renderer/search.html'))
     }
 
-    searchWindow.webContents.send('search-info', potplayerInfo, messages ?? null)
+    searchWindow.webContents.send('searchInfo', potplayerInfo, messages ?? null)
 
     searchWindow.once('ready-to-show', () => {
       searchWindow.show()
@@ -341,7 +341,7 @@ function createWindow(): void {
   }
 
   ipcMain.handle(
-    'open-search-window',
+    'openSearchWindow',
     async (_event, potplayerInfo: PotPlayerInfo, messages?: TwitchMessage[]) => {
       createSearchWindow(potplayerInfo, messages)
     }
