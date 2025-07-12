@@ -150,7 +150,6 @@
     changingPotPlayerPromise.then(async () => {
       changingPotPlayerPromise = null
       potplayerInstances = await window.api.getPotPlayers()
-      console.log('PotPlayer instances updated:', potplayerInstances)
     })
   }
 
