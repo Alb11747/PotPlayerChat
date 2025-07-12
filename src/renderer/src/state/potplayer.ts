@@ -68,7 +68,7 @@ export async function getPotplayerExtraInfo<
       newPotPlayerInfo = { ...instance, channel, startTime, endTime }
   }
 
-  conf.set(configKey, titleCache)
+  conf.set(configKey, Object.fromEntries(titleCache.entries()))
 
   if (!newPotPlayerInfo) {
     console.warn('No valid stream found for title:', title)
