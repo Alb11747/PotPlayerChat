@@ -139,7 +139,7 @@ function createWindow(): void {
     }, 50)
 
     const instances = await getPotPlayerInstances()
-    console.debug(`Found ${instances.length} PotPlayer instance(s)`, instances)
+    console.debug(`Found ${instances.length} PotPlayer instance(s)`)
     if (!isEqual(potplayerInstances, instances)) {
       potplayerInstances = instances
 
