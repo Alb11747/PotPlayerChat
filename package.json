@@ -8,8 +8,8 @@
   "scripts": {
     "format": "prettier --plugin prettier-plugin-svelte --write .",
     "lint": "eslint --fix --cache .",
-    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
-    "svelte-check": "svelte-check --tsconfig ./tsconfig.json",
+    "typecheck:node": "tsc --strict --noEmit -p tsconfig.node.json --composite false",
+    "svelte-check": "svelte-check --fail-on-warnings --tsconfig ./tsconfig.json",
     "typecheck": "npm run typecheck:node && npm run svelte-check",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
@@ -20,6 +20,12 @@
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
     "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,ts,mjs,cjs,svelte}": [
+      "eslint --fix --cache",
+      "prettier --plugin prettier-plugin-svelte --write"
+    ]
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -61,6 +67,7 @@
     "svelte-check": "^4.2.2",
     "typescript": "^5.8.3",
     "vite": "^6.0.0",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "lint-staged": "^15.2.9"
   }
 }
