@@ -28,7 +28,7 @@ export class NativeTwitchEmote {
 
   toLink(size: number): string {
     return buildEmoteImageUrl(this.id, {
-      animationSettings: this.animated ? 'animated' : 'static',
+      animationSettings: this.animated ? 'default' : 'static',
       size: this.sizes[size] || '1.0'
     })
   }
