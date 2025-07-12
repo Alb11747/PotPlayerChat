@@ -188,7 +188,7 @@ type SegmentNoEscape = { fullText: string; text: string } & (
   | { type: 'url'; url: string }
   | EmoteSegment
 )
-type Segment = SegmentNoEscape & { escaped: string }
+export type Segment = SegmentNoEscape & { escaped: string }
 
 export function parseFullMessage(
   username: string,

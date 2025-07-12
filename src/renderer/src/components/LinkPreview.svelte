@@ -1,9 +1,26 @@
 <script lang="ts">
-  import { previewState } from '../state/preview.svelte'
   import sanitizeHtml from 'sanitize-html'
+  import { previewState } from '../state/preview.svelte'
 
   let previewElement: HTMLDivElement | null = $state(null)
   let previewStyle = $state('')
+
+  function handleMouseMove(e: MouseEvent): void {
+    previewState.mousePosition = { x: e.clientX, y: e.clientY }
+    if (previewState.clearOnMove) {
+      previewState.clearOnMove = false
+      previewState.url = null
+      previewState.emoteSegment = null
+    }
+  }
+
+  $effect(() => {
+    if (!previewElement) return
+    document.addEventListener('mousemove', handleMouseMove, { capture: true })
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+    }
+  })
 
   $effect(() => {
     if (!previewElement || (!previewState.url && !emoteSegment)) return

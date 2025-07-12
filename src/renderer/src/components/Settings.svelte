@@ -44,6 +44,10 @@
       <input type="checkbox" bind:checked={settings.interface.showTimestamps} />
       Show Timestamps
     </label>
+    <label>
+      <input type="checkbox" bind:checked={settings.interface.stickyPreviews} />
+      Sticky Previews
+    </label>
   </fieldset>
 
   <fieldset>

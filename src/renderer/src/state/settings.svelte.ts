@@ -9,6 +9,7 @@ export interface InterfaceSettings {
   enableEmotes: boolean
   enableLinkPreviews: boolean
   enableEmotePreviews: boolean
+  stickyPreviews: boolean
 }
 
 export interface Settings {
@@ -27,7 +28,8 @@ export const defaultSettings: Settings = {
     showTimestamps: true,
     enableEmotes: true,
     enableLinkPreviews: true,
-    enableEmotePreviews: true
+    enableEmotePreviews: true,
+    stickyPreviews: true
   },
   intervals: {
     videoTime: 0,

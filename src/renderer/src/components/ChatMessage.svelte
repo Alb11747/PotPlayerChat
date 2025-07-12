@@ -1,14 +1,18 @@
 <script lang="ts">
-  import { isActionMessage, parseFullMessage } from '@/renderer/src/core/chat-dom'
+  import { isActionMessage, parseFullMessage, type Segment } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
   import { getTwitchUserIdByName } from '@core/chat/twitch-api'
   import { mainEmoteService, type TwitchEmoteService } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import type { TwitchEmote } from '@mkody/twitch-emoticons'
 
-  import { UrlTracker } from '../state/url-tracker'
-  import { previewState } from '../state/preview.svelte'
+  import {
+    currentPreviewType,
+    onMouseLeavePreviewElement,
+    previewState
+  } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
+  import { UrlTracker } from '../state/url-tracker'
 
   interface Props {
     message: TwitchMessage
@@ -86,6 +90,18 @@
       searchQuery
     })
   })
+
+  function mouseUpdateEmote(segment: Segment & { type: 'emote' }): void {
+    if (enableEmotePreviews && !currentPreviewType()) previewState.emoteSegment = segment
+  }
+
+  function mouseUpdateUrl(segment: Segment & { type: 'url' }): void {
+    if (enableLinkPreviews && !currentPreviewType()) {
+      previewState.url = segment.url
+      previewState.urlTrackerInstance = urlTracker
+      handleUrlHover(segment.url)
+    }
+  }
 </script>
 
 <div class="chat-message">
@@ -118,17 +134,10 @@
               onerror={() => {
                 urlTracker.markFailedUrl(segment.url)
               }}
-              onmouseenter={(e) => {
-                if (enableEmotePreviews) {
-                  previewState.emoteSegment = segment
-                  previewState.mousePosition = { x: e.clientX, y: e.clientY }
-                }
-              }}
-              onmousemove={(e) => {
-                if (enableEmotePreviews) previewState.mousePosition = { x: e.clientX, y: e.clientY }
-              }}
+              onmouseenter={() => mouseUpdateEmote(segment)}
+              onmousemove={() => mouseUpdateEmote(segment)}
               onmouseleave={() => {
-                if (enableEmotePreviews) previewState.emoteSegment = null
+                if (enableEmotePreviews) onMouseLeavePreviewElement()
               }}
             />
             {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), index, attachedIndex))}
@@ -154,19 +163,10 @@
             class="chat-url"
             class:visited={urlTracker.isVisitedUrl(segment.url)}
             onclick={() => handleUrlClick(segment.url)}
-            onmouseenter={(e) => {
-              if (enableLinkPreviews) {
-                previewState.url = segment.url
-                previewState.mousePosition = { x: e.clientX, y: e.clientY }
-                previewState.urlTrackerInstance = urlTracker
-                handleUrlHover(segment.url)
-              }
-            }}
-            onmousemove={(e) => {
-              if (enableLinkPreviews) previewState.mousePosition = { x: e.clientX, y: e.clientY }
-            }}
+            onmouseenter={() => mouseUpdateUrl(segment)}
+            onmousemove={() => mouseUpdateUrl(segment)}
             onmouseleave={() => {
-              if (enableLinkPreviews) previewState.url = null
+              if (enableLinkPreviews) onMouseLeavePreviewElement()
             }}
             type="button"
           >
