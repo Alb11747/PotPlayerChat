@@ -158,7 +158,10 @@
   function handleKeydown(event: KeyboardEvent): void {
     if (event.ctrlKey && event.key === 'f') {
       event.preventDefault()
-      window.api.openSearchWindow(messages)
+      window.api.openSearchWindow({
+        potplayerInfo: $state.snapshot(selectedPotplayerInfo),
+        messages: messages.length > 0 ? messages : undefined
+      })
     }
   }
 

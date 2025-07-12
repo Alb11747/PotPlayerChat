@@ -7,15 +7,33 @@ import type { WindowApi } from './types'
 
 exposeConf()
 
-const searchInfo: Promise<{
-  potplayerInfo: PotPlayerInfo
-  messages: TwitchMessage[]
-} | null> = new Promise((resolve) => {
-  setTimeout(() => resolve(null), 1000) // Fallback to null after 1 second
-  ipcRenderer.on(
+let searchInfo:
+  | Promise<{
+      potplayerInfo: PotPlayerInfo
+      messages?: TwitchMessage[]
+    } | null>
+  | {
+      potplayerInfo: PotPlayerInfo
+      messages?: TwitchMessage[]
+    } = new Promise((resolve) => {
+  ipcRenderer.once(
     'searchInfo',
-    (_event, potplayerInfo: PotPlayerInfo, messages: TwitchMessage[]) => {
+    (
+      _event,
+      { potplayerInfo, messages }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[] }
+    ) => {
+      console.debug('Preloaded search info:', potplayerInfo, messages?.length)
       resolve({ potplayerInfo, messages })
+      ipcRenderer.on(
+        'searchInfo',
+        (
+          _event,
+          { potplayerInfo, messages }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[] }
+        ) => {
+          console.debug('Updated search info:', potplayerInfo, messages?.length)
+          searchInfo = { potplayerInfo, messages }
+        }
+      )
     }
   )
 })
@@ -26,7 +44,7 @@ const api: WindowApi = {
   saveDataFile: (subpath: string, value: unknown) =>
     ipcRenderer.invoke('saveDataFile', subpath, value),
   loadKeys: () => ipcRenderer.invoke('loadKeys'),
-  getSearchInfo: () => searchInfo,
+  getSearchInfo: async () => await searchInfo,
   getPotPlayers: () => ipcRenderer.invoke('getPotplayers'),
   getSelectedPotPlayerHWND: () => ipcRenderer.invoke('getPotplayerHwnd'),
   setSelectedPotPlayerHWND: (hwnd) => ipcRenderer.invoke('setPotplayerHwnd', hwnd),
@@ -34,8 +52,7 @@ const api: WindowApi = {
   getTotalVideoTime: (hwnd) => ipcRenderer.invoke('getTotalTime', hwnd),
   getStreamHistory: () => ipcRenderer.invoke('getStreamHistory'),
   openUrl: (url: string) => ipcRenderer.invoke('openUrl', url),
-  openSearchWindow: (potplayerInfo: PotPlayerInfo, messages?: TwitchMessage[]) =>
-    ipcRenderer.invoke('openSearchWindow', potplayerInfo, messages),
+  openSearchWindow: (args) => ipcRenderer.invoke('openSearchWindow', args),
   getLinkPreview: (url: string) => ipcRenderer.invoke('getLinkPreview', url),
   onSetCurrentTime: (callback) => ipcRenderer.on('setCurrentTime', callback as never),
   offSetCurrentTime: (callback) => ipcRenderer.off('setCurrentTime', callback as never),

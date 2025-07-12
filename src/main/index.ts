@@ -326,15 +326,10 @@ function createWindow(): void {
       searchWindow.loadFile(join(__dirname, '../renderer/search.html'))
     }
 
-    searchWindow.webContents.send('searchInfo', potplayerInfo, messages ?? null)
-
     searchWindow.once('ready-to-show', () => {
+      searchWindow.webContents.send('searchInfo', { potplayerInfo, messages })
       searchWindow.show()
       searchWindow.focus()
-    })
-
-    searchWindow.on('closed', () => {
-      // Window will be garbage collected
     })
 
     return searchWindow
@@ -342,7 +337,10 @@ function createWindow(): void {
 
   ipcMain.handle(
     'openSearchWindow',
-    async (_event, potplayerInfo: PotPlayerInfo, messages?: TwitchMessage[]) => {
+    async (
+      _event,
+      { potplayerInfo, messages }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[] }
+    ) => {
       createSearchWindow(potplayerInfo, messages)
     }
   )

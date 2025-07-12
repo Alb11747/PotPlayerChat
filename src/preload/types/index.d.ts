@@ -19,7 +19,7 @@ export interface WindowApi {
   loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
   getSearchInfo: () => Promise<{
     potplayerInfo: PotPlayerInfo
-    messages: TwitchMessage[]
+    messages?: TwitchMessage[]
   } | null>
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
@@ -28,7 +28,13 @@ export interface WindowApi {
   getTotalVideoTime: (hwnd: HWND) => Promise<number>
   getStreamHistory: () => Promise<({ url: string; title: string } | null)[]>
   openUrl: (url: string) => Promise<void>
-  openSearchWindow: (potplayerInfo: PotPlayerInfo, messages?: TwitchMessage[]) => Promise<void>
+  openSearchWindow: ({
+    potplayerInfo,
+    messages
+  }: {
+    potplayerInfo: PotPlayerInfo
+    messages?: TwitchMessage[]
+  }) => Promise<void>
   getLinkPreview: (
     url: string
   ) => Promise<{ status: number; thumbnail?: string; tooltip?: string; link: string } | null>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ChatService, LoadingState } from '@/core/chat/twitch-chat'
+  import { ChatService, type LoadingState } from '@/core/chat/twitch-chat'
   import {
     TwitchChatMessage,
     TwitchSystemMessage,
@@ -13,7 +13,7 @@
   import ChatMessage from './ChatMessage.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
-  const chatService: ChatService = new ChatService(window.api, loadingState)
+  const chatService = new ChatService(window.api, loadingState)
 
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
@@ -55,13 +55,31 @@
   })
 
   async function loadAllMessages(): Promise<void> {
+    if (messages && messages.length > 0) return // Already loaded
     try {
-      const { potplayerInfo, msgs } = await window.api.getSearchInfo()
-      console.debug('Preloaded messages:', msgs.length)
-      loadMessages(msgs)
+      const searchInfo = await window.api.getSearchInfo()
+      if (!searchInfo) {
+        console.error('No search info available')
+        return
+      }
 
-      const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
-      chatService.updateVideoInfo(potplayerInfo)
+      if (searchInfo.messages) {
+        console.debug('Preloaded messages:', searchInfo.messages.length)
+        loadMessages(searchInfo.messages)
+      }
+
+      if (!searchInfo.potplayerInfo?.hwnd) {
+        const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
+        const instances = await window.api.getPotPlayers()
+        searchInfo.potplayerInfo = instances.find((p) => p.hwnd === selectedHwnd)
+        if (!searchInfo.potplayerInfo?.hwnd) {
+          console.error('No PotPlayer info available')
+          return
+        }
+      }
+
+      const currentTime = await window.api.getCurrentVideoTime(searchInfo.potplayerInfo.hwnd)
+      chatService.updateVideoInfo(searchInfo.potplayerInfo)
       const loadedMsgs: TwitchMessage[] = await chatService.getMessagesAroundTime(
         currentTime,
         60 * 60 * 1000, // 1 hour before
