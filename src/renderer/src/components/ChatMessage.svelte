@@ -104,7 +104,7 @@
   }
 </script>
 
-<div class="chat-message">
+<div class="chat-message" class:first-message={message.firstMsg === '1'}>
   {#if settings.interface.showTimestamps}
     <span class="chat-time">
       {formatTime(message.timestamp, videoStartTime, videoEndTime)}
@@ -205,6 +205,10 @@
     box-sizing: border-box;
     user-select: text;
     cursor: default;
+  }
+
+  .chat-message.first-message {
+    background-color: rgba(0, 255, 0, 0.1);
   }
 
   .chat-time {
