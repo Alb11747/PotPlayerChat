@@ -435,7 +435,7 @@ export class ChatService {
 
     await this.prefetchMessagesForTime(
       this.currentPotPlayerInfo.channel,
-      this.currentPotPlayerInfo.startTime + currentVideoTime - 5 * 60 * 1000, // 5 minutes before
+      this.currentPotPlayerInfo.startTime + currentVideoTime - ChatService.prefetchTimePadding,
       this.currentPotPlayerInfo.startTime + currentVideoTime
     )
 
