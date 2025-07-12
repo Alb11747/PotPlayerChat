@@ -196,14 +196,14 @@ export function parseFullMessage(
   {
     twitchMessage,
     twitchEmotes: emotes,
-    emotesEnabled = true,
+    enableEmotes = true,
     enableZeroWidthEmotes = true,
     searchQuery,
     debug = true
   }: {
     twitchMessage?: TwitchChatMessage
     twitchEmotes?: Collection<string, TwitchEmote>
-    emotesEnabled?: boolean
+    enableEmotes?: boolean
     enableZeroWidthEmotes?: boolean
     searchQuery?: string | RegExp
     debug?: boolean
@@ -256,7 +256,7 @@ export function parseFullMessage(
 
   // Process Twitch emotes
   const markedTwitchEmotes: { index: number; name: string; id?: string }[] = []
-  if (emotesEnabled && twitchMessage) {
+  if (enableEmotes && twitchMessage) {
     const twitchEmotes = twitchMessage.emotes
     if (twitchEmotes) {
       for (const { id, startIndex, endIndex } of twitchEmotes) {
@@ -279,7 +279,7 @@ export function parseFullMessage(
   markedTwitchEmotes.sort((a, b) => b.index - a.index)
 
   // Process external emotes
-  if (emotesEnabled && emotes) {
+  if (enableEmotes && emotes) {
     processedMessage.matchAll(/\S+/g).forEach((word) => {
       const emoteName = word[0]
       const emote = emotes.get(emoteName)

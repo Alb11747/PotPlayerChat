@@ -1,19 +1,21 @@
 <script lang="ts">
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import type { PotPlayerInstance } from '@/main/potplayer'
-  import LinkPreview from '@/renderer/src/components/LinkPreview.svelte'
-  import { getPotplayerExtraInfo } from '@/renderer/src/state/potplayer'
   import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
+  import LinkPreview from '../components/LinkPreview.svelte'
+  import Settings from '../components/Settings.svelte'
+  import { getPotplayerExtraInfo } from '../state/potplayer'
+  import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
-  const chatService = new ChatService(window.api, loadingState)
+  const chatService = new ChatService(window.api, loadingState, settings.chat)
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker()
 
@@ -23,6 +25,8 @@
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
   let scrollToBottom = $state(true)
+
+  let showSettings = $state(false)
 
   let changingPotPlayerPromise: Promise<PotPlayerInfo | null> | null = $state(null)
 
@@ -128,6 +132,7 @@
     }
 
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
+      showSettings = false
       scrollToBottom = true
       if (!instance?.hwnd) {
         autoSelectPotPlayer = true
@@ -201,8 +206,13 @@
         {inst.title}
       </button>
     {/each}
+    <button class="settings-button" onclick={() => (showSettings = !showSettings)}>⚙️</button>
   </div>
 </div>
+
+{#if showSettings}
+  <Settings />
+{/if}
 
 <div class="chat-container">
   {#if messages && messages.length > 0}
@@ -223,6 +233,9 @@
           usernameColorMap={chatService.usernameColorCache}
           onUrlClick={handleUrlClick}
           onEmoteLoad={scrollToBottomIfNeeded}
+          enableLinkPreviews={settings.interface.enableLinkPreviews}
+          enableEmotePreviews={settings.interface.enableEmotePreviews}
+          enableEmotes={settings.interface.enableEmotes}
         />
       {/snippet}
     </VList>
@@ -265,6 +278,8 @@
     gap: 1rem;
     max-height: 4.5rem;
     scrollbar-width: thin;
+    user-select: text;
+    cursor: default;
   }
   .instances button {
     padding: 0 0.5rem;

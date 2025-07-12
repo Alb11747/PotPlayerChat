@@ -18,7 +18,8 @@ export class NativeTwitchEmote {
 
   constructor(
     public id: string,
-    public name?: string
+    public name?: string,
+    public animated: boolean = true
   ) {}
 
   get sizes(): EmoteSize[] {
@@ -27,7 +28,7 @@ export class NativeTwitchEmote {
 
   toLink(size: number): string {
     return buildEmoteImageUrl(this.id, {
-      animationSettings: 'animated',
+      animationSettings: this.animated ? 'animated' : 'static',
       size: this.sizes[size] || '1.0'
     })
   }

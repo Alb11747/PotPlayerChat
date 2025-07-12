@@ -8,6 +8,7 @@
 
   import { UrlTracker } from '../state/url-tracker'
   import { previewState } from '../state/preview.svelte'
+  import { settings } from '../state/settings.svelte'
 
   interface Props {
     message: TwitchMessage
@@ -81,15 +82,18 @@
     return parseFullMessage(message.username || '', message.message || '', {
       twitchMessage: message,
       twitchEmotes: emotes ?? undefined,
+      enableEmotes,
       searchQuery
     })
   })
 </script>
 
 <div class="chat-message">
-  <span class="chat-time">
-    {formatTime(message.timestamp, videoStartTime, videoEndTime)}
-  </span>
+  {#if settings.interface.showTimestamps}
+    <span class="chat-time">
+      {formatTime(message.timestamp, videoStartTime, videoEndTime)}
+    </span>
+  {/if}
   {#if message.type === 'chat'}
     <span class="chat-username" style="color: {message.color}">
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -205,9 +209,10 @@
 
   .chat-time {
     color: #a9a9a9;
-    margin-right: 0.5rem;
+    margin-right: 0.2rem;
   }
   .chat-username {
+    margin-left: 0.3rem;
     font-weight: bold;
   }
   .chat-text {

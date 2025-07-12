@@ -6,15 +6,16 @@
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
   import type {} from '@/preload/types/index.d.ts'
+  import LinkPreview from '../components/LinkPreview.svelte'
+  import { settings } from '../state/settings.svelte'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
-  import LinkPreview from '@/renderer/src/components/LinkPreview.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
-  const chatService = new ChatService(window.api, loadingState)
+  const chatService = new ChatService(window.api, loadingState, settings.chat)
 
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()

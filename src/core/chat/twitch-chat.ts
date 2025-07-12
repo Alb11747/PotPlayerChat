@@ -8,14 +8,8 @@ import { userIdCache } from './twitch-api'
 import type { TwitchMessage } from './twitch-msg'
 
 export interface ChatSettings {
-  getJustlogUrl: () => string
-  getChatMessageLimit: () => number
-}
-
-// A placeholder for settings
-const settings: ChatSettings = {
-  getJustlogUrl: () => 'https://justlog.alb11747.com',
-  getChatMessageLimit: () => 200
+  justlogUrl: string
+  chatMessageLimit: number
 }
 
 export interface PotPlayerInfo {
@@ -44,6 +38,7 @@ export class ChatService {
 
   private api: WindowApi
   private justLogApi: JustLogAPI
+  private settings: ChatSettings
 
   public usernameColorCache: Map<string, { color: string; timestamp: number }> | null = null
   public currentPotPlayerInfo: PotPlayerInfo | null = null
@@ -60,9 +55,10 @@ export class ChatService {
   // state for UI
   public state: LoadingState
 
-  constructor(api: WindowApi, state: LoadingState) {
+  constructor(api: WindowApi, state: LoadingState, settings: ChatSettings) {
     this.api = api
     this.state = state
+    this.settings = settings
 
     this.justLogApi = new JustLogAPI()
   }
@@ -173,7 +169,7 @@ export class ChatService {
                 month,
                 day
               },
-              { baseUrl: settings.getJustlogUrl() }
+              { baseUrl: this.settings.justlogUrl }
             )
             console.timeEnd(timeLabel)
             if (data == null) {
@@ -377,7 +373,7 @@ export class ChatService {
           fromTime: startDate,
           toTime: endDate
         },
-        { baseUrl: settings.getJustlogUrl() }
+        { baseUrl: this.settings.justlogUrl }
       )
       console.timeEnd(timeLabel)
       if (prefetchedMessages == null) {
@@ -442,7 +438,7 @@ export class ChatService {
     return getMessagesForTime(
       this.currentChatData,
       this.currentPotPlayerInfo.startTime + currentVideoTime,
-      settings.getChatMessageLimit(),
+      this.settings.chatMessageLimit,
       next
     )
   }
