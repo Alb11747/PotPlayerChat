@@ -282,6 +282,7 @@
     cursor: default;
   }
   .instances button {
+    flex: 1 1 max-content;
     padding: 0 0.5rem;
     border: 1px solid #444;
     border-radius: 4px;
