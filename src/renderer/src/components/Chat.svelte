@@ -37,11 +37,11 @@
 
     if (!newSelectedPotplayerInstanceInfo) {
       const selectedPotplayerInstance = instances.find((i) => i.selected)
-      if (!selectedPotplayerInstance) return
+      if (!selectedPotplayerInstance?.hwnd) return
       newSelectedPotplayerInstanceInfo = await getPotplayerExtraInfo(selectedPotplayerInstance)
     }
 
-    selectedPotplayerInfo = newSelectedPotplayerInstanceInfo
+    selectedPotplayerInfo = newSelectedPotplayerInstanceInfo || {}
     await chatService.updateVideoInfo(selectedPotplayerInfo)
   })
 
@@ -128,7 +128,7 @@
 
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
       scrollToBottom = true
-      if (!instance) {
+      if (!instance?.hwnd) {
         autoSelectPotPlayer = true
         window.api.setSelectedPotPlayerHWND(null)
         return null
@@ -146,6 +146,12 @@
       await resetVideoTimeHistory()
       return currentSelectedPotPlayerInfo
     })()
+
+    changingPotPlayerPromise.then(async () => {
+      changingPotPlayerPromise = null
+      potplayerInstances = await window.api.getPotPlayers()
+      console.log('PotPlayer instances updated:', potplayerInstances)
+    })
   }
 
   // Handle URL click

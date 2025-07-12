@@ -1,5 +1,6 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type { HWND } from '@/types/globals'
+import { isEqual } from '@/utils/objects'
 import { RecentValue } from '@/utils/state'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -138,8 +139,8 @@ function createWindow(): void {
     }, 50)
 
     const instances = await getPotPlayerInstances()
-    console.debug(`Found ${instances.length} PotPlayer instance(s)`)
-    if (potplayerInstances !== instances) {
+    console.debug(`Found ${instances.length} PotPlayer instance(s)`, instances)
+    if (!isEqual(potplayerInstances, instances)) {
       potplayerInstances = instances
 
       // If the selected PotPlayer instance is not in the list, set it to null
@@ -241,11 +242,11 @@ function createWindow(): void {
     return potplayerInstances
   })
 
-  ipcMain.handle('getCurrentTime', async (_event, hwnd: HWND) => {
+  ipcMain.handle('getCurrentVideoTime', async (_event, hwnd: HWND) => {
     return getCurrentVideoTime(hwnd)
   })
 
-  ipcMain.handle('getTotalTime', async (_event, hwnd: HWND) => {
+  ipcMain.handle('getTotalVideoTime', async (_event, hwnd: HWND) => {
     return getTotalVideoTime(hwnd)
   })
 
