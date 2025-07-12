@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import type { PotPlayerInstance } from '@/main/potplayer'
-  import { getPotplayerExtraInfo } from '@/renderer/src/state/chat-state.svelte'
+  import { getPotplayerExtraInfo } from '@/renderer/src/state/potplayer'
   import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
