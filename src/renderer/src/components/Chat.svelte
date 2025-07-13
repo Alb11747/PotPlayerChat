@@ -188,7 +188,7 @@
 <LinkPreview />
 
 <div class="header" role="presentation" onkeydown={handleKeydown}>
-  <div class="instances">
+  <div class="header-button">
     <button
       class:main={autoSelectPotPlayer}
       onclick={() => setPotPlayerInstance(null)}
@@ -206,7 +206,19 @@
         {inst.title}
       </button>
     {/each}
-    <button class="settings-button" onclick={() => (showSettings = !showSettings)}>⚙️</button>
+    <button
+      class="settings-button"
+      onclick={() => {
+        showSettings = !showSettings
+
+        const currentScrollToBottom = scrollToBottom
+        scrollToBottomIfNeeded()
+        setTimeout(() => {
+          scrollToBottom = currentScrollToBottom
+          scrollToBottomIfNeeded()
+        }, 0)
+      }}>⚙️</button
+    >
   </div>
 </div>
 
@@ -273,7 +285,7 @@
     font-size: 1rem;
   }
 
-  .instances {
+  .header-button {
     display: flex;
     gap: 1rem;
     max-height: 4.5rem;
@@ -281,7 +293,7 @@
     user-select: text;
     cursor: default;
   }
-  .instances button {
+  .header-button button {
     flex: 1 1 max-content;
     padding: 0 0.5rem;
     border: 1px solid #444;
@@ -298,11 +310,11 @@
     scrollbar-color: #333 #23232b;
     scrollbar-width: thin;
   }
-  .instances button:hover {
+  .header-button button:hover {
     background: none;
     border-color: #2b4675;
   }
-  .instances button.main {
+  .header-button button.main {
     color: #4e8cff;
     font-weight: bold;
     background: none;
