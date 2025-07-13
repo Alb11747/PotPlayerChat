@@ -166,10 +166,25 @@
   }
 
   input[type='text']:focus,
-  input[type='number']:focus {
+  input[type='number']:focus,
+  select:focus {
     outline: none;
     border-color: #4e8cff;
     box-shadow: 0 0 0 2px rgba(78, 140, 255, 0.5);
+  }
+
+  select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background-color: #2a2a33;
+    color: #efeff1;
+    box-sizing: border-box;
+  }
+  option {
+    background-color: #2a2a33;
+    color: #efeff1;
   }
 
   @media (max-width: 768px) {
