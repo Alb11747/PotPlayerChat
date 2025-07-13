@@ -1,3 +1,4 @@
+import { millifyTimedelta } from '@/utils/time'
 import { escapeIrcText, type IrcMessage } from './irc'
 
 export type TwitchMessage = TwitchChatMessage | TwitchSystemMessage
@@ -220,7 +221,11 @@ export class TwitchSystemMessage {
       const banDuration = this.banDuration
       if (user) {
         if (banDuration) {
-          return [`${user} has been timed out for ${banDuration} seconds`, undefined]
+          const secondsNumber = parseInt(banDuration, 10)
+          const duration = !Number.isNaN(secondsNumber)
+            ? millifyTimedelta(secondsNumber, { long: true })
+            : `${banDuration} seconds`
+          return [`${user} has been timed out for ${duration}`, undefined]
         } else {
           return [`${user} has been banned`, undefined]
         }
@@ -252,7 +257,16 @@ export class TwitchSystemMessage {
         case 'followers_off':
           return ['This room is no longer in followers-only mode.', undefined]
         case 'followers_on': {
-          const duration = this.tags['duration'] || lastRoomStateTags?.['followers'] || '<duration>'
+          let duration: string | undefined =
+            this.tags['duration'] || lastRoomStateTags?.['followers']
+          if (duration) {
+            const minutes = parseInt(duration, 10)
+            if (!Number.isNaN(minutes)) {
+              duration = millifyTimedelta(minutes * 60, { long: true })
+            }
+          } else {
+            duration = '<duration>'
+          }
           return [`This room is now in ${duration} followers-only mode.`, undefined]
         }
         case 'followers_on_zero':
@@ -282,15 +296,40 @@ export class TwitchSystemMessage {
             undefined
           ]
         case 'msg_followersonly': {
-          const duration = this.tags['duration'] || lastRoomStateTags?.['followers'] || '<duration>'
+          let duration: string | undefined =
+            this.tags['duration'] || lastRoomStateTags?.['followers']
+          if (duration) {
+            const minutes = parseInt(duration, 10)
+            if (!Number.isNaN(minutes)) {
+              duration = millifyTimedelta(minutes * 60, { long: true })
+            }
+          } else {
+            duration = '<duration>'
+          }
           return [
             `This room is in ${duration} followers-only mode. Follow ${this.channel} to join the community!`,
             undefined
           ]
         }
         case 'msg_followersonly_followed': {
-          const duration1 = this.tags['duration1'] || '<duration1>'
-          const duration2 = this.tags['duration2'] || '<duration2>'
+          let duration1: string | undefined = this.tags['duration1']
+          if (duration1) {
+            const minutes = parseInt(duration1, 10)
+            if (!Number.isNaN(minutes)) {
+              duration1 = millifyTimedelta(minutes * 60, { long: true })
+            }
+          } else {
+            duration1 = '<duration1>'
+          }
+          let duration2: string | undefined = this.tags['duration2']
+          if (duration2) {
+            const minutes = parseInt(duration2, 10)
+            if (!Number.isNaN(minutes)) {
+              duration2 = millifyTimedelta(minutes * 60, { long: true })
+            }
+          } else {
+            duration2 = '<duration2>'
+          }
           return [
             `This room is in ${duration1} followers-only mode. You have been following for ${duration2}. Continue following to chat!`,
             undefined
@@ -324,9 +363,14 @@ export class TwitchSystemMessage {
             undefined
           ]
         case 'msg_slowmode': {
-          const seconds = this.tags['number'] || lastRoomStateTags?.['slow'] || '<number>'
+          let seconds = this.tags['number'] || lastRoomStateTags?.['slow']
+          if (seconds) {
+            const secondsNumber = parseInt(seconds, 10)
+            if (!Number.isNaN(secondsNumber))
+              seconds = millifyTimedelta(secondsNumber, { long: true })
+          }
           return [
-            `This room is in slow mode and you are sending messages too quickly. You will be able to talk again in ${seconds} seconds.`,
+            `This room is in slow mode and you are sending messages too quickly. You will be able to talk again in ${seconds || '<number> seconds'}.`,
             undefined
           ]
         }
@@ -339,8 +383,17 @@ export class TwitchSystemMessage {
         case 'msg_suspended':
           return ['You don’t have permission to perform that action.', undefined]
         case 'msg_timedout': {
-          const seconds = this.tags['number'] || lastRoomStateTags?.['ban-duration'] || '<number>'
-          return [`You are timed out for ${seconds} more seconds.`, undefined]
+          let seconds: string | undefined =
+            this.tags['number'] || lastRoomStateTags?.['ban-duration']
+          if (seconds) {
+            const secondsNumber = parseInt(seconds, 10)
+            if (!Number.isNaN(secondsNumber)) {
+              seconds = millifyTimedelta(secondsNumber, { long: true })
+            }
+          } else {
+            seconds = '<number> seconds'
+          }
+          return [`You are timed out for ${seconds} more.`, undefined]
         }
         case 'msg_verified_email':
           return [
@@ -350,9 +403,17 @@ export class TwitchSystemMessage {
         case 'slow_off':
           return ['This room is no longer in slow mode.', undefined]
         case 'slow_on': {
-          const seconds = this.tags['number'] || lastRoomStateTags?.['slow'] || '<number>'
+          let seconds: string | undefined = this.tags['number'] || lastRoomStateTags?.['slow']
+          if (seconds) {
+            const secondsNumber = parseInt(seconds, 10)
+            if (!Number.isNaN(secondsNumber)) {
+              seconds = millifyTimedelta(secondsNumber, { long: true })
+            }
+          } else {
+            seconds = '<number> seconds'
+          }
           return [
-            `This room is now in slow mode. You may send messages every ${seconds} seconds.`,
+            `This room is now in slow mode. You may send messages every ${seconds}.`,
             undefined
           ]
         }
@@ -389,11 +450,21 @@ export class TwitchSystemMessage {
         } else if (followersOnly === '0') {
           settings.push('Followers-only mode enabled (any follower)')
         } else {
-          settings.push(`Followers-only mode enabled (must follow for ${followersOnly} minutes)`)
+          const minutes = parseInt(followersOnly, 10)
+          const duration = !Number.isNaN(minutes)
+            ? millifyTimedelta(minutes * 60, { long: true })
+            : `${followersOnly} minutes`
+          settings.push(`Followers-only mode enabled (must follow for ${duration})`)
         }
       }
       if (r9k) settings.push('Unique message mode enabled')
-      if (slow !== undefined && slow !== '0') settings.push(`Slow mode enabled (${slow} seconds)`)
+      if (slow !== undefined && slow !== '0') {
+        const seconds = parseInt(slow, 10)
+        const duration = !Number.isNaN(seconds)
+          ? millifyTimedelta(seconds, { long: true })
+          : `${slow} seconds`
+        settings.push(`Slow mode enabled (${duration})`)
+      }
       if (subsOnly) settings.push('Subscribers-only mode enabled')
 
       if (settings.length === 0) return ['Chat settings updated (no restrictions)', undefined]

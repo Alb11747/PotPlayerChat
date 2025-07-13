@@ -1,3 +1,111 @@
+const timeUnitsToSeconds: Record<string, number> = {
+  y: 365 * 24 * 60 * 60,
+  M: 30 * 24 * 60 * 60,
+  w: 7 * 24 * 60 * 60,
+  d: 24 * 60 * 60,
+  h: 60 * 60,
+  m: 60,
+  s: 1,
+  ms: 1e-3,
+  us: 1e-6,
+  ns: 1e-9
+}
+
+const longTimeUnits: Record<string, { singular: string; plural: string }> = {
+  y: { singular: 'year', plural: 'years' },
+  M: { singular: 'month', plural: 'months' },
+  w: { singular: 'week', plural: 'weeks' },
+  d: { singular: 'day', plural: 'days' },
+  h: { singular: 'hour', plural: 'hours' },
+  m: { singular: 'minute', plural: 'minutes' },
+  s: { singular: 'second', plural: 'seconds' },
+  ms: { singular: 'millisecond', plural: 'milliseconds' },
+  us: { singular: 'microsecond', plural: 'microseconds' },
+  ns: { singular: 'nanosecond', plural: 'nanoseconds' }
+}
+
+export function millifyTimedelta(
+  time: number,
+  {
+    precision = 's',
+    maxUnits = 2,
+    excludedUnits = [],
+    long = false
+  }: { precision?: string; maxUnits?: number; excludedUnits?: string[]; long?: boolean } = {}
+): string {
+  let seconds = time
+  if (seconds < 0) {
+    return '-' + millifyTimedelta(-seconds, { precision, maxUnits, excludedUnits, long })
+  } else if (seconds === 0) {
+    return long ? '0 seconds' : '0s'
+  }
+
+  const excluded = new Set(excludedUnits)
+  const timeChunks: string[] = []
+  const units = Object.entries(timeUnitsToSeconds)
+  let i = 0
+
+  // Find where to stop (precision)
+  for (; i < units.length; i++) {
+    const [unit] = units[i]!
+    if (unit === precision) break
+    if (excluded.has(unit)) continue
+    const unitSeconds = units[i]![1]
+    if (seconds >= unitSeconds) {
+      const value = Math.floor(seconds / unitSeconds)
+      if (long) {
+        const unitName = value === 1 ? longTimeUnits[unit]!.singular : longTimeUnits[unit]!.plural
+        timeChunks.push(`${value} ${unitName}`)
+      } else {
+        timeChunks.push(`${value}${unit}`)
+      }
+      seconds %= unitSeconds
+    }
+    if (timeChunks.length >= maxUnits) break
+  }
+
+  if (timeChunks.length) {
+    if (seconds > 0) {
+      const value = Math.floor(seconds)
+      if (long) {
+        const unitName =
+          value === 1 ? longTimeUnits[precision]!.singular : longTimeUnits[precision]!.plural
+        timeChunks.push(`${value} ${unitName}`)
+      } else {
+        timeChunks.push(`${value}${precision}`)
+      }
+    }
+    return timeChunks.slice(0, maxUnits).join(' ')
+  } else if (seconds > (timeUnitsToSeconds[precision] ?? 1)) {
+    const value = parseFloat(seconds.toFixed(2))
+    if (long) {
+      const unitName =
+        value === 1.0 ? longTimeUnits[precision]!.singular : longTimeUnits[precision]!.plural
+      return `${value} ${unitName}`
+    }
+    return `${value}${precision}`
+  }
+
+  // Continue iterating for sub-precision units
+  for (; i < units.length; i++) {
+    const [unit, unitSeconds] = units[i]!
+    if (excluded.has(unit)) continue
+    if (seconds >= unitSeconds) {
+      const value = parseFloat((seconds / unitSeconds).toPrecision(3))
+      if (long) {
+        const unitName = value === 1.0 ? longTimeUnits[unit]!.singular : longTimeUnits[unit]!.plural
+        return `${value} ${unitName}`
+      }
+      return `${value}${unit}`
+    }
+    if (unit === precision) break
+  }
+
+  if (long) {
+    return `${seconds.toExponential(3)} seconds`
+  }
+  return `${seconds.toExponential(3)}s`
+}
 export class CurrentVideoTimeHistory {
   private history: { time: number; timestamp: number }[] = []
   private lastPredictedTime: number | null = null
