@@ -1,4 +1,4 @@
-import type { WindowApi } from '@/preload/types/index.d.ts'
+import type { WindowApi } from '@/types/preload'
 import type { HWND } from '@/types/globals'
 import { isEqual, isSorted } from '@/utils/objects'
 import { getMessagesBetween, getMessagesForTime } from '@core/chat/chat'

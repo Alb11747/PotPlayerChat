@@ -1,5 +1,5 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
-import type { PollingIntervals } from '@/preload/types'
+import type { PollingIntervals } from '@/types/preload'
 import type { HWND } from '@/types/globals'
 import { isEqual } from '@/utils/objects'
 import { RecentValue } from '@/utils/state'

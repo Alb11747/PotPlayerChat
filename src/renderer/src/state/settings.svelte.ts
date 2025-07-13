@@ -1,5 +1,5 @@
 import type { ChatSettings } from '@/core/chat/twitch-chat'
-import type { PollingIntervals } from '@/preload/types'
+import type { PollingIntervals } from '@/types/preload'
 import conf from './config'
 
 export interface GeneralSettings {}

@@ -3,7 +3,7 @@ import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { electronAPI } from '@electron-toolkit/preload'
 import { exposeConf } from 'electron-conf/preload'
 import { contextBridge, ipcRenderer } from 'electron/renderer'
-import type { WindowApi } from './types'
+import type { WindowApi } from '@/types/preload'
 
 exposeConf()
 

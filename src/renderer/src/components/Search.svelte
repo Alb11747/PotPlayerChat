@@ -5,7 +5,7 @@
     TwitchSystemMessage,
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
-  import type {} from '@/preload/types/index.d.ts'
+  import type {} from '@/types/preload'
   import LinkPreview from '../components/LinkPreview.svelte'
   import { settings } from '../state/settings.svelte'
   import { onMount } from 'svelte'

@@ -1,4 +1,4 @@
-import type {} from '@/preload/types/index.d.ts'
+import type {} from '@/types/preload'
 import AsyncLock from 'async-lock'
 import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
