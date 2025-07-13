@@ -45,6 +45,15 @@
       Show Timestamps
     </label>
     <label>
+      <span class="label-text">Show Name:</span>
+      <select bind:value={settings.interface.showName}>
+        <option value="username">Username</option>
+        <option value="displayName">Display Name</option>
+        <option value="usernameFirst">Username (Display Name)</option>
+        <option value="displayFirst">Display Name (Username)</option>
+      </select>
+    </label>
+    <label>
       <input type="checkbox" bind:checked={settings.interface.stickyPreviews} />
       Sticky Previews
     </label>

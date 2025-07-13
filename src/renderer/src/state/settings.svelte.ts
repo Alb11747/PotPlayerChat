@@ -5,11 +5,12 @@ import conf from './config'
 export interface GeneralSettings {}
 
 export interface InterfaceSettings {
-  showTimestamps: boolean
   enableEmotes: boolean
   enableLinkPreviews: boolean
   enableEmotePreviews: boolean
   stickyPreviews: boolean
+  showTimestamps: boolean
+  showName: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
 }
 
 export interface Settings {
@@ -25,11 +26,12 @@ export const defaultSettings: Settings = {
     chatMessageLimit: 200
   },
   interface: {
-    showTimestamps: true,
     enableEmotes: true,
     enableLinkPreviews: true,
     enableEmotePreviews: true,
-    stickyPreviews: true
+    stickyPreviews: true,
+    showTimestamps: true,
+    showName: 'displayFirst'
   },
   intervals: {
     videoTime: 0,

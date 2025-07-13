@@ -83,10 +83,10 @@
     if (!message) return { escapedUsername: '', parsedMessageSegments: [] }
     let emotes: Record<string, TwitchEmote[]> | undefined = undefined
     if (emoteService) emotes = emoteService.getEmotes(channelUserId)
-    return parseFullMessage(message.username || '', message.message || '', {
-      twitchMessage: message,
+    return parseFullMessage(message, {
       twitchEmotes: emotes ?? undefined,
       enableEmotes,
+      showName: settings.interface.showName,
       searchQuery
     })
   })
