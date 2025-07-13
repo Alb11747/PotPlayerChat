@@ -78,9 +78,14 @@
 
   loadEmotes()
 
+  const [systemText, systemMsg] = $derived(
+    message.type === 'system' ? message?.getSystemTextAndMessage() || [] : []
+  )
+
   // Highlight search terms in the message and parse emotes and parse emotes
   const { escapedUsername, parsedMessageSegments } = $derived.by(() => {
-    if (!message) return { escapedUsername: '', parsedMessageSegments: [] }
+    if (!message || (message.type === 'system' && !systemMsg))
+      return { escapedUsername: '', parsedMessageSegments: undefined }
     let emotes: Record<string, TwitchEmote[]> | undefined = undefined
     if (emoteService) emotes = emoteService.getEmotes(channelUserId)
     return parseFullMessage(message, {
@@ -115,11 +120,21 @@
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html escapedUsername + ': '}
     </span>
+  {:else if message.type === 'system'}
+    <span class="chat-text chat-system"
+      >{#if parsedMessageSegments}
+        {systemText + ': '}
+      {:else}
+        {systemText}
+      {/if}</span
+    >
+  {/if}
+  {#if parsedMessageSegments}
     <span
       class="chat-text"
       style={isActionMessage(message.message) ? `color: ${message.color}` : ''}
     >
-      {#each parsedMessageSegments?.entries() || [] as [index, segment] ((message.getId(), index))}
+      {#each parsedMessageSegments.entries() || [] as [index, segment] ((message.getId(), index))}
         {#if segment.type === 'emote' && !urlTracker.isFailedUrl(segment.url)}
           <span class="emote-group">
             <img
@@ -186,12 +201,6 @@
           {@html segment.escaped}
         {/if}
       {/each}
-    </span>
-  {:else if message.type === 'system'}
-    <span class="chat-text chat-system">{message.getSystemText()}</span>
-  {:else}
-    <span class="chat-text">
-      Unknown message type: {(message as { type: string }).type}
     </span>
   {/if}
 </div>

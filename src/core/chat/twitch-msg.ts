@@ -211,24 +211,26 @@ export class TwitchSystemMessage {
     return (this.tempId = `${this.timestamp}-${this.command || 'unknown'}-${this.channel}-${this.message || ''}`)
   }
 
-  public getSystemText(lastRoomStateTags?: Record<string, string>): string {
-    if (this.systemText) return this.systemText
+  public getSystemTextAndMessage(
+    lastRoomStateTags?: Record<string, string>
+  ): [string, string | undefined] {
+    if (this.systemText) return [this.systemText, undefined]
     if (this.command === 'CLEARCHAT') {
       const user = this.message
       const banDuration = this.banDuration
       if (user) {
         if (banDuration) {
-          return `${user} has been timed out for ${banDuration} seconds`
+          return [`${user} has been timed out for ${banDuration} seconds`, undefined]
         } else {
-          return `${user} has been banned`
+          return [`${user} has been banned`, undefined]
         }
       } else {
-        return 'All chat messages have been cleared'
+        return ['All chat messages have been cleared', undefined]
       }
     } else if (this.command === 'CLEARMSG') {
       const login = this.tags['login'] || 'Unknown'
       const msg = this.message || ''
-      return `A message from ${login} was deleted: "${msg}"`
+      return [`A message from ${login} was deleted: "${msg}"`, undefined]
     } else if (this.command === 'GLOBALUSERSTATE') {
       const displayName = this.tags['display-name'] || 'Unknown'
       const color = this.tags['color'] || 'no color'
@@ -238,92 +240,140 @@ export class TwitchSystemMessage {
       const turbo = this.tags['turbo'] === '1'
       let info = `Authenticated as ${displayName} (${userType}, badges: ${badges}, color: ${color}, emote sets: ${emoteSets})`
       if (turbo) info += ', turbo'
-      return info
+      return [info, undefined]
     } else if (this.command === 'NOTICE') {
       const msgId = this.tags['msg-id']
       const msg = this.message || ''
       switch (msgId) {
         case 'emote_only_off':
-          return 'This room is no longer in emote-only mode.'
+          return ['This room is no longer in emote-only mode.', undefined]
         case 'emote_only_on':
-          return 'This room is now in emote-only mode.'
+          return ['This room is now in emote-only mode.', undefined]
         case 'followers_off':
-          return 'This room is no longer in followers-only mode.'
+          return ['This room is no longer in followers-only mode.', undefined]
         case 'followers_on': {
           const duration = this.tags['duration'] || lastRoomStateTags?.['followers'] || '<duration>'
-          return `This room is now in ${duration} followers-only mode.`
+          return [`This room is now in ${duration} followers-only mode.`, undefined]
         }
         case 'followers_on_zero':
-          return 'This room is now in followers-only mode.'
+          return ['This room is now in followers-only mode.', undefined]
         case 'msg_banned':
-          return `You are permanently banned from talking in ${this.channel}.`
+          return [`You are permanently banned from talking in ${this.channel}.`, undefined]
         case 'msg_bad_characters':
-          return 'Your message was not sent because it contained too many unprocessable characters. If you believe this is an error, please rephrase and try again.'
+          return [
+            'Your message was not sent because it contained too many unprocessable characters. If you believe this is an error, please rephrase and try again.',
+            undefined
+          ]
         case 'msg_channel_blocked':
-          return 'Your message was not sent because your account is not in good standing in this channel.'
+          return [
+            'Your message was not sent because your account is not in good standing in this channel.',
+            undefined
+          ]
         case 'msg_channel_suspended':
-          return 'This channel does not exist or has been suspended.'
+          return ['This channel does not exist or has been suspended.', undefined]
         case 'msg_duplicate':
-          return 'Your message was not sent because it is identical to the previous one you sent, less than 30 seconds ago.'
+          return [
+            'Your message was not sent because it is identical to the previous one you sent, less than 30 seconds ago.',
+            undefined
+          ]
         case 'msg_emoteonly':
-          return 'This room is in emote-only mode. You can find your currently available emoticons using the smiley in the chat text area.'
+          return [
+            'This room is in emote-only mode. You can find your currently available emoticons using the smiley in the chat text area.',
+            undefined
+          ]
         case 'msg_followersonly': {
           const duration = this.tags['duration'] || lastRoomStateTags?.['followers'] || '<duration>'
-          return `This room is in ${duration} followers-only mode. Follow ${this.channel} to join the community!`
+          return [
+            `This room is in ${duration} followers-only mode. Follow ${this.channel} to join the community!`,
+            undefined
+          ]
         }
         case 'msg_followersonly_followed': {
           const duration1 = this.tags['duration1'] || '<duration1>'
           const duration2 = this.tags['duration2'] || '<duration2>'
-          return `This room is in ${duration1} followers-only mode. You have been following for ${duration2}. Continue following to chat!`
+          return [
+            `This room is in ${duration1} followers-only mode. You have been following for ${duration2}. Continue following to chat!`,
+            undefined
+          ]
         }
         case 'msg_followersonly_zero':
-          return `This room is in followers-only mode. Follow ${this.channel} to join the community!`
+          return [
+            `This room is in followers-only mode. Follow ${this.channel} to join the community!`,
+            undefined
+          ]
         case 'msg_r9k':
-          return 'This room is in unique-chat mode and the message you attempted to send is not unique.'
+          return [
+            'This room is in unique-chat mode and the message you attempted to send is not unique.',
+            undefined
+          ]
         case 'msg_ratelimit':
-          return 'Your message was not sent because you are sending messages too quickly.'
+          return [
+            'Your message was not sent because you are sending messages too quickly.',
+            undefined
+          ]
         case 'msg_rejected':
-          return 'Hey! Your message is being checked by mods and has not been sent.'
+          return ['Hey! Your message is being checked by mods and has not been sent.', undefined]
         case 'msg_rejected_mandatory':
-          return 'Your message wasn’t posted due to conflicts with the channel’s moderation settings.'
+          return [
+            'Your message wasn’t posted due to conflicts with the channel’s moderation settings.',
+            undefined
+          ]
         case 'msg_requires_verified_phone_number':
-          return 'A verified phone number is required to chat in this channel. Please visit https://www.twitch.tv/settings/security to verify your phone number.'
+          return [
+            'A verified phone number is required to chat in this channel. Please visit https://www.twitch.tv/settings/security to verify your phone number.',
+            undefined
+          ]
         case 'msg_slowmode': {
           const seconds = this.tags['number'] || lastRoomStateTags?.['slow'] || '<number>'
-          return `This room is in slow mode and you are sending messages too quickly. You will be able to talk again in ${seconds} seconds.`
+          return [
+            `This room is in slow mode and you are sending messages too quickly. You will be able to talk again in ${seconds} seconds.`,
+            undefined
+          ]
         }
         case 'msg_subsonly': {
-          return `This room is in subscribers only mode. To talk, purchase a channel subscription at https://www.twitch.tv/products/${this.channel}/ticket?ref=subscriber_only_mode_chat.`
+          return [
+            `This room is in subscribers only mode. To talk, purchase a channel subscription at https://www.twitch.tv/products/${this.channel}/ticket?ref=subscriber_only_mode_chat.`,
+            undefined
+          ]
         }
         case 'msg_suspended':
-          return 'You don’t have permission to perform that action.'
+          return ['You don’t have permission to perform that action.', undefined]
         case 'msg_timedout': {
           const seconds = this.tags['number'] || lastRoomStateTags?.['ban-duration'] || '<number>'
-          return `You are timed out for ${seconds} more seconds.`
+          return [`You are timed out for ${seconds} more seconds.`, undefined]
         }
         case 'msg_verified_email':
-          return 'This room requires a verified account to chat. Please verify your account at https://www.twitch.tv/settings/security.'
+          return [
+            'This room requires a verified account to chat. Please verify your account at https://www.twitch.tv/settings/security.',
+            undefined
+          ]
         case 'slow_off':
-          return 'This room is no longer in slow mode.'
+          return ['This room is no longer in slow mode.', undefined]
         case 'slow_on': {
           const seconds = this.tags['number'] || lastRoomStateTags?.['slow'] || '<number>'
-          return `This room is now in slow mode. You may send messages every ${seconds} seconds.`
+          return [
+            `This room is now in slow mode. You may send messages every ${seconds} seconds.`,
+            undefined
+          ]
         }
         case 'subs_off':
-          return 'This room is no longer in subscribers-only mode.'
+          return ['This room is no longer in subscribers-only mode.', undefined]
         case 'subs_on':
-          return 'This room is now in subscribers-only mode.'
+          return ['This room is now in subscribers-only mode.', undefined]
         case 'tos_ban':
-          return `The community has closed channel ${this.channel} due to Terms of Service violations.`
+          return [
+            `The community has closed channel ${this.channel} due to Terms of Service violations.`,
+            undefined
+          ]
         case 'unrecognized_cmd': {
           const command = this.tags['command'] || '<command>'
-          return `Unrecognized command: ${command}`
+          return [`Unrecognized command: ${command}`, undefined]
         }
         default:
-          return msg || `Notice${msgId ? ` (${msgId})` : ''}`
+          return [msg || `Notice${msgId ? ` (${msgId})` : ''}`, undefined]
       }
     } else if (this.command === 'PRIVMSG') {
-      return this.message || ''
+      return ['', this.message]
     } else if (this.command === 'ROOMSTATE') {
       const emoteOnly = this.tags['emote-only'] === '1'
       const followersOnly = this.tags['followers-only']
@@ -346,8 +396,8 @@ export class TwitchSystemMessage {
       if (slow !== undefined && slow !== '0') settings.push(`Slow mode enabled (${slow} seconds)`)
       if (subsOnly) settings.push('Subscribers-only mode enabled')
 
-      if (settings.length === 0) return 'Chat settings updated (no restrictions)'
-      return `Chat settings updated: ${settings.join(', ')}`
+      if (settings.length === 0) return ['Chat settings updated (no restrictions)', undefined]
+      return [`Chat settings updated: ${settings.join(', ')}`, undefined]
     } else if (this.command === 'USERNOTICE') {
       const msgId = this.tags['msg-id']
       const displayName = this.tags['display-name'] || this.tags['login'] || 'Unknown'
@@ -370,7 +420,7 @@ export class TwitchSystemMessage {
             if (planName) msg += ` with ${planName}`
             if (streak && streak !== '0') msg += ` (streak: ${streak} months)`
           }
-          return `${msg}: ${this.message}`
+          return [msg, this.message]
         }
         case 'subgift': {
           let msg = ''
@@ -387,7 +437,7 @@ export class TwitchSystemMessage {
             msg = `${displayName} gifted a sub to ${recipient}`
             if (planName) msg += ` (${planName})`
           }
-          return `${msg}: ${this.message}`
+          return [msg, this.message]
         }
         case 'submysterygift': {
           let msg = ''
@@ -398,7 +448,7 @@ export class TwitchSystemMessage {
             const count = escapeIrcText(this.tags['msg-param-mass-gift-count'])
             msg = `${displayName} gifted ${count || 'some'} mystery subs to the community`
           }
-          return `${msg}: ${this.message}`
+          return [msg, this.message]
         }
         case 'raid': {
           let msg = ''
@@ -410,28 +460,28 @@ export class TwitchSystemMessage {
             const viewers = escapeIrcText(this.tags['msg-param-viewerCount'])
             msg = `${raider} is raiding with ${viewers || 'some'} viewers`
           }
-          return `${msg}: ${this.message}`
+          return [msg, this.message]
         }
         case 'bitsbadgetier': {
           const threshold = escapeIrcText(this.tags['msg-param-threshold'])
-          return `${displayName} just earned a new Bits badge tier: ${threshold}`
+          return [`${displayName} just earned a new Bits badge tier: ${threshold}`, undefined]
         }
         case 'giftpaidupgrade': {
           const sender = escapeIrcText(
             this.tags['msg-param-sender-name'] || this.tags['msg-param-sender-login'] || 'someone'
           )
-          return `${displayName} received a gift sub from ${sender}`
+          return [`${displayName} received a gift sub from ${sender}`, undefined]
         }
         case 'anongiftpaidupgrade': {
-          return `${displayName} received a gift sub from an anonymous user`
+          return [`${displayName} received a gift sub from an anonymous user`, undefined]
         }
         case 'rewardgift': {
-          return `${displayName} has been rewarded a gift`
+          return [`${displayName} has been rewarded a gift`, undefined]
         }
         default: {
-          if (systemMsg) return systemMsg
-          if (this.message) return this.message
-          return `User notice from ${displayName}`
+          if (systemMsg) return [systemMsg, this.message]
+          if (this.message) return [this.message, undefined]
+          return [`User notice from ${displayName}`, undefined]
         }
       }
     } else if (this.command === 'USERSTATE') {
@@ -448,9 +498,14 @@ export class TwitchSystemMessage {
       if (mod) info += ', moderator'
       if (subscriber) info += ', subscriber'
       if (turbo) info += ', turbo'
-      return info
+      return [info, undefined]
     }
-    return this.message || ''
+    return [this.message || '', undefined]
+  }
+
+  public getSystemText(): string {
+    const [systemText] = this.getSystemTextAndMessage()
+    return systemText
   }
 
   get banDuration(): string | undefined {

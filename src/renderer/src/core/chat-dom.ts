@@ -40,8 +40,8 @@ const actionEnd = '\u{0001}'
  * @param message The message to check.
  * @returns True if the message is an action message, false otherwise.
  */
-export function isActionMessage(message: string): boolean {
-  return message.startsWith(actionStart) && message.endsWith(actionEnd)
+export function isActionMessage(message?: string): boolean {
+  return !!message && message.startsWith(actionStart) && message.endsWith(actionEnd)
 }
 
 /**
@@ -211,20 +211,21 @@ export function parseFullMessage(
   escapedUsername: string
   parsedMessageSegments: Segment[]
 } {
+  const { username, message } = messageObj
   let processedUsername: string
-  let processedMessage: string = messageObj.message
+  let processedMessage: string = message
 
   if (showName === 'username' || !messageObj.displayName) {
-    processedUsername = messageObj.username || ''
+    processedUsername = username || ''
   } else if (
     showName === 'displayName' ||
-    messageObj.username.toLowerCase() === messageObj.displayName.toLowerCase()
+    username.toLowerCase() === messageObj.displayName.toLowerCase()
   ) {
     processedUsername = messageObj.displayName
   } else if (showName === 'usernameFirst') {
-    processedUsername = `${messageObj.username} (${messageObj.displayName})`
+    processedUsername = `${username} (${messageObj.displayName})`
   } else {
-    processedUsername = `${messageObj.displayName} (${messageObj.username})`
+    processedUsername = `${messageObj.displayName} (${username})`
   }
 
   const isAction = isActionMessage(processedMessage)
@@ -273,7 +274,7 @@ export function parseFullMessage(
     if (twitchEmotes) {
       for (const { id, startIndex, endIndex } of twitchEmotes) {
         const endIndexAdjusted = endIndex + 1 // Adjust for inclusive end index
-        const emoteName = messageObj.message.slice(startIndex, endIndexAdjusted)
+        const emoteName = message.slice(startIndex, endIndexAdjusted)
         markIndices.push({
           index: startIndex,
           char: MarkType.TwitchEmoteStart,
@@ -434,7 +435,7 @@ export function parseFullMessage(
         : emotes?.get(emoteName || '')
 
       if (!emote) {
-        console.warn(`No emote found for marked segment: ${messageObj.message}`, segment)
+        console.warn(`No emote found for marked segment: ${message}`, segment)
         return false
       }
       const url = emote.toLink(emote.sizes?.length - 1 || 2)
@@ -444,7 +445,7 @@ export function parseFullMessage(
     } else if (type === 'url') {
       const url = markedUrls.pop()
       if (!url) {
-        console.warn(`No URL found for marked segment: ${messageObj.message}`, segment)
+        console.warn(`No URL found for marked segment: ${message}`, segment)
         return false
       }
       acc.push({ type, fullText, text, url })
@@ -453,7 +454,7 @@ export function parseFullMessage(
     } else if (type === 'mention') {
       let username = markedMentions.pop()
       if (!username) {
-        console.warn(`No username found for marked segment: ${messageObj.message}`, segment)
+        console.warn(`No username found for marked segment: ${message}`, segment)
         username = removePrefix(text, '@') // Fallback to text if no mention found
       }
       acc.push({ type, fullText, text, username })
@@ -518,8 +519,7 @@ export function parseFullMessage(
           if (type === 'url') {
             // We have an unclosed url, just push the remaining text
             const url = markedUrls[markedUrls.length - 1] // Peek the last URL
-            if (!url)
-              console.warn(`No URL found for unclosed segment: ${messageObj.message}`, segment)
+            if (!url) console.warn(`No URL found for unclosed segment: ${message}`, segment)
             acc.push({
               type: type,
               fullText: textAfterIncludingStartMark,
@@ -530,7 +530,7 @@ export function parseFullMessage(
             // We have an unclosed mention, just push the remaining text
             const username = markedMentions[markedMentions.length - 1] // Peek the last mention
             if (!username)
-              console.warn(`No username found for unclosed segment: ${messageObj.message}`, segment)
+              console.warn(`No username found for unclosed segment: ${message}`, segment)
             acc.push({
               type: type,
               fullText: textAfterIncludingStartMark,
