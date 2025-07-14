@@ -160,7 +160,7 @@
                 <img
                   class="chat-emote zero-width-emote"
                   src={attachedEmote.url}
-                  alt={attachedEmote.name}
+                  alt={attachedEmote.alt}
                   loading="lazy"
                   decoding="async"
                   onload={() => {
