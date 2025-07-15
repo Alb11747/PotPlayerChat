@@ -3,6 +3,12 @@
   import { settings, settingsConfigKey } from '../state/settings.svelte'
 
   $effect(() => {
+    // Normalize the Base URLs
+    while ((settings.chat.justlogUrl ?? '').endsWith('/'))
+      settings.chat.justlogUrl = settings.chat.justlogUrl.slice(0, -1)
+    while ((settings.chat.chatterinoBaseUrl ?? '').endsWith('/'))
+      settings.chat.chatterinoBaseUrl = settings.chat.chatterinoBaseUrl.slice(0, -1)
+
     conf.set(settingsConfigKey, $state.snapshot(settings))
   })
 
@@ -24,6 +30,10 @@
       <span class="label-text">JustLog URL:</span>
       <input type="text" bind:value={settings.chat.justlogUrl} />
     </label>
+    <label>
+      <span class="label-text">Chatterino Base URL:</span>
+      <input type="text" bind:value={settings.chat.chatterinoBaseUrl} />
+    </label>
   </fieldset>
 
   <fieldset>
@@ -41,6 +51,10 @@
       Enable Emote Previews
     </label>
     <label>
+      <input type="checkbox" bind:checked={settings.interface.stickyPreviews} />
+      Sticky Previews
+    </label>
+    <label>
       <input type="checkbox" bind:checked={settings.interface.showTimestamps} />
       Show Timestamps
     </label>
@@ -56,10 +70,6 @@
         <option value="usernameFirst">Username (Display Name)</option>
         <option value="displayFirst">Display Name (Username)</option>
       </select>
-    </label>
-    <label>
-      <input type="checkbox" bind:checked={settings.interface.stickyPreviews} />
-      Sticky Previews
     </label>
   </fieldset>
 

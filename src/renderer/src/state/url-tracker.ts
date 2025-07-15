@@ -16,6 +16,8 @@ export class UrlTracker {
   private failedUrls = new SvelteSet<string>()
   private lock = new AsyncLock()
 
+  constructor(private settings: { chatterinoBaseUrl: string }) {}
+
   /**
    * Fetch link preview data for a URL
    */
@@ -28,7 +30,7 @@ export class UrlTracker {
         this.loadingUrls.add(url)
 
         // Use IPC to fetch from main process (avoids CORS)
-        const data = await window.api.getLinkPreview(url)
+        const data = await window.api.getLinkPreview(url, this.settings.chatterinoBaseUrl)
 
         if (!data) {
           const errorResult: LinkPreview = { status: 0, link: url }

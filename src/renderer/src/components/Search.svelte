@@ -35,7 +35,7 @@
     }
   }
 
-  const urlTracker = new UrlTracker()
+  const urlTracker = new UrlTracker(settings.chat)
 
   let searchQuery = $state('')
   let caseSensitive = $state(false)

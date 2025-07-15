@@ -46,7 +46,8 @@ export interface WindowApi {
     initialSearch?: string
   }) => Promise<void>
   getLinkPreview: (
-    url: string
+    url: string,
+    chatterinoBaseUrl?: string
   ) => Promise<{ status: number; thumbnail?: string; tooltip?: string; link: string } | null>
   onSetCurrentTime: (callback: (event: Event, time: number) => void) => void
   offSetCurrentTime: (callback: (event: Event, time: number) => void) => void

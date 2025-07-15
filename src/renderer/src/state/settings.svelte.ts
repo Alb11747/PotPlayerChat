@@ -15,7 +15,7 @@ export interface InterfaceSettings {
 }
 
 export interface Settings {
-  chat: ChatSettings
+  chat: ChatSettings & { chatterinoBaseUrl: string }
   interface: InterfaceSettings
   intervals: PollingIntervals
   general: GeneralSettings
@@ -23,8 +23,9 @@ export interface Settings {
 
 export const defaultSettings: Settings = {
   chat: {
+    chatMessageLimit: 200,
     justlogUrl: 'https://justlog.alb11747.com',
-    chatMessageLimit: 200
+    chatterinoBaseUrl: 'https://chatterino.alb11747.com/link_resolver'
   },
   interface: {
     enableEmotes: true,

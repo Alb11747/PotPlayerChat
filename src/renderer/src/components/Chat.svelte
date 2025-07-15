@@ -17,7 +17,7 @@
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
   const videoTimeHistory = new CurrentVideoTimeHistory()
-  const urlTracker = new UrlTracker()
+  const urlTracker = new UrlTracker(settings.chat)
 
   let potplayerInstances: PotPlayerInstance[] = $state([])
   let selectedPotplayerInfo: PotPlayerInfo = $state({})
