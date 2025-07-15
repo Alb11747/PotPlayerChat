@@ -35,6 +35,7 @@
     usernameColorMap?: Map<string, { color: string; timestamp: number }>
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
+    onUsernameClick?: (info: { username: string }) => void
     onEmoteLoad?: (emote: CheerEmote | TwitchEmote | NativeTwitchEmote) => void
     enableLinkPreviews?: boolean
     enableEmotePreviews?: boolean
@@ -50,6 +51,7 @@
     usernameColorMap,
     searchQuery,
     onUrlClick,
+    onUsernameClick,
     onEmoteLoad,
     enableLinkPreviews = settings.interface.enableLinkPreviews,
     enableEmotePreviews = settings.interface.enableEmotePreviews,
@@ -211,7 +213,15 @@
         {/each}
       </span>
     {/if}
-    <span class="chat-username" style="color: {message.color}">
+    <span
+      class="chat-username"
+      role="link"
+      tabindex="-1"
+      style="color: {message.color}"
+      onclick={() => onUsernameClick?.(message)}
+      onkeydown={(e) => e.key === 'Enter' && onUsernameClick?.(message)}
+      style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
+    >
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html escapedUsername + ': '}
     </span>
@@ -293,8 +303,14 @@
           </button>
         {:else if segment.type === 'mention'}
           <span
+            type="button"
+            role="link"
+            tabindex="-1"
             class="chat-username"
             style="color: {usernameColorMap?.get(segment.username)?.color || '#ffffff'}"
+            onclick={() => onUsernameClick?.(segment)}
+            onkeydown={(e) => e.key === 'Enter' && onUsernameClick?.(segment)}
+            style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
           >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             {@html segment.escaped}

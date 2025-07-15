@@ -165,6 +165,14 @@
     window.api.openUrl(url)
   }
 
+  function handleUsernameClick(info: { username: string }): void {
+    window.api.openSearchWindow({
+      potplayerInfo: $state.snapshot(selectedPotplayerInfo),
+      messages: messages.length > 0 ? messages : undefined,
+      initialSearch: `${info.username}: `
+    })
+  }
+
   // Handle keyboard shortcuts
   function handleKeydown(event: KeyboardEvent): void {
     if (event.ctrlKey && event.key === 'f') {
@@ -244,6 +252,7 @@
           {urlTracker}
           usernameColorMap={chatService.usernameColorCache}
           onUrlClick={handleUrlClick}
+          onUsernameClick={handleUsernameClick}
           onEmoteLoad={scrollToBottomIfNeeded}
         />
       {/snippet}
