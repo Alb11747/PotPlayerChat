@@ -1,3 +1,4 @@
+import type { CheerEmote } from '@/core/chat/twitch-api'
 import { regExpEscape, removePrefix } from '@/utils/strings'
 import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchChatMessage } from '@core/chat/twitch-msg'
@@ -165,20 +166,28 @@ export function correctMarks(str: string): string {
   return prefix + str + suffix
 }
 
-export type EmoteSegment = {
-  type: 'emote'
-  source: string
-  url: string
-  emote: TwitchEmote | NativeTwitchEmote
-  name: string
-  zeroWidth?: boolean
-  attachedEmotes?: {
-    url: string
-    emote: TwitchEmote | NativeTwitchEmote
-    name: string
-    alt: string
-  }[]
-}
+export type EmoteSegment =
+  | {
+      type: 'emote'
+      source: string
+      url: string
+      emote: TwitchEmote | NativeTwitchEmote
+      name: string
+      zeroWidth?: boolean
+      attachedEmotes?: {
+        url: string
+        emote: TwitchEmote | NativeTwitchEmote
+        name: string
+        alt: string
+      }[]
+    }
+  | {
+      type: 'cheer'
+      url: string
+      emote: CheerEmote
+      name: string
+      bits: number
+    }
 
 const basicTextTypes = ['text', 'action'] as const
 // const partialTextTypes = ['mention', 'url'] as const
@@ -200,7 +209,7 @@ export function parseFullMessage(
     searchQuery,
     debug = true
   }: {
-    twitchEmotes?: Collection<string, TwitchEmote>
+    twitchEmotes?: Collection<string, TwitchEmote | CheerEmote>
     enableEmotes?: boolean
     enableZeroWidthEmotes?: boolean
     showName?: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
@@ -406,7 +415,7 @@ export function parseFullMessage(
     text: string,
     opts: { source?: string } = {}
   ): boolean {
-    if (type === 'emote') {
+    if (type === 'emote' || type === 'cheer') {
       let emoteName: string | undefined
       let emoteId: string | undefined
       let zeroWidth: boolean | undefined
@@ -438,10 +447,21 @@ export function parseFullMessage(
         console.warn(`No emote found for marked segment: ${message}`, segment)
         return false
       }
-      const url = emote.toLink(emote.sizes?.length - 1 || 2)
-      const source = opts?.source || ''
-      const name = emoteName || text.replace(PUA_UNICODE_REGEX, '')
-      acc.push({ type, source, fullText, text, url, emote, name, zeroWidth })
+      if (type === 'emote' && 'toLink' in emote) {
+        const url = emote.toLink(emote.sizes?.length - 1 || 2)
+        const source = opts?.source || ''
+        const name = emoteName || text.replace(PUA_UNICODE_REGEX, '')
+        acc.push({ type, source, fullText, text, url, emote, name, zeroWidth })
+      } else if ('source' in emote && emote.source === 'cheer') {
+        const type = 'cheer'
+        const url = emote.url
+        const bits = emote.bits
+        const name = emote.name
+        acc.push({ type, fullText, text, url, emote, bits, name })
+      } else {
+        console.warn(`Unknown emote type: ${type}`, segment)
+        return false
+      }
     } else if (type === 'url') {
       const url = markedUrls.pop()
       if (!url) {

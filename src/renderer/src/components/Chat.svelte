@@ -245,9 +245,6 @@
           usernameColorMap={chatService.usernameColorCache}
           onUrlClick={handleUrlClick}
           onEmoteLoad={scrollToBottomIfNeeded}
-          enableLinkPreviews={settings.interface.enableLinkPreviews}
-          enableEmotePreviews={settings.interface.enableEmotePreviews}
-          enableEmotes={settings.interface.enableEmotes}
         />
       {/snippet}
     </VList>

@@ -10,7 +10,7 @@ export interface InterfaceSettings {
   enableEmotePreviews: boolean
   stickyPreviews: boolean
   showTimestamps: boolean
-  showBadges: boolean
+  enableBadges: boolean
   showName: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
 }
 
@@ -32,7 +32,7 @@ export const defaultSettings: Settings = {
     enableEmotePreviews: true,
     stickyPreviews: true,
     showTimestamps: true,
-    showBadges: true,
+    enableBadges: true,
     showName: 'displayFirst'
   },
   intervals: {

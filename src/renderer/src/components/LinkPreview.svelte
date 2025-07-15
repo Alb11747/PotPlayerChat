@@ -102,7 +102,7 @@
         <img src={emoteSegment.url} alt={emoteSegment.name} class="emote-preview-image" />
         <div class="emote-preview-name">{emoteSegment.name}</div>
         <div class="emote-preview-source">
-          Source: {emoteSegment.emote.type || emoteSegment.source}
+          Source: {emoteSegment.emote.type || emoteSegment.source || emoteSegment.emote.source}
         </div>
         {#if emoteSegment.emote.ownerName}
           <div class="emote-preview-author">

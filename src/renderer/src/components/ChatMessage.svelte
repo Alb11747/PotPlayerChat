@@ -1,12 +1,24 @@
 <script lang="ts">
   import { isActionMessage, parseFullMessage, type Segment } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
-  import { getMainBadgeService, getTwitchUserIdByName } from '@core/chat/twitch-api'
-  import { mainEmoteService, type TwitchEmoteService } from '@core/chat/twitch-emotes'
+  import {
+    getTwitchUserIdByName,
+    mainBadgeService,
+    mainCheerEmoteService,
+    type CheerEmote,
+    type TwitchBadgeService,
+    type TwitchCheerEmoteService
+  } from '@core/chat/twitch-api'
+  import {
+    mainEmoteService,
+    type NativeTwitchEmote,
+    type TwitchEmoteService
+  } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
-  import type { TwitchEmote } from '@mkody/twitch-emoticons'
+  import { Collection, TwitchEmote } from '@mkody/twitch-emoticons'
 
-  import type { HelixChatBadgeVersion } from '@twurple/api'
+  import type { CheermoteDisplayInfo, HelixChatBadgeVersion } from '@twurple/api'
+  import { onMount } from 'svelte'
   import {
     currentPreviewType,
     onMouseLeavePreviewElement,
@@ -23,10 +35,11 @@
     usernameColorMap?: Map<string, { color: string; timestamp: number }>
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
-    onEmoteLoad?: (emote: TwitchEmote) => void
+    onEmoteLoad?: (emote: CheerEmote | TwitchEmote | NativeTwitchEmote) => void
     enableLinkPreviews?: boolean
     enableEmotePreviews?: boolean
     enableEmotes?: boolean
+    enableBadges?: boolean
   }
 
   let {
@@ -38,9 +51,10 @@
     searchQuery,
     onUrlClick,
     onEmoteLoad,
-    enableLinkPreviews = true,
-    enableEmotePreviews = true,
-    enableEmotes = true
+    enableLinkPreviews = settings.interface.enableLinkPreviews,
+    enableEmotePreviews = settings.interface.enableEmotePreviews,
+    enableEmotes = settings.interface.enableEmotes,
+    enableBadges = settings.interface.enableBadges
   }: Props = $props()
 
   // Handle URL click
@@ -62,36 +76,42 @@
 
   let emoteService: TwitchEmoteService | null = $state(null)
   let channelUserId: number | null = $state(null)
-  let badgeService: Awaited<ReturnType<typeof getMainBadgeService>> = $state(null)
   let badges: [string, HelixChatBadgeVersion][] = $state([])
   const badgeInfo: Map<string, string> | undefined = $derived(message?.badgeInfo)
   const subscriberMonths: string | undefined = $derived(badgeInfo?.get('subscriber'))
+  let cheerEmotes: Map<string, CheerEmote> | null = $state(null)
 
   async function loadServices(): Promise<void> {
-    if (!enableEmotes) return
     const id = await getTwitchUserIdByName(message.channel)
-    if (!id) return
-    channelUserId = parseInt(id, 10)
+    if (id) channelUserId = parseInt(id, 10)
 
-    // Load emote service
-    const emoteServiceInstance = await mainEmoteService
-    if (emoteServiceInstance) {
-      const fetchPromise = channelUserId
-        ? emoteServiceInstance.fetchAllEmotes(channelUserId)
-        : emoteServiceInstance.fetchAllEmotes()
-      await fetchPromise
-      emoteService = emoteServiceInstance
+    if (enableBadges) {
+      // Load badge service
+      mainBadgeService.then((badgeService) => {
+        if (badgeService) loadBadges(badgeService)
+      })
     }
 
-    // Load badge service
-    const badgeServiceInstance = await getMainBadgeService()
-    if (badgeServiceInstance) {
-      badgeService = badgeServiceInstance
-      await loadBadges()
+    if (enableEmotes) {
+      // Load emote service
+      mainEmoteService.then((emoteServiceInstance) => {
+        if (!emoteServiceInstance) return
+        const fetchPromise = channelUserId
+          ? emoteServiceInstance.fetchAllEmotes(channelUserId)
+          : emoteServiceInstance.fetchAllEmotes()
+        fetchPromise.then(() => {
+          emoteService = emoteServiceInstance
+        })
+      })
+
+      // Load cheer emote service
+      mainCheerEmoteService.then((cheerEmoteService) => {
+        if (cheerEmoteService) loadCheerEmotes(cheerEmoteService)
+      })
     }
   }
 
-  async function loadBadges(): Promise<void> {
+  async function loadBadges(badgeService: TwitchBadgeService): Promise<void> {
     if (!badgeService || !channelUserId || message.type !== 'chat') return
     const badgeList = message.badges
     if (!badgeList) return
@@ -102,7 +122,30 @@
     }
   }
 
-  loadServices()
+  async function loadCheerEmotes(cheerEmoteService: TwitchCheerEmoteService): Promise<void> {
+    if (!message.bits || !cheerEmoteService || !channelUserId) return
+    const msgBits = parseInt(message.bits, 10)
+    if (isNaN(msgBits)) return
+
+    const cheerEmotesMap: Map<string, CheermoteDisplayInfo> = new Map()
+
+    // Extract cheer emote names from message
+    for (const word of message.message.matchAll(/(?:^|\s)([^\W\d]+\d+)(?:\s|$)/g)) {
+      const match = /([^\W\d]+)(\d+)/.exec(word)
+      if (!match) continue
+      const [emote, name, amount] = match
+      const bits = parseInt(amount, 10)
+      if (isNaN(bits)) continue // Skip if bits is not a number
+      if (bits > msgBits) continue // Skip if bits is greater than message bits
+
+      const info = await cheerEmoteService.getCheerEmoteInfo(name, bits, channelUserId?.toString())
+      if (info) cheerEmotesMap.set(emote, info)
+    }
+
+    cheerEmotes = cheerEmotesMap
+  }
+
+  onMount(loadServices)
 
   const [systemText, systemMsg] = $derived(
     message.type === 'system' ? message?.getSystemTextAndMessage() || [] : []
@@ -112,10 +155,18 @@
   const { escapedUsername, parsedMessageSegments } = $derived.by(() => {
     if (!message || (message.type === 'system' && !systemMsg))
       return { escapedUsername: '', parsedMessageSegments: undefined }
-    let emotes: Record<string, TwitchEmote[]> | undefined = undefined
-    if (emoteService) emotes = emoteService.getEmotes(channelUserId)
+
+    // Get base emotes
+    let emotes = emoteService?.getEmotes(channelUserId ?? undefined)
+    if (emotes && cheerEmotes) {
+      emotes = new Collection(emotes)
+      for (const [name, emote] of cheerEmotes.entries()) {
+        emotes.set(name, emote)
+      }
+    }
+
     return parseFullMessage(message, {
-      twitchEmotes: emotes ?? undefined,
+      twitchEmotes: emotes,
       enableEmotes,
       showName: settings.interface.showName,
       searchQuery
@@ -142,7 +193,7 @@
     </span>
   {/if}
   {#if message.type === 'chat'}
-    {#if settings.interface.showBadges && badges.length > 0}
+    {#if enableBadges && badges.length > 0}
       <span class="chat-badges">
         {#each badges as [badgeId, badge] (badgeId)}
           <img
@@ -179,8 +230,11 @@
       style={isActionMessage(message.message) ? `color: ${message.color}` : ''}
     >
       {#each parsedMessageSegments.entries() || [] as [index, segment] ((message.getId(), index))}
-        {#if segment.type === 'emote' && !urlTracker.isFailedUrl(segment.url)}
-          <span class="emote-group">
+        {#if (segment.type === 'emote' || segment.type === 'cheer') && !urlTracker.isFailedUrl(segment.url)}
+          <span
+            class={segment.type === 'cheer' ? 'emote-cheer' : 'emote-group'}
+            style:color={segment.type === 'cheer' ? segment.emote.color : ''}
+          >
             <img
               class="chat-emote"
               src={segment.url}
@@ -216,6 +270,11 @@
                 />
               {/if}
             {/each}
+            {#if segment.type === 'cheer'}
+              <span class="bits">
+                {segment.bits}
+              </span>
+            {/if}
           </span>
         {:else if segment.type === 'url'}
           <button
@@ -300,12 +359,10 @@
     position: relative;
     vertical-align: text-bottom;
   }
-
   .emote-group > .chat-emote,
   .emote-group > .zero-width-emote {
     grid-area: 1 / 1;
   }
-
   .zero-width-emote {
     grid-area: 1 / 1;
     width: auto;
@@ -313,6 +370,19 @@
     margin: 0;
     pointer-events: none;
     z-index: 1;
+  }
+
+  .emote-cheer {
+    display: inline-block;
+    width: fit-content;
+  }
+  .emote-cheer > .chat-emote {
+    margin: 0;
+  }
+  .emote-cheer > .bits {
+    vertical-align: center;
+    margin-left: -0.25rem;
+    margin-right: 0.25rem;
   }
 
   .chat-url {

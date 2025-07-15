@@ -1,5 +1,9 @@
-import type { HelixChatBadgeSet, HelixChatBadgeVersion } from '@twurple/api'
+import type { HelixChatBadgeSet, HelixChatBadgeVersion, HelixCheermoteList } from '@twurple/api'
 import { ApiClient } from '@twurple/api'
+import type {
+  CheermoteDisplayInfo,
+  CheermoteFormat
+} from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
 import { AppTokenAuthProvider } from '@twurple/auth'
 import AsyncLock from 'async-lock'
 
@@ -42,7 +46,7 @@ export async function getTwitchUserIdByName(username: string): Promise<string | 
   })
 }
 
-class TwitchBadgeService {
+export class TwitchBadgeService {
   private globalBadgeCache = new Map<string, Map<string, HelixChatBadgeVersion>>()
   private channelBadgeCache = new Map<string, Map<string, Map<string, HelixChatBadgeVersion>>>()
 
@@ -135,22 +139,107 @@ class TwitchBadgeService {
   }
 }
 
-// Create singleton instance
-let mainBadgeService: Promise<TwitchBadgeService | null>
-
-export const getMainBadgeService = async (): Promise<TwitchBadgeService | null> => {
-  if (!mainBadgeService) {
-    mainBadgeService = (async () => {
-      const keys = await window.api.loadKeys()
-      if (!keys.twitch) {
-        console.warn('Twitch keys not found, badge service will not work')
-        return null
-      }
-      const api = new ApiClient({
-        authProvider: new AppTokenAuthProvider(keys.twitch.clientId, keys.twitch.clientSecret)
-      })
-      return new TwitchBadgeService(api)
-    })()
+export const mainBadgeService = (async (): Promise<TwitchBadgeService | null> => {
+  const keys = await window.api.loadKeys()
+  if (!keys.twitch) {
+    console.warn('Twitch keys not found, badge service will not work')
+    return null
   }
-  return mainBadgeService
+  const api = new ApiClient({
+    authProvider: new AppTokenAuthProvider(keys.twitch.clientId, keys.twitch.clientSecret)
+  })
+  return new TwitchBadgeService(api)
+})()
+
+export class CheerEmote implements CheermoteDisplayInfo {
+  public source = 'cheer' as const
+
+  public url: string
+  public color: string
+
+  constructor(
+    info: CheermoteDisplayInfo,
+    public name: string,
+    public bits: number
+  ) {
+    this.url = info.url
+    this.color = info.color
+  }
 }
+
+export class TwitchCheerEmoteService {
+  private globalCheerEmotes: HelixCheermoteList | null = null
+  private channelCheerEmotes = new Map<string, HelixCheermoteList>()
+
+  constructor(private api: ApiClient | null) {}
+
+  private async fetchCheerEmotes(channelId?: string): Promise<void> {
+    const api = this.api
+    if (!api) return
+
+    const lockKey = channelId ? `cheer-emotes:channel:${channelId}` : 'cheer-emotes:global'
+
+    if (channelId ? this.channelCheerEmotes.has(channelId) : this.globalCheerEmotes) return
+    return lock.acquire(lockKey, async () => {
+      if (channelId ? this.channelCheerEmotes.has(channelId) : this.globalCheerEmotes) return
+
+      try {
+        const fetchLabel = channelId
+          ? `Fetching cheer emotes for channel '${channelId}'`
+          : 'Fetching global cheer emotes'
+        console.debug(fetchLabel)
+        console.time(fetchLabel)
+        const cheerEmotes = await api.bits.getCheermotes(channelId)
+        console.timeEnd(fetchLabel)
+
+        if (channelId) {
+          this.channelCheerEmotes.set(channelId, cheerEmotes)
+        } else {
+          this.globalCheerEmotes = cheerEmotes
+        }
+      } catch (error) {
+        console.error(
+          `Failed to fetch cheerEmotes${channelId ? ` for channel ${channelId}` : ''}:`,
+          error
+        )
+      }
+    })
+  }
+
+  async getCheerEmoteInfo(
+    name: string,
+    bits: number,
+    channelId?: string,
+    format: CheermoteFormat = {
+      background: 'dark',
+      state: 'animated',
+      scale: '4'
+    }
+  ): Promise<CheerEmote | undefined> {
+    await this.fetchCheerEmotes(channelId)
+
+    const channelCheerEmotes = channelId ? this.channelCheerEmotes.get(channelId) : undefined
+    if (channelCheerEmotes) {
+      const cheerEmote = channelCheerEmotes.getCheermoteDisplayInfo(name, bits, format)
+      if (cheerEmote) return new CheerEmote(cheerEmote, `${name}${bits}`, bits)
+    }
+    const globalCheerEmotes = this.globalCheerEmotes
+    if (globalCheerEmotes) {
+      const cheerEmote = globalCheerEmotes.getCheermoteDisplayInfo(name, bits, format)
+      if (cheerEmote) return new CheerEmote(cheerEmote, `${name}${bits}`, bits)
+    }
+    return undefined
+  }
+}
+
+export const mainCheerEmoteService = (async (): Promise<TwitchCheerEmoteService | null> => {
+  const keys = await window.api.loadKeys()
+  if (!keys.twitch) {
+    console.warn('Twitch keys not found, cheermote service will not work')
+    return null
+  }
+  const api = new ApiClient({
+    authProvider: new AppTokenAuthProvider(keys.twitch.clientId, keys.twitch.clientSecret)
+  })
+  return new TwitchCheerEmoteService(api)
+})()

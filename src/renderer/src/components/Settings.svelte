@@ -45,7 +45,7 @@
       Show Timestamps
     </label>
     <label>
-      <input type="checkbox" bind:checked={settings.interface.showBadges} />
+      <input type="checkbox" bind:checked={settings.interface.enableBadges} />
       Show Badges
     </label>
     <label>
