@@ -1,11 +1,12 @@
 <script lang="ts">
   import { isActionMessage, parseFullMessage, type Segment } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
-  import { getTwitchUserIdByName } from '@core/chat/twitch-api'
+  import { getMainBadgeService, getTwitchUserIdByName } from '@core/chat/twitch-api'
   import { mainEmoteService, type TwitchEmoteService } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import type { TwitchEmote } from '@mkody/twitch-emoticons'
 
+  import type { HelixChatBadgeVersion } from '@twurple/api'
   import {
     currentPreviewType,
     onMouseLeavePreviewElement,
@@ -61,22 +62,47 @@
 
   let emoteService: TwitchEmoteService | null = $state(null)
   let channelUserId: number | null = $state(null)
+  let badgeService: Awaited<ReturnType<typeof getMainBadgeService>> = $state(null)
+  let badges: [string, HelixChatBadgeVersion][] = $state([])
+  const badgeInfo: Map<string, string> | undefined = $derived(message?.badgeInfo)
+  const subscriberMonths: string | undefined = $derived(badgeInfo?.get('subscriber'))
 
-  async function loadEmotes(): Promise<void> {
+  async function loadServices(): Promise<void> {
     if (!enableEmotes) return
     const id = await getTwitchUserIdByName(message.channel)
     if (!id) return
     channelUserId = parseInt(id, 10)
-    const service = await mainEmoteService
-    if (!service) return
-    const fetchPromise = channelUserId
-      ? service.fetchAllEmotes(channelUserId)
-      : service.fetchAllEmotes()
-    await fetchPromise
-    emoteService = service
+
+    // Load emote service
+    const emoteServiceInstance = await mainEmoteService
+    if (emoteServiceInstance) {
+      const fetchPromise = channelUserId
+        ? emoteServiceInstance.fetchAllEmotes(channelUserId)
+        : emoteServiceInstance.fetchAllEmotes()
+      await fetchPromise
+      emoteService = emoteServiceInstance
+    }
+
+    // Load badge service
+    const badgeServiceInstance = await getMainBadgeService()
+    if (badgeServiceInstance) {
+      badgeService = badgeServiceInstance
+      await loadBadges()
+    }
   }
 
-  loadEmotes()
+  async function loadBadges(): Promise<void> {
+    if (!badgeService || !channelUserId || message.type !== 'chat') return
+    const badgeList = message.badges
+    if (!badgeList) return
+    badges.length = 0
+    for (const [badgeId, version] of badgeList) {
+      const badgeData = await badgeService.getBadgeInfo(badgeId, version, channelUserId.toString())
+      if (badgeData) badges.push([badgeId, badgeData])
+    }
+  }
+
+  loadServices()
 
   const [systemText, systemMsg] = $derived(
     message.type === 'system' ? message?.getSystemTextAndMessage() || [] : []
@@ -116,6 +142,24 @@
     </span>
   {/if}
   {#if message.type === 'chat'}
+    {#if settings.interface.showBadges && badges.length > 0}
+      <span class="chat-badges">
+        {#each badges as [badgeId, badge] (badgeId)}
+          <img
+            class="chat-badge"
+            src={badge.getImageUrl(4)}
+            alt={badge.title}
+            title={badgeId === 'subscriber'
+              ? `${badge.title} (${subscriberMonths} ${subscriberMonths === '1' ? 'Month' : 'Months'})`
+              : badgeId === 'predictions'
+                ? `${badge.title} - ${badgeInfo?.get('predictions')}`
+                : badge.title}
+            loading="lazy"
+            decoding="async"
+          />
+        {/each}
+      </span>
+    {/if}
     <span class="chat-username" style="color: {message.color}">
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
       {@html escapedUsername + ': '}
@@ -225,7 +269,7 @@
     margin-right: 0.2rem;
   }
   .chat-username {
-    margin-left: 0.3rem;
+    margin-left: 0.1rem;
     font-weight: bold;
   }
   .chat-text {
@@ -254,7 +298,7 @@
   .emote-group {
     display: inline-grid;
     position: relative;
-    vertical-align: middle;
+    vertical-align: text-bottom;
   }
 
   .emote-group > .chat-emote,
@@ -303,5 +347,21 @@
     background: #4e8cff;
     color: white;
     border-radius: 4px;
+  }
+
+  .chat-badges {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    vertical-align: middle;
+  }
+
+  .chat-badge {
+    height: 1.45rem;
+    object-fit: contain;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: text-bottom;
   }
 </style>

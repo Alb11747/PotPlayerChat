@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { settings, settingsConfigKey } from '../state/settings.svelte'
   import conf from '../state/config'
+  import { settings, settingsConfigKey } from '../state/settings.svelte'
 
   $effect(() => {
     conf.set(settingsConfigKey, $state.snapshot(settings))
@@ -43,6 +43,10 @@
     <label>
       <input type="checkbox" bind:checked={settings.interface.showTimestamps} />
       Show Timestamps
+    </label>
+    <label>
+      <input type="checkbox" bind:checked={settings.interface.showBadges} />
+      Show Badges
     </label>
     <label>
       <span class="label-text">Show Name:</span>

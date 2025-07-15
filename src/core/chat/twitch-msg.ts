@@ -41,12 +41,30 @@ export class TwitchChatMessage {
   get displayName(): string | undefined {
     return this.tags['display-name']
   }
-  get badgeInfo(): string | undefined {
-    return this.tags['badge-info']
+
+  private static parseBadgeStr(badgeStr: string): Map<string, string> {
+    const badges: Map<string, string> = new Map()
+    const pairs = badgeStr.split(',')
+    for (const pair of pairs) {
+      const [id, version] = pair.split('/')
+      if (id && version) {
+        badges.set(id, version)
+      }
+    }
+    return badges
   }
-  get badges(): string | undefined {
-    return this.tags['badges']
+
+  get badgeInfo(): Map<string, string> | undefined {
+    const badgeInfoStr = this.tags['badge-info']
+    if (!badgeInfoStr) return undefined
+    return TwitchChatMessage.parseBadgeStr(badgeInfoStr)
   }
+  get badges(): Map<string, string> | undefined {
+    const badgesStr = this.tags['badges']
+    if (!badgesStr) return undefined
+    return TwitchChatMessage.parseBadgeStr(badgesStr)
+  }
+
   get bits(): string | undefined {
     return this.tags['bits']
   }
