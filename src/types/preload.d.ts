@@ -49,6 +49,7 @@ export interface WindowApi {
     url: string,
     chatterinoBaseUrl?: string
   ) => Promise<{ status: number; thumbnail?: string; tooltip?: string; link: string } | null>
+  sanitizeHtml: (html: string) => Promise<string>
   onSetCurrentTime: (callback: (event: Event, time: number) => void) => void
   offSetCurrentTime: (callback: (event: Event, time: number) => void) => void
   onPotPlayerInstancesChanged: (

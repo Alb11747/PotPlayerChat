@@ -42,6 +42,7 @@ const api: WindowApi = {
   openUrl: (url: string) => ipcRenderer.invoke('openUrl', url),
   openSearchWindow: (args) => ipcRenderer.invoke('openSearchWindow', args),
   getLinkPreview: (...args: unknown[]) => ipcRenderer.invoke('getLinkPreview', ...args),
+  sanitizeHtml: (html: string) => ipcRenderer.invoke('sanitizeHtml', html),
   onSetCurrentTime: (callback) => ipcRenderer.on('updateCurrentVideoTime', callback as never),
   offSetCurrentTime: (callback) => ipcRenderer.off('updateCurrentVideoTime', callback as never),
   onPotPlayerInstancesChanged: (callback) => {

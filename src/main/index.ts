@@ -1,6 +1,6 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
-import type { PollingIntervals } from '@/types/preload'
 import type { HWND } from '@/types/globals'
+import type { PollingIntervals } from '@/types/preload'
 import { isEqual } from '@/utils/objects'
 import { RecentValue } from '@/utils/state'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
@@ -10,6 +10,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { Conf } from 'electron-conf/main'
 import contextMenuModule from 'electron-context-menu'
 import { join } from 'path'
+import sanitizeHtml from 'sanitize-html'
 import {
   getCurrentVideoTime,
   getPotPlayerInstances,
@@ -344,6 +345,10 @@ function createWindow(): void {
       }
     }
   )
+
+  ipcMain.handle('sanitizeHtml', async (_event, html: string) => {
+    return sanitizeHtml(html)
+  })
 
   // Create search window
   function createSearchWindow(

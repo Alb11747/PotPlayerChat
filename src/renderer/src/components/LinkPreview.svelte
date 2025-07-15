@@ -1,5 +1,4 @@
 <script lang="ts">
-  import sanitizeHtml from 'sanitize-html'
   import { previewState } from '../state/preview.svelte'
 
   let previewElement: HTMLDivElement | null = $state(null)
@@ -46,6 +45,10 @@
 
   const preview = $derived(previewState.urlTrackerInstance?.getCachedPreview(previewState.url))
   const emoteSegment = $derived(previewState.emoteSegment)
+
+  async function sanitizeTooltip(tooltip: string): Promise<string> {
+    return await window.api.sanitizeHtml(tooltip)
+  }
 </script>
 
 {#if (previewState.url && previewState.urlTrackerInstance) || emoteSegment}
@@ -78,8 +81,12 @@
           <div class="preview-content">
             {#if preview.tooltip}
               <div class="preview-tooltip">
-                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                {@html sanitizeHtml(preview.tooltip)}
+                {#await sanitizeTooltip(preview.tooltip)}
+                  <span>Loading...</span>
+                {:then sanitizedHtml}
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                  {@html sanitizedHtml}
+                {/await}
               </div>
             {/if}
             <div class="preview-url">{preview.link}</div>
