@@ -21,14 +21,12 @@
 
   let potplayerInstances: PotPlayerInstance[] = $state([])
   let selectedPotplayerInfo: PotPlayerInfo = $state({})
+  let showSettings = $state(false)
+  let changingPotPlayerPromise: Promise<PotPlayerInfo | null> | null = $state(null)
 
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
   let scrollToBottom = $state(true)
-
-  let showSettings = $state(false)
-
-  let changingPotPlayerPromise: Promise<PotPlayerInfo | null> | null = $state(null)
 
   let vlistRef: VList<TwitchMessage> | null = $state(null)
   let targetElement: string | null = $state(null)
@@ -325,6 +323,18 @@
   {/if}
 </div>
 
+{#if !scrollToBottom}
+  <button
+    class="scroll-to-bottom"
+    onclick={() => {
+      scrollToBottom = true
+      scrollToTarget()
+    }}
+  >
+    Scroll to bottom
+  </button>
+{/if}
+
 <style>
   .header {
     flex: 0 1 auto;
@@ -409,5 +419,25 @@
     text-align: center;
     justify-content: center;
     align-items: center;
+  }
+
+  .scroll-to-bottom {
+    position: fixed;
+    width: calc(100% - 6px);
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(35, 35, 43, 0.97);
+    border: 1px solid rgba(78, 140, 255, 0.5);
+    border-radius: 4px;
+    color: #4e8cff;
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .scroll-to-bottom:hover {
+    background: rgba(35, 35, 43, 0.95);
+    border-color: #4e8cff;
   }
 </style>
