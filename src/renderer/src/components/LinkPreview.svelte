@@ -17,9 +17,7 @@
   $effect(() => {
     if (!previewElement) return
     document.addEventListener('mousemove', handleMouseMove, { capture: true })
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-    }
+    return () => document.removeEventListener('mousemove', handleMouseMove)
   })
 
   function updatePosition(): void {

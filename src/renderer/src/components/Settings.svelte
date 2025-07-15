@@ -50,6 +50,10 @@
       Sticky Previews
     </label>
     <label>
+      <input type="checkbox" bind:checked={settings.interface.keepScrollPosition} />
+      Keep Scroll Position
+    </label>
+    <label>
       <input type="checkbox" bind:checked={settings.interface.showTimestamps} />
       Show Timestamps
     </label>

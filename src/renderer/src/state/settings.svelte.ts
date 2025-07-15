@@ -9,6 +9,7 @@ export interface InterfaceSettings {
   enableLinkPreviews: boolean
   enableEmotePreviews: boolean
   stickyPreviews: boolean
+  keepScrollPosition: boolean
   showTimestamps: boolean
   enableBadges: boolean
   showName: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
@@ -32,6 +33,7 @@ export const defaultSettings: Settings = {
     enableLinkPreviews: true,
     enableEmotePreviews: true,
     stickyPreviews: true,
+    keepScrollPosition: true,
     showTimestamps: true,
     enableBadges: true,
     showName: 'displayFirst'

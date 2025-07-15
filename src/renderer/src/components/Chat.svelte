@@ -4,7 +4,7 @@
   import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
   import LinkPreview from '../components/LinkPreview.svelte'
@@ -30,7 +30,43 @@
 
   let changingPotPlayerPromise: Promise<PotPlayerInfo | null> | null = $state(null)
 
-  let vlistRef: VList<unknown> | null = $state(null)
+  let vlistRef: VList<TwitchMessage> | null = $state(null)
+  let targetElement: string | null = $state(null)
+  let targetViewportOffset: number = $state(0)
+  let modifiedMessages: boolean = $state(false)
+
+  function clearTargetElement(): void {
+    targetElement = null
+    targetViewportOffset = 0
+    modifiedMessages = false
+  }
+
+  $effect(() => {
+    if (!vlistRef) return
+    document.addEventListener('scroll', clearTargetElement, { capture: true })
+    return () => document.removeEventListener('scroll', clearTargetElement)
+  })
+
+  function calculateTargetTopElement(): void {
+    if (!vlistRef) return
+    if (!settings.interface.keepScrollPosition) {
+      targetElement = null
+      targetViewportOffset = 0
+      return
+    }
+
+    for (let i = 0; i < messages.length; i++) {
+      const itemOffset = vlistRef.getItemOffset(i)
+      const itemSize = vlistRef.getItemSize(i)
+      const scrollOffset = vlistRef.getScrollOffset()
+      const viewportSize = vlistRef.getViewportSize()
+      if (itemOffset + itemSize / 2 >= scrollOffset + viewportSize / 2) {
+        targetElement = messages[i].getId()
+        targetViewportOffset = itemOffset - scrollOffset
+        break
+      }
+    }
+  }
 
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
@@ -50,10 +86,24 @@
     await chatService.updateVideoInfo(selectedPotplayerInfo)
   })
 
-  function scrollToBottomIfNeeded(): void {
-    if (vlistRef && scrollToBottom)
+  function scrollToTarget(): void {
+    if (!vlistRef) return
+
+    const _targetTopElement = untrack(() => targetElement)
+    const _targetTopViewportOffset = untrack(() => targetViewportOffset)
+    const _modifiedMessages = untrack(() => modifiedMessages)
+
+    if (scrollToBottom) {
       vlistRef.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
+    } else if (_modifiedMessages && _targetTopElement) {
+      modifiedMessages = false
+      const targetIndex = messages.findIndex((m) => m.getId() === _targetTopElement)
+      if (targetIndex === -1) return
+      vlistRef.scrollToIndex(targetIndex, { offset: -_targetTopViewportOffset, smooth: false })
+    }
   }
+
+  $effect(scrollToTarget)
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(potplayerInfo?: PotPlayerInfo): Promise<void> {
@@ -72,9 +122,10 @@
       lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
 
     if (!isEqual(messages, newMessages) || !isEqual(selectedPotplayerInfo, potplayerInfo)) {
+      calculateTargetTopElement()
       messages = newMessages
       selectedPotplayerInfo = potplayerInfo
-      scrollToBottomIfNeeded()
+      modifiedMessages = true
     }
 
     if (nextMessage) {
@@ -107,6 +158,8 @@
   // Handle user scroll detection
   function handleScroll(currentScrollOffset: number): void {
     if (!vlistRef) return
+
+    clearTargetElement()
 
     // Check if user is at the bottom
     const isAtBottom =
@@ -187,9 +240,7 @@
   // Set up keyboard listener
   $effect(() => {
     window.addEventListener('keydown', handleKeydown)
-    return () => {
-      window.removeEventListener('keydown', handleKeydown)
-    }
+    return () => window.removeEventListener('keydown', handleKeydown)
   })
 </script>
 
@@ -220,10 +271,10 @@
         showSettings = !showSettings
 
         const currentScrollToBottom = scrollToBottom
-        scrollToBottomIfNeeded()
+        scrollToTarget()
         setTimeout(() => {
           scrollToBottom = currentScrollToBottom
-          scrollToBottomIfNeeded()
+          scrollToTarget()
         }, 0)
       }}>⚙️</button
     >
@@ -253,7 +304,7 @@
           usernameColorMap={chatService.usernameColorCache}
           onUrlClick={handleUrlClick}
           onUsernameClick={handleUsernameClick}
-          onEmoteLoad={scrollToBottomIfNeeded}
+          onEmoteLoad={scrollToTarget}
         />
       {/snippet}
     </VList>
