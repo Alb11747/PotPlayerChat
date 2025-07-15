@@ -102,7 +102,10 @@ const markEnds = Object.fromEntries(markData.map(({ start, end }) => [end, start
 >
 
 const PUA_UNICODE_REGEX = new RegExp('[\u{E000}-\u{F8FF}]+', 'gu')
-const URL_REGEX = /https?:\/\/(?:[-\w.])+(?::[0-9]+)?(?:\/(?:[\w._~:/?#[\]@!$&'()*+,;=-])*)?/gi
+const HTTP_URL_REGEX =
+  /^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)$/gi
+const NON_HTTP_URL_REGEX =
+  /^[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&//=]*)$/gi
 
 const highlightStartRegex = new RegExp(MarkType.HighlightStart, 'gu')
 const highlightEndRegex = new RegExp(MarkType.HighlightEnd, 'gu')
@@ -207,6 +210,7 @@ export function parseFullMessage(
     enableZeroWidthEmotes = true,
     showName = 'displayFirst',
     searchQuery,
+    requireHttpInUrl = true,
     debug = true
   }: {
     twitchEmotes?: Collection<string, TwitchEmote | CheerEmote>
@@ -214,6 +218,7 @@ export function parseFullMessage(
     enableZeroWidthEmotes?: boolean
     showName?: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
     searchQuery?: string | RegExp
+    requireHttpInUrl?: boolean
     debug?: boolean
   } = {}
 ): {
@@ -266,7 +271,8 @@ export function parseFullMessage(
 
   // Process URLs in the message
   const markedUrls: string[] = []
-  for (const match of processedMessage.matchAll(URL_REGEX)) {
+  const urlRegex = requireHttpInUrl ? HTTP_URL_REGEX : NON_HTTP_URL_REGEX
+  for (const match of processedMessage.matchAll(urlRegex)) {
     const url = match[0]
     const startIndex = match.index || 0
     const endIndex = startIndex + url.length

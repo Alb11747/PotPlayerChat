@@ -41,6 +41,7 @@
     enableEmotePreviews?: boolean
     enableEmotes?: boolean
     enableBadges?: boolean
+    requireHttpInUrl?: boolean
   }
 
   let {
@@ -56,7 +57,8 @@
     enableLinkPreviews = settings.interface.enableLinkPreviews,
     enableEmotePreviews = settings.interface.enableEmotePreviews,
     enableEmotes = settings.interface.enableEmotes,
-    enableBadges = settings.interface.enableBadges
+    enableBadges = settings.interface.enableBadges,
+    requireHttpInUrl = settings.interface.requireHttpInUrl
   }: Props = $props()
 
   // Handle URL click
@@ -171,7 +173,8 @@
       twitchEmotes: emotes,
       enableEmotes,
       showName: settings.interface.showName,
-      searchQuery
+      searchQuery,
+      requireHttpInUrl
     })
   })
 

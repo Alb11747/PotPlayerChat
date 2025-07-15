@@ -13,6 +13,7 @@ export interface InterfaceSettings {
   showTimestamps: boolean
   enableBadges: boolean
   showName: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
+  requireHttpInUrl: boolean
 }
 
 export interface Settings {
@@ -36,7 +37,8 @@ export const defaultSettings: Settings = {
     keepScrollPosition: true,
     showTimestamps: true,
     enableBadges: true,
-    showName: 'displayFirst'
+    showName: 'displayFirst',
+    requireHttpInUrl: true
   },
   intervals: {
     videoTime: 0,

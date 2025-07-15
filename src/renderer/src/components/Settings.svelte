@@ -70,6 +70,10 @@
         <option value="displayFirst">Display Name (Username)</option>
       </select>
     </label>
+    <label>
+      <input type="checkbox" bind:checked={settings.interface.requireHttpInUrl} />
+      Require HTTP in URL
+    </label>
   </fieldset>
 
   <fieldset>
