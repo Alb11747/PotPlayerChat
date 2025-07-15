@@ -22,7 +22,7 @@
     }
   })
 
-  $effect(() => {
+  function updatePosition(): void {
     if (!previewElement || (!previewState.url && !emoteSegment)) return
 
     const rect = previewElement.getBoundingClientRect()
@@ -42,7 +42,9 @@
     }
 
     previewStyle = `top: ${top}px; left: ${left}px;`
-  })
+  }
+
+  $effect(updatePosition)
 
   const preview = $derived(previewState.urlTrackerInstance?.getCachedPreview(previewState.url))
   const emoteSegment = $derived(previewState.emoteSegment)
@@ -64,6 +66,7 @@
             {#if !previewState.urlTrackerInstance.isFailedUrl(preview.link)}
               <img
                 src={preview.thumbnail}
+                onload={updatePosition}
                 onerror={() => {
                   previewState.urlTrackerInstance.markFailedUrl(preview.link)
                 }}
