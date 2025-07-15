@@ -65,6 +65,8 @@
         return
       }
 
+      if (searchInfo.initialSearch) searchQuery = searchInfo.initialSearch
+
       if (searchInfo.messages) {
         console.debug('Preloaded messages:', searchInfo.messages.length)
         loadMessages(searchInfo.messages)

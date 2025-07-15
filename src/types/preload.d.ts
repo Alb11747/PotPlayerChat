@@ -38,10 +38,12 @@ export interface WindowApi {
   openUrl: (url: string) => Promise<void>
   openSearchWindow: ({
     potplayerInfo,
-    messages
+    messages,
+    initialSearch
   }: {
     potplayerInfo: PotPlayerInfo
     messages?: TwitchMessage[]
+    initialSearch?: string
   }) => Promise<void>
   getLinkPreview: (
     url: string

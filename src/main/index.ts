@@ -340,7 +340,8 @@ function createWindow(): void {
   // Create search window
   function createSearchWindow(
     potplayerInfo: PotPlayerInfo,
-    messages?: TwitchMessage[]
+    messages?: TwitchMessage[],
+    initialSearch?: string
   ): BrowserWindow {
     const searchWindow = new BrowserWindow({
       width: 400,
@@ -364,7 +365,7 @@ function createWindow(): void {
     }
 
     searchWindow.once('ready-to-show', () => {
-      searchWindow.webContents.send('searchInfo', { potplayerInfo, messages })
+      searchWindow.webContents.send('searchInfo', { potplayerInfo, messages, initialSearch })
       searchWindow.show()
       searchWindow.focus()
     })
@@ -376,9 +377,13 @@ function createWindow(): void {
     'openSearchWindow',
     async (
       _event,
-      { potplayerInfo, messages }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[] }
+      {
+        potplayerInfo,
+        messages,
+        initialSearch
+      }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[]; initialSearch?: string }
     ) => {
-      createSearchWindow(potplayerInfo, messages)
+      createSearchWindow(potplayerInfo, messages, initialSearch)
     }
   )
 }

@@ -7,35 +7,21 @@ import type { WindowApi } from '@/types/preload'
 
 exposeConf()
 
-let searchInfo:
-  | Promise<{
-      potplayerInfo: PotPlayerInfo
-      messages?: TwitchMessage[]
-    } | null>
-  | {
-      potplayerInfo: PotPlayerInfo
-      messages?: TwitchMessage[]
-    } = new Promise((resolve) => {
-  ipcRenderer.once(
-    'searchInfo',
-    (
-      _event,
-      { potplayerInfo, messages }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[] }
-    ) => {
-      console.debug('Preloaded search info:', potplayerInfo, messages?.length)
-      resolve({ potplayerInfo, messages })
-      ipcRenderer.on(
-        'searchInfo',
-        (
-          _event,
-          { potplayerInfo, messages }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[] }
-        ) => {
-          console.debug('Updated search info:', potplayerInfo, messages?.length)
-          searchInfo = { potplayerInfo, messages }
-        }
-      )
-    }
-  )
+type SearchInfo = {
+  potplayerInfo: PotPlayerInfo
+  messages?: TwitchMessage[]
+  initialSearch?: string
+}
+
+let searchInfo: Promise<SearchInfo | null> | SearchInfo = new Promise((resolve) => {
+  ipcRenderer.once('searchInfo', (_event, info: SearchInfo) => {
+    console.debug('Preloaded search info:', info)
+    resolve(info)
+    ipcRenderer.on('searchInfo', (_event, info: SearchInfo) => {
+      console.debug('Updated search info:', info)
+      searchInfo = info
+    })
+  })
 })
 
 // Custom APIs for renderer
