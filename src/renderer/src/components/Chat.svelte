@@ -33,12 +33,10 @@
   let vlistRef: VList<TwitchMessage> | null = $state(null)
   let targetElement: string | null = $state(null)
   let targetViewportOffset: number = $state(0)
-  let modifiedMessages: boolean = $state(false)
 
   function clearTargetElement(): void {
     targetElement = null
     targetViewportOffset = 0
-    modifiedMessages = false
   }
 
   $effect(() => {
@@ -50,8 +48,7 @@
   function calculateTargetTopElement(): void {
     if (!vlistRef) return
     if (!settings.interface.keepScrollPosition) {
-      targetElement = null
-      targetViewportOffset = 0
+      clearTargetElement()
       return
     }
 
@@ -91,19 +88,15 @@
 
     const _targetTopElement = untrack(() => targetElement)
     const _targetTopViewportOffset = untrack(() => targetViewportOffset)
-    const _modifiedMessages = untrack(() => modifiedMessages)
 
     if (scrollToBottom) {
       vlistRef.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
-    } else if (_modifiedMessages && _targetTopElement) {
-      modifiedMessages = false
+    } else if (_targetTopElement) {
       const targetIndex = messages.findIndex((m) => m.getId() === _targetTopElement)
       if (targetIndex === -1) return
       vlistRef.scrollToIndex(targetIndex, { offset: -_targetTopViewportOffset, smooth: false })
     }
   }
-
-  $effect(scrollToTarget)
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(potplayerInfo?: PotPlayerInfo): Promise<void> {
@@ -121,11 +114,16 @@
     const nextMessage =
       lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
 
-    if (!isEqual(messages, newMessages) || !isEqual(selectedPotplayerInfo, potplayerInfo)) {
+    if (!isEqual(selectedPotplayerInfo, potplayerInfo)) {
+      selectedPotplayerInfo = potplayerInfo
+      messages = newMessages
+      scrollToBottom = true
+      clearTargetElement()
+      scrollToTarget()
+    } else if (!isEqual(messages, newMessages)) {
       calculateTargetTopElement()
       messages = newMessages
-      selectedPotplayerInfo = potplayerInfo
-      modifiedMessages = true
+      scrollToTarget()
     }
 
     if (nextMessage) {
@@ -158,8 +156,6 @@
   // Handle user scroll detection
   function handleScroll(currentScrollOffset: number): void {
     if (!vlistRef) return
-
-    clearTargetElement()
 
     // Check if user is at the bottom
     const isAtBottom =
