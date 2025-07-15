@@ -1,14 +1,9 @@
 <script lang="ts">
   import conf from '../state/config'
-  import { settings, settingsConfigKey } from '../state/settings.svelte'
+  import { normalizeSettings, settings, settingsConfigKey } from '../state/settings.svelte'
 
   $effect(() => {
-    // Normalize the Base URLs
-    while ((settings.chat.justlogUrl ?? '').endsWith('/'))
-      settings.chat.justlogUrl = settings.chat.justlogUrl.slice(0, -1)
-    while ((settings.chat.chatterinoBaseUrl ?? '').endsWith('/'))
-      settings.chat.chatterinoBaseUrl = settings.chat.chatterinoBaseUrl.slice(0, -1)
-
+    normalizeSettings()
     conf.set(settingsConfigKey, $state.snapshot(settings))
   })
 

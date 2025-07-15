@@ -44,11 +44,30 @@ export const defaultSettings: Settings = {
   general: {}
 }
 
+export function normalizeSettings(): void {
+  for (const _key in defaultSettings) {
+    const key = _key as keyof Settings
+    for (const _subkey in defaultSettings[key]) {
+      const subkey = _subkey as keyof Settings[keyof Settings]
+      if (settings[key][subkey] === undefined || settings[key][subkey] === '')
+        settings[key][subkey] = defaultSettings[key][subkey]
+    }
+  }
+
+  // Normalize the Base URLs
+  while ((settings.chat.justlogUrl ?? '').endsWith('/'))
+    settings.chat.justlogUrl = settings.chat.justlogUrl.slice(0, -1)
+  while ((settings.chat.chatterinoBaseUrl ?? '').endsWith('/'))
+    settings.chat.chatterinoBaseUrl = settings.chat.chatterinoBaseUrl.slice(0, -1)
+}
+
 export const settings = $state(defaultSettings)
 
 export const settingsConfigKey = 'settings'
 conf.get(settingsConfigKey).then((data) => {
   Object.assign(settings, data)
+  normalizeSettings()
+
   if (Object.entries(settings.interface).some(([, value]) => !value)) {
     window.api.getPollingIntervals().then((args) => (settings.intervals = args))
   } else {
