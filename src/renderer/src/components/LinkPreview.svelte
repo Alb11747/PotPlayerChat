@@ -143,8 +143,8 @@
     height: max-content;
     position: fixed;
     z-index: 1000;
-    background: #2d2d35;
-    border: 1px solid #444;
+    background: #2d2d35fc;
+    border: 1px solid #444444fc;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     max-width: 400px;
@@ -232,8 +232,8 @@
   }
 
   .emote-preview-image {
-    max-width: 150px;
-    max-height: 150px;
+    max-width: 16rem;
+    max-height: 8rem;
     object-fit: contain;
   }
 
