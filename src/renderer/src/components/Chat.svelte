@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import type { PotPlayerInstance } from '@/core/os/potplayer'
+  import type { SearchInfo } from '@/types/preload'
   import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
@@ -13,6 +14,10 @@
   import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
+  import {
+    calculateTargetElement,
+    scrollToTarget as scrollToTargetBase
+  } from '@/renderer/src/utils/vlist'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
@@ -26,15 +31,28 @@
 
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
-  let scrollToBottom = $state(true)
 
   let vlistRef: VList<TwitchMessage> | null = $state(null)
-  let targetElement: string | null = $state(null)
+  let targetElement: TwitchMessage = $state(null)
   let targetViewportOffset: number = $state(0)
+  let scrollToBottom = $state(true)
 
   function clearTargetElement(): void {
     targetElement = null
     targetViewportOffset = 0
+  }
+
+  function scrollToTarget(): void {
+    const _vlistRef = untrack(() => vlistRef)
+    const _messages = untrack(() => messages)
+    const _targetElement = untrack(() => targetElement)
+    const _targetViewportOffset = untrack(() => targetViewportOffset)
+    const _scrollToBottom = untrack(() => scrollToBottom)
+    scrollToTargetBase(_vlistRef, _messages, {
+      targetElement: _targetElement,
+      targetViewportOffset: _targetViewportOffset,
+      scrollToBottom: _scrollToBottom
+    })
   }
 
   $effect(() => {
@@ -42,26 +60,6 @@
     document.addEventListener('scroll', clearTargetElement, { capture: true })
     return () => document.removeEventListener('scroll', clearTargetElement)
   })
-
-  function calculateTargetTopElement(): void {
-    if (!vlistRef) return
-    if (!settings.interface.keepScrollPosition) {
-      clearTargetElement()
-      return
-    }
-
-    for (let i = 0; i < messages.length; i++) {
-      const itemOffset = vlistRef.getItemOffset(i)
-      const itemSize = vlistRef.getItemSize(i)
-      const scrollOffset = vlistRef.getScrollOffset()
-      const viewportSize = vlistRef.getViewportSize()
-      if (itemOffset + itemSize / 2 >= scrollOffset + viewportSize / 2) {
-        targetElement = messages[i].getId()
-        targetViewportOffset = itemOffset - scrollOffset
-        break
-      }
-    }
-  }
 
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
@@ -93,21 +91,6 @@
     scrollToTarget()
   })
 
-  function scrollToTarget(): void {
-    if (!vlistRef) return
-
-    const _targetTopElement = untrack(() => targetElement)
-    const _targetTopViewportOffset = untrack(() => targetViewportOffset)
-
-    if (scrollToBottom) {
-      vlistRef.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
-    } else if (_targetTopElement) {
-      const targetIndex = messages.findIndex((m) => m.getId() === _targetTopElement)
-      if (targetIndex === -1) return
-      vlistRef.scrollToIndex(targetIndex, { offset: -_targetTopViewportOffset, smooth: false })
-    }
-  }
-
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(potplayerInfo?: PotPlayerInfo): Promise<void> {
     if (chatIntervalId) clearTimeout(chatIntervalId)
@@ -133,7 +116,10 @@
       clearTargetElement()
       scrollToTarget()
     } else if (!isEqual(messages, newMessages)) {
-      calculateTargetTopElement()
+      if (!settings.interface.keepScrollPosition) clearTargetElement()
+      else {
+        ;({ targetElement, targetViewportOffset } = calculateTargetElement(vlistRef, messages))
+      }
       messages = newMessages
       scrollToTarget()
     }
@@ -226,22 +212,32 @@
     window.api.openUrl(url)
   }
 
+  function getSearchInfo(): SearchInfo {
+    const searchRangeBuffer = 60 * 60 * 1000
+    return {
+      potplayerInfo: $state.snapshot(selectedPotplayerInfo),
+      messages: messages.length > 0 ? messages.slice(0, 200) : undefined,
+      searchRange: settings.search.showAllMessages
+        ? {
+            startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,
+            endTime: selectedPotplayerInfo.endTime + searchRangeBuffer
+          }
+        : undefined
+    }
+  }
+
   function handleUsernameClick(info: { username: string }): void {
     window.api.openSearchWindow({
-      potplayerInfo: $state.snapshot(selectedPotplayerInfo),
-      messages: messages.length > 0 ? messages : undefined,
+      ...getSearchInfo(),
       initialSearch: `${info.username}: `
     })
   }
 
   // Handle keyboard shortcuts
   function handleKeydown(event: KeyboardEvent): void {
-    if (event.ctrlKey && event.key === 'f') {
+    if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
       event.preventDefault()
-      window.api.openSearchWindow({
-        potplayerInfo: $state.snapshot(selectedPotplayerInfo),
-        messages: messages.length > 0 ? messages : undefined
-      })
+      window.api.openSearchWindow(getSearchInfo())
     }
   }
 

@@ -1,10 +1,9 @@
-import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
-import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { Conf } from 'electron-conf/main'
 import { join } from 'path'
 
+import type { SearchInfo } from '@/types/preload'
 import { initLinks } from './links'
 import { initContextMenus } from './menu'
 import { initPotplayerHandlers } from './potplayer'
@@ -41,11 +40,7 @@ function createWindow(): void {
   }
 
   // Create search window
-  function createSearchWindow(
-    potplayerInfo: PotPlayerInfo,
-    messages?: TwitchMessage[],
-    initialSearch?: string
-  ): BrowserWindow {
+  function createSearchWindow(args: SearchInfo): BrowserWindow {
     const searchWindow = new BrowserWindow({
       width: 400,
       height: 600,
@@ -66,7 +61,7 @@ function createWindow(): void {
     }
 
     searchWindow.once('ready-to-show', () => {
-      searchWindow.webContents.send('searchInfo', { potplayerInfo, messages, initialSearch })
+      searchWindow.webContents.send('searchInfo', args)
       searchWindow.show()
       searchWindow.focus()
     })
@@ -74,19 +69,9 @@ function createWindow(): void {
     return searchWindow
   }
 
-  ipcMain.handle(
-    'openSearchWindow',
-    async (
-      _event,
-      {
-        potplayerInfo,
-        messages,
-        initialSearch
-      }: { potplayerInfo: PotPlayerInfo; messages?: TwitchMessage[]; initialSearch?: string }
-    ) => {
-      createSearchWindow(potplayerInfo, messages, initialSearch)
-    }
-  )
+  ipcMain.handle('openSearchWindow', async (_event, args: SearchInfo) => {
+    createSearchWindow(args)
+  })
 }
 
 app.whenReady().then(() => {

@@ -405,6 +405,17 @@ export class ChatService {
     return this.currentChatData
   }
 
+  public async getMessagesBetweenTimes(
+    startTime: number,
+    endTime: number
+  ): Promise<TwitchMessage[]> {
+    if (this.currentPotPlayerInfo === null) return []
+
+    await this.prefetchMessagesForTime(this.currentPotPlayerInfo.channel, startTime, endTime)
+
+    return getMessagesBetween(this.currentChatData, startTime, endTime)
+  }
+
   public async getMessagesAroundTime(
     currentVideoTime: number,
     beforeTime: number,

@@ -1,17 +1,9 @@
-import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
-import type { WindowApi } from '@/types/preload'
-import type { TwitchMessage } from '@core/chat/twitch-msg'
+import type { SearchInfo, WindowApi } from '@/types/preload'
 import { electronAPI } from '@electron-toolkit/preload'
 import { exposeConf } from 'electron-conf/preload'
 import { contextBridge, ipcRenderer } from 'electron/renderer'
 
 exposeConf()
-
-type SearchInfo = {
-  potplayerInfo: PotPlayerInfo
-  messages?: TwitchMessage[]
-  initialSearch?: string
-}
 
 let searchInfo: Promise<SearchInfo | null> | SearchInfo = new Promise((resolve) => {
   ipcRenderer.once('searchInfo', (_event, info: SearchInfo) => {

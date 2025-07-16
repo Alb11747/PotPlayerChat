@@ -6,11 +6,11 @@
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
   import type {} from '@/types/preload'
-  import LinkPreview from '../components/LinkPreview.svelte'
-  import { settings } from '../state/settings.svelte'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
+  import LinkPreview from '../components/LinkPreview.svelte'
+  import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
@@ -41,15 +41,19 @@
   let caseSensitive = $state(false)
   let useRegex = $state(false)
 
+  let loadedMessages = $state(false)
   const seenMessages = new Set()
   let messages: TwitchMessageFormatted[] = $state.raw([])
+  let initialMessages: TwitchMessageFormatted[] = $state.raw([])
   let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
 
+  const initialMessageIds = $derived.by(() => new Set(initialMessages.map((msg) => msg.getId())))
+
   let searchInputRef: HTMLInputElement | null = $state(null)
-  let vlistRef: VList<unknown> | null = $state(null)
+  let vlistRef: VList<TwitchMessageFormatted> | null = $state(null)
 
   // Load all messages when component mounts
-  onMount(loadAllMessages)
+  $effect(loadAllMessages)
 
   // Focus search input when component mounts
   onMount(() => {
@@ -57,7 +61,9 @@
   })
 
   async function loadAllMessages(): Promise<void> {
-    if (messages && messages.length > 0) return // Already loaded
+    if (vlistRef && loadedMessages) return
+    loadedMessages = true
+
     try {
       const searchInfo = await window.api.getSearchInfo()
       if (!searchInfo) {
@@ -70,6 +76,8 @@
       if (searchInfo.messages) {
         console.debug('Preloaded messages:', searchInfo.messages.length)
         loadMessages(searchInfo.messages)
+        initialMessages = messages.slice()
+        scrollToInitialMessages()
       }
 
       if (!searchInfo.potplayerInfo?.hwnd) {
@@ -84,13 +92,24 @@
 
       const currentTime = await window.api.getCurrentVideoTime(searchInfo.potplayerInfo.hwnd)
       chatService.updateVideoInfo(searchInfo.potplayerInfo)
-      const loadedMsgs: TwitchMessage[] = await chatService.getMessagesAroundTime(
-        currentTime,
-        60 * 60 * 1000, // 1 hour before
-        5 * 60 * 1000 // 5 minutes after
-      )
+
+      let loadedMsgs: TwitchMessage[] = []
+
+      const { startTime, endTime } = searchInfo.searchRange || {}
+      if (startTime && endTime) {
+        await chatService.loadChat()
+        loadedMsgs = await chatService.getMessagesBetweenTimes(startTime, endTime)
+      } else {
+        loadedMsgs = await chatService.getMessagesAroundTime(
+          currentTime,
+          60 * 60 * 1000, // 1 hour before
+          0
+        )
+      }
+
       console.debug('Loaded messages:', loadedMsgs.length)
       loadMessages(loadedMsgs)
+      scrollToInitialMessages()
     } catch (error) {
       console.error('Failed to load messages for search:', error)
     }
@@ -110,6 +129,17 @@
 
     // Update filtered messages
     updateFilteredMessages()
+  }
+
+  function scrollToInitialMessages(): void {
+    setTimeout(() => {
+      if (!vlistRef || !filteredMessages || filteredMessages.length === 0) return
+      const targetElementIndex = filteredMessages.findLastIndex((msg) =>
+        initialMessageIds.has(msg.getId())
+      )
+      if (targetElementIndex === -1) return
+      vlistRef.scrollToIndex(targetElementIndex, { align: 'center' })
+    }, 0)
   }
 
   // Filter messages when search query changes
@@ -136,6 +166,8 @@
         return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
       }
     })
+
+    scrollToInitialMessages()
   }
 
   // Computed search pattern for highlighting

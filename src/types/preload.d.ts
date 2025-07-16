@@ -19,16 +19,23 @@ export type PollingIntervals = {
   activeWindow: number
 }
 
+export type SearchInfo = {
+  potplayerInfo: PotPlayerInfo
+  messages?: TwitchMessage[]
+  initialSearch?: string
+  searchRange?: {
+    startTime: number
+    endTime: number
+  }
+}
+
 export interface WindowApi {
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
   loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
   getPollingIntervals: () => Promise<PollingIntervals>
   setPollingIntervals: (args: Partial<PollingIntervals>) => Promise<void>
-  getSearchInfo: () => Promise<{
-    potplayerInfo: PotPlayerInfo
-    messages?: TwitchMessage[]
-  } | null>
+  getSearchInfo: () => Promise<SearchInfo | null>
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>

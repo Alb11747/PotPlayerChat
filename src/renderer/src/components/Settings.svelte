@@ -85,6 +85,14 @@
   </fieldset>
 
   <fieldset>
+    <legend>Search Settings</legend>
+    <label>
+      <span class="label-text">Show All Messages:</span>
+      <input type="checkbox" bind:checked={settings.search.showAllMessages} />
+    </label>
+  </fieldset>
+
+  <fieldset>
     <legend>Interval Settings</legend>
     <label>
       <span class="label-text">Video Time:</span>

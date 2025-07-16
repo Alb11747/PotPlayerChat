@@ -118,7 +118,7 @@
   }
 
   async function loadBadges(badgeService: TwitchBadgeService): Promise<void> {
-    if (!badgeService || !channelUserId || message.type !== 'chat') return
+    if (!badgeService || !channelUserId || !message || message.type !== 'chat') return
     const badgeList = message.badges
     if (!badgeList) return
     badges.length = 0
@@ -129,7 +129,7 @@
   }
 
   async function loadCheerEmotes(cheerEmoteService: TwitchCheerEmoteService): Promise<void> {
-    if (!message.bits || !cheerEmoteService || !channelUserId) return
+    if (!message?.bits || !cheerEmoteService || !channelUserId) return
     const msgBits = parseInt(message.bits, 10)
     if (isNaN(msgBits)) return
 

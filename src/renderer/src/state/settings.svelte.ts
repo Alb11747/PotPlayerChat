@@ -16,6 +16,10 @@ export interface InterfaceSettings {
   requireHttpInUrl: boolean
 }
 
+export interface SearchSettings {
+  showAllMessages: boolean
+}
+
 export interface Settings {
   chat: ChatSettings & {
     timestampOffset: number
@@ -23,6 +27,7 @@ export interface Settings {
     _sessionTimestampOffset: number
   }
   interface: InterfaceSettings
+  search: SearchSettings
   intervals: PollingIntervals
   general: GeneralSettings
 }
@@ -45,6 +50,9 @@ export const defaultSettings: Settings = {
     enableBadges: true,
     showName: 'displayFirst',
     requireHttpInUrl: true
+  },
+  search: {
+    showAllMessages: false
   },
   intervals: {
     videoTime: 0,
@@ -89,7 +97,7 @@ export function removeTemporarySettings(): void {
   }
 }
 
-export const settings = $state(defaultSettings)
+export const settings: Settings = $state(defaultSettings)
 
 export const settingsConfigKey = 'settings'
 conf.get(settingsConfigKey).then((data) => {
