@@ -1,5 +1,5 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
-import type { PotPlayerInstance } from '@/main/potplayer'
+import type { PotPlayerInstance } from '@/core/os/potplayer'
 import type { HWND } from '@/types/globals'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { IpcRenderer } from 'electron/renderer'

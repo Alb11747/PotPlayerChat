@@ -1,12 +1,6 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": [
-    "src/renderer/src/**/*",
-    "src/utils/**/*",
-    "src/core/chat/**/*",
-    "src/types/**/*",
-    "src/preload/types/**/*"
-  ],
+  "include": ["src/renderer/src/**/*", "src/utils/**/*", "src/core/chat/**/*", "src/types/**/*"],
   "compilerOptions": {
     "composite": true,
     "allowJs": true,

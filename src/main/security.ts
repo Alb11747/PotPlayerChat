@@ -1,0 +1,36 @@
+import electron, { type BrowserWindow } from 'electron'
+
+function setAccessControlHeaders(window: BrowserWindow): void {
+  window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const { responseHeaders } = details
+    if (responseHeaders) {
+      for (const header of Object.keys(responseHeaders)) {
+        if (header.toLowerCase() === 'access-control-allow-origin') delete responseHeaders[header]
+      }
+      // Add custom headers
+      responseHeaders['Access-Control-Allow-Origin'] = ['*']
+      callback({
+        responseHeaders
+      })
+    } else {
+      callback({})
+    }
+  })
+}
+
+function isChildWindow(parentWindow: BrowserWindow, window: BrowserWindow): boolean {
+  let parent = window.getParentWindow()
+  while (parent) {
+    if (parent === parentWindow) return true
+    parent = parent.getParentWindow()
+  }
+  return false
+}
+
+export function initSecurity(mainWindow: BrowserWindow): void {
+  setAccessControlHeaders(mainWindow)
+
+  electron.app.on('browser-window-created', (_, window) => {
+    if (isChildWindow(mainWindow, window)) setAccessControlHeaders(window)
+  })
+}
