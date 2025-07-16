@@ -248,8 +248,8 @@
   .search-container {
     width: 100%;
     height: 100%;
-    background: #18181b;
-    color: #efeff1;
+    background: var(--color-black-dark);
+    color: var(--color-text-light);
 
     --header-height: 10.4rem;
   }
@@ -257,13 +257,13 @@
   .search-header {
     flex: 0 1 auto;
     max-height: var(--header-height);
-    background: #23232b;
-    border-bottom: 1px solid #333;
+    background: var(--color-black-soft);
+    border-bottom: 1px solid var(--color-gray-4);
     padding: 15px;
   }
   .search-header h2 {
     margin: 0 0 16px 0;
-    color: #efeff1;
+    color: var(--color-text-light);
     font-size: 18px;
     font-weight: 600;
   }
@@ -277,16 +277,16 @@
   .search-input {
     width: 100%;
     padding: 12px 16px;
-    border: 1px solid #444;
+    border: 1px solid var(--color-gray-5);
     border-radius: 6px;
-    background: #2d2d35;
-    color: #efeff1;
+    background: var(--color-bg-modal);
+    color: var(--color-text-light);
     font-size: 14px;
     outline: none;
     transition: border-color 0.2s ease;
   }
   .search-input:focus {
-    border-color: #4e8cff;
+    border-color: var(--color-accent);
   }
 
   .search-options {
@@ -297,7 +297,7 @@
   }
   .search-stats {
     font-size: 12px;
-    color: #a9a9a9;
+    color: var(--color-text-muted);
     padding-left: 4px;
   }
 
@@ -307,13 +307,13 @@
     gap: 6px;
     cursor: pointer;
     font-size: 12px;
-    color: #efeff1;
+    color: var(--color-text-light);
   }
 
   .search-checkbox {
     width: 14px;
     height: 14px;
-    accent-color: #4e8cff;
+    accent-color: var(--color-accent);
     cursor: pointer;
   }
 
@@ -337,11 +337,11 @@
     text-align: left;
     background: none;
     border: none;
-    border-bottom: 1px solid #2d2d35;
+    border-bottom: 1px solid var(--color-bg-hover);
     color: inherit;
   }
   .search-result-item:hover {
-    background: #2d2d35;
+    background: var(--color-bg-hover);
   }
 
   .no-results,
@@ -367,18 +367,18 @@
     font-size: 16px;
     font-weight: 500;
     margin-bottom: 8px;
-    color: #efeff1;
+    color: var(--color-text-light);
   }
 
   .no-results-hint,
   .placeholder-hint {
     font-size: 14px;
-    color: #a9a9a9;
+    color: var(--color-text-muted);
   }
 
   :global(mark) {
-    background: #4e8cff;
-    color: white;
+    background: var(--color-accent);
+    color: var(--color-white);
     padding: 1px 2px;
     border-radius: 2px;
   }

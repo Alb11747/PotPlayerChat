@@ -1,36 +1,103 @@
 :root {
-  --ev-c-white: #ffffff;
-  --ev-c-white-soft: #f8f8f8;
-  --ev-c-white-mute: #f2f2f2;
+  /* Base colors */
+  --color-white: #ffffff;
+  --color-white-soft: #f8f8f8;
+  --color-white-mute: #f2f2f2;
 
-  --ev-c-black: #1b1b1f;
-  --ev-c-black-soft: #222222;
-  --ev-c-black-mute: #282828;
+  --color-black: #1b1b1f;
+  --color-black-soft: #22232b;
+  --color-black-mute: #282828;
+  --color-black-alt: #202127;
+  --color-black-dark: #18181b;
+  --color-black-deep: #1e1e26;
+  --color-black-modal: #2d2d35;
+  --color-black-modal-transparent: #2d2d35fa;
 
-  --ev-c-gray-1: #515c67;
-  --ev-c-gray-2: #414853;
-  --ev-c-gray-3: #32363f;
+  /* Grays */
+  --color-gray-1: #515c67;
+  --color-gray-2: #414853;
+  --color-gray-3: #32363f;
+  --color-gray-4: #333333;
+  --color-gray-5: #444444;
+  --color-gray-6: #2a2a33;
 
-  --ev-c-text-1: rgba(255, 255, 245, 0.86);
-  --ev-c-text-2: rgba(235, 235, 245, 0.6);
-  --ev-c-text-3: rgba(235, 235, 245, 0.38);
+  /* Text colors */
+  --color-text-main: rgba(255, 255, 245, 0.86);
+  --color-text-secondary: rgba(235, 235, 245, 0.6);
+  --color-text-tertiary: rgba(235, 235, 245, 0.38);
+  --color-text-invert: #0f0f0f;
+  --color-text-light: #efeff1;
+  --color-text-muted: #a9a9a9;
+  --color-text-system: #c0c0c0;
 
-  --ev-button-alt-border: transparent;
-  --ev-button-alt-text: var(--ev-c-text-1);
-  --ev-button-alt-bg: var(--ev-c-gray-3);
-  --ev-button-alt-hover-border: transparent;
-  --ev-button-alt-hover-text: var(--ev-c-text-1);
-  --ev-button-alt-hover-bg: var(--ev-c-gray-2);
+  /* Accent and brand */
+  --color-accent: #4e8cff;
+  --color-accent-hover: #6b9eff;
+  --color-accent-faded: rgba(78, 140, 255, 0.5);
+  --color-accent-purple: #a855f7;
+  --color-accent-orange: #ff3e00;
+  --color-accent-blue: #647eff;
+  --color-accent-ts: #3178c6;
+  --color-accent-yellow: #f0dc4e;
+
+  /* Error, warning, success */
+  --color-error: #ff4d4d;
+  --color-error-soft: #ff6b6b;
+  --color-warning: #ffb020;
+  --color-success: #00ff00;
+
+  /* UI backgrounds */
+  --color-bg-main: var(--color-black);
+  --color-bg-soft: var(--color-black-soft);
+  --color-bg-mute: var(--color-black-mute);
+  --color-bg-alt: var(--color-black-alt);
+  --color-bg-dark: var(--color-black-dark);
+  --color-bg-deep: var(--color-black-deep);
+  --color-bg-modal: var(--color-black-modal-transparent);
+  --color-bg-gray: var(--color-gray-6);
+  --color-bg-field: var(--color-black-modal);
+  --color-bg-field-alt: var(--color-black-deep);
+  --color-bg-hover: #2d2d35;
+  --color-bg-scrollbar: var(--color-black-soft);
+  --color-bg-scrollbar-thumb: var(--color-gray-4);
+  --color-bg-scrollbar-thumb-hover: var(--color-accent);
+
+  /* Borders */
+  --color-border-main: var(--color-gray-4);
+  --color-border-light: var(--color-gray-5);
+  --color-border-accent: var(--color-accent);
+  --color-border-accent-faded: var(--color-accent-faded);
+
+  /* Transparency/alpha variants */
+  --color-bg-main-alpha-97: rgba(35, 35, 43, 0.97);
+  --color-bg-main-alpha-90: rgba(35, 35, 43, 0.9);
+  --color-success-alpha: rgba(0, 255, 0, 0.1);
+  --color-shadow-modal: rgba(0, 0, 0, 0.3);
+  --color-white-alpha: rgba(255, 255, 255, 0.87);
+  --color-accent-orange-alpha: #ff3e00cc;
+  --color-accent-blue-alpha: #647effcc;
+  --color-accent-ts-alpha: #3178c6cc;
+
+  /* Button/element states */
+  --button-alt-border: transparent;
+  --button-alt-text: var(--color-text-main);
+  --button-alt-bg: var(--color-gray-3);
+  --button-alt-hover-border: transparent;
+  --button-alt-hover-text: var(--color-text-main);
+  --button-alt-hover-bg: var(--color-gray-2);
+
+  /* Misc */
+  --color-focus-shadow: 0 0 0 2px var(--color-accent-faded);
 }
 
 :root {
-  --color-background: var(--ev-c-black);
-  --color-background-soft: var(--ev-c-black-soft);
-  --color-background-mute: var(--ev-c-black-mute);
-
-  --color-text: var(--ev-c-text-1);
+  --color-background: var(--color-bg-main);
+  --color-background-soft: var(--color-bg-soft);
+  --color-background-mute: var(--color-bg-mute);
+  --color-text: var(--color-text-main);
 }
 
+/* Global resets and base element styles */
 *,
 *::before,
 *::after {

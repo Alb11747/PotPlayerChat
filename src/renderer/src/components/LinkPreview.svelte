@@ -143,10 +143,10 @@
     height: max-content;
     position: fixed;
     z-index: 1000;
-    background: #2d2d35fc;
-    border: 1px solid #444444fc;
+    background: var(--color-bg-modal);
+    border: 1px solid var(--color-gray-5);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px var(--color-shadow-modal);
     max-width: 400px;
     overflow: hidden;
     display: flex;
@@ -182,7 +182,7 @@
   }
 
   .preview-error-text {
-    color: #ff6b6b;
+    color: var(--color-error-soft);
     font-size: 14px;
     font-weight: 500;
     text-align: center;
@@ -192,7 +192,7 @@
   }
 
   .preview-loading-text {
-    color: #6b9eff;
+    color: var(--color-accent-hover);
     font-size: 14px;
     font-weight: 500;
   }
@@ -210,7 +210,7 @@
   }
 
   .preview-tooltip {
-    color: #efeff1;
+    color: var(--color-text-light);
     font-size: 12px;
     line-height: 0.8;
     white-space: pre-wrap;
@@ -218,7 +218,7 @@
   }
 
   .preview-url {
-    color: #a9a9a9;
+    color: var(--color-text-muted);
     font-size: 12px;
     word-break: break-all;
   }
@@ -240,20 +240,20 @@
   .emote-preview-name {
     font-size: 16px;
     font-weight: bold;
-    color: #efeff1;
+    color: var(--color-text-light);
   }
 
   .emote-preview-source,
   .emote-preview-author {
     font-size: 12px;
-    color: #a9a9a9;
+    color: var(--color-text-muted);
     line-height: 0.8;
   }
 
   .emote-preview-divider {
     width: 95%;
     height: 1px;
-    background-color: #444;
+    background-color: var(--color-gray-5);
     margin: 2px 0;
   }
 
@@ -282,7 +282,7 @@
 
   .zero-width-emote-name {
     font-size: 10px;
-    color: #a9a9a9;
+    color: var(--color-text-muted);
     text-align: center;
     word-break: break-all;
   }

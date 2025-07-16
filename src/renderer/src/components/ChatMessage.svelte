@@ -349,11 +349,11 @@
   }
 
   .chat-message.first-message {
-    background-color: rgba(0, 255, 0, 0.1);
+    background-color: var(--color-success-alpha);
   }
 
   .chat-time {
-    color: #a9a9a9;
+    color: var(--color-text-muted);
     margin-right: 0.2rem;
   }
   .chat-username {
@@ -364,7 +364,7 @@
     white-space: pre-wrap;
   }
   .chat-system {
-    color: #c0c0c0;
+    color: var(--color-text-system);
     font-style: italic;
     font-weight: 500;
   }
@@ -421,7 +421,7 @@
     justify-content: flex-start;
     display: inline;
     font: inherit;
-    color: #4e8cff;
+    color: var(--color-accent);
     text-decoration: underline;
     cursor: pointer;
     transition: color 0.2s ease;
@@ -433,18 +433,18 @@
   }
 
   .chat-url:hover {
-    color: #6b9eff;
+    color: var(--color-accent-hover);
     text-decoration: none;
   }
 
   .chat-url.visited,
   .chat-url:focus-visible {
-    color: #a855f7;
+    color: var(--color-accent-purple);
   }
 
   :global(mark) {
-    background: #4e8cff;
-    color: white;
+    background: var(--color-accent);
+    color: var(--color-white);
     border-radius: 4px;
   }
 

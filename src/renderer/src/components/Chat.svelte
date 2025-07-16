@@ -363,10 +363,10 @@
     width: 100%;
     contain: content;
     align-items: center;
-    background: #23232b;
-    color: #fff;
+    background: var(--color-black-soft);
+    color: var(--color-white);
     padding: 0.5rem 0.5rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--color-gray-4);
     font-size: 1rem;
   }
 
@@ -381,7 +381,7 @@
   .header-button button {
     flex: 1 1 max-content;
     padding: 0 0.5rem;
-    border: 1px solid #444;
+    border: 1px solid var(--color-gray-5);
     border-radius: 4px;
     background: none;
     color: inherit;
@@ -392,32 +392,32 @@
     min-width: 4.5rem;
     max-height: 4rem;
     overflow: auto;
-    scrollbar-color: #333 #23232b;
+    scrollbar-color: var(--color-gray-4) var(--color-black-soft);
     scrollbar-width: thin;
   }
   .header-button button:hover {
     background: none;
-    border-color: #2b4675;
+    border-color: var(--color-accent-hover);
   }
   .header-button button.main {
-    color: #4e8cff;
+    color: var(--color-accent);
     font-weight: bold;
     background: none;
-    border-color: #4e8cff;
+    border-color: var(--color-accent);
   }
 
   .chat-container {
     flex: 1 1 auto;
     width: 100%;
     height: fit-content;
-    background-color: #18181b;
-    color: #efeff1;
+    background-color: var(--color-black-dark);
+    color: var(--color-text-light);
     padding-bottom: 0.5rem;
     overflow: auto;
   }
 
   .system {
-    color: #a9a9a9;
+    color: var(--color-text-muted);
     font-style: italic;
     padding: 0.25rem 0.5rem;
     line-height: 1.7;
@@ -427,7 +427,7 @@
   }
 
   .error {
-    color: #ff4d4d;
+    color: var(--color-error);
     font-weight: bold;
     padding: 0.25rem 0.5rem;
     line-height: 1.7;
@@ -449,17 +449,17 @@
     bottom: 4px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(35, 35, 43, 0.97);
-    border: 1px solid rgba(78, 140, 255, 0.5);
+    background: var(--color-bg-main-alpha-97);
+    border: 1px solid var(--color-accent-faded);
     border-radius: 4px;
-    color: #4e8cff;
+    color: var(--color-accent);
     font: inherit;
     cursor: pointer;
     transition: background-color 0.2s;
   }
 
   .scroll-to-bottom:hover {
-    background: rgba(35, 35, 43, 0.95);
-    border-color: #4e8cff;
+    background: var(--color-bg-main-alpha-90);
+    border-color: var(--color-accent);
   }
 </style>
