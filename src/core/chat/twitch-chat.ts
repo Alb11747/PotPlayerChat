@@ -1,7 +1,7 @@
 import type { WindowApi } from '@/types/preload'
 import type { HWND } from '@/types/globals'
 import { isEqual, isSorted } from '@/utils/objects'
-import { getMessagesBetween, getMessagesForTime } from '@core/chat/chat'
+import { getMessagesBetween, getMessagesForTime } from '@/utils/chat'
 import AsyncLock from 'async-lock'
 import { JustLogAPI } from './justlog'
 import { userIdCache } from './twitch-api'
