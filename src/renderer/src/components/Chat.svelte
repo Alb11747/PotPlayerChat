@@ -1,23 +1,26 @@
 <script lang="ts">
+  import type { TwitchMessage } from '@core/chat/twitch-msg'
+  import { VList } from 'virtua/svelte'
+
+  import { onMount, untrack } from 'svelte'
+  import { SvelteMap } from 'svelte/reactivity'
+
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import type { PotPlayerInstance } from '@/core/os/potplayer'
+  import {
+    calculateTargetElement,
+    scrollToTarget as scrollToTargetBase
+  } from '@/renderer/src/utils/vlist'
   import type { SearchInfo } from '@/types/preload'
   import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
-  import type { TwitchMessage } from '@core/chat/twitch-msg'
-  import { onMount, untrack } from 'svelte'
-  import { SvelteMap } from 'svelte/reactivity'
-  import { VList } from 'virtua/svelte'
+
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
   import { getPotplayerExtraInfo } from '../state/potplayer'
   import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
-  import {
-    calculateTargetElement,
-    scrollToTarget as scrollToTargetBase
-  } from '@/renderer/src/utils/vlist'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
@@ -253,7 +256,7 @@
 <div class="header" role="presentation" onkeydown={handleKeydown}>
   <div class="header-button">
     <button
-      class:main={autoSelectPotPlayer}
+      class:selected={autoSelectPotPlayer}
       onclick={() => setPotPlayerInstance(null)}
       aria-pressed={autoSelectPotPlayer}
     >
@@ -262,7 +265,7 @@
 
     {#each potplayerInstances as inst (inst.hwnd)}
       <button
-        class:main={inst.hwnd === selectedPotplayerInfo.hwnd}
+        class:selected={inst.hwnd === selectedPotplayerInfo.hwnd}
         onclick={() => setPotPlayerInstance(inst)}
         aria-pressed={inst.hwnd === selectedPotplayerInfo.hwnd}
       >
@@ -270,7 +273,8 @@
       </button>
     {/each}
     <button
-      class="settings-button"
+      class:selected={showSettings}
+      aria-pressed={showSettings}
       onclick={() => {
         showSettings = !showSettings
 
@@ -287,70 +291,70 @@
 
 {#if showSettings}
   <Settings />
-{/if}
+{:else}
+  <div class="chat-container">
+    {#if messages && messages.length > 0}
+      <VList
+        bind:this={vlistRef}
+        data={messages}
+        getKey={(_, i) => messages[i].getId()}
+        initialTopMostItemIndex={messages.length - 1}
+        onscroll={handleScroll}
+        ssrCount={20}
+      >
+        {#snippet children(msg)}
+          <ChatMessage
+            message={msg}
+            videoStartTime={selectedPotplayerInfo.startTime}
+            videoEndTime={selectedPotplayerInfo.endTime}
+            elapsedTime={selectedPotplayerInfo.startTime
+              ? Math.floor(
+                  msg.timestamp -
+                    selectedPotplayerInfo.startTime -
+                    settings.chat.timestampOffset -
+                    settings.chat._sessionTimestampOffset
+                )
+              : undefined}
+            {urlTracker}
+            usernameColorMap={chatService.usernameColorCache}
+            onUrlClick={handleUrlClick}
+            onUsernameClick={handleUsernameClick}
+            onEmoteLoad={scrollToTarget}
+          />
+        {/snippet}
+      </VList>
+    {:else if loadingState?.state === 'loading'}
+      <div class="chat-message system center">Loading chat...</div>
+    {:else if loadingState?.state === 'error'}
+      <div class="chat-message error center">{loadingState.errorMessage}</div>
+    {:else if loadingState?.state === 'channel-not-found'}
+      <div class="chat-message system center">Channel not found.</div>
+    {:else if !selectedPotplayerInfo.hwnd}
+      <div class="chat-message system center">No PotPlayer instance selected.</div>
+    {:else if !selectedPotplayerInfo.startTime}
+      <div class="chat-message system center">
+        No start time set for the selected PotPlayer instance.
+      </div>
+    {:else}
+      <div class="chat-message system">
+        Unknown error occurred.<br />
+        <span>Loading state: {JSON.stringify(loadingState)}</span><br />
+        <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
+      </div>
+    {/if}
+  </div>
 
-<div class="chat-container">
-  {#if messages && messages.length > 0}
-    <VList
-      bind:this={vlistRef}
-      data={messages}
-      getKey={(_, i) => messages[i].getId()}
-      initialTopMostItemIndex={messages.length - 1}
-      onscroll={handleScroll}
-      ssrCount={20}
+  {#if !scrollToBottom}
+    <button
+      class="scroll-to-bottom"
+      onclick={() => {
+        scrollToBottom = true
+        scrollToTarget()
+      }}
     >
-      {#snippet children(msg)}
-        <ChatMessage
-          message={msg}
-          videoStartTime={selectedPotplayerInfo.startTime}
-          videoEndTime={selectedPotplayerInfo.endTime}
-          elapsedTime={selectedPotplayerInfo.startTime
-            ? Math.floor(
-                msg.timestamp -
-                  selectedPotplayerInfo.startTime -
-                  settings.chat.timestampOffset -
-                  settings.chat._sessionTimestampOffset
-              )
-            : undefined}
-          {urlTracker}
-          usernameColorMap={chatService.usernameColorCache}
-          onUrlClick={handleUrlClick}
-          onUsernameClick={handleUsernameClick}
-          onEmoteLoad={scrollToTarget}
-        />
-      {/snippet}
-    </VList>
-  {:else if loadingState?.state === 'loading'}
-    <div class="chat-message system center">Loading chat...</div>
-  {:else if loadingState?.state === 'error'}
-    <div class="chat-message error center">{loadingState.errorMessage}</div>
-  {:else if loadingState?.state === 'channel-not-found'}
-    <div class="chat-message system center">Channel not found.</div>
-  {:else if !selectedPotplayerInfo.hwnd}
-    <div class="chat-message system center">No PotPlayer instance selected.</div>
-  {:else if !selectedPotplayerInfo.startTime}
-    <div class="chat-message system center">
-      No start time set for the selected PotPlayer instance.
-    </div>
-  {:else}
-    <div class="chat-message system">
-      Unknown error occurred.<br />
-      <span>Loading state: {JSON.stringify(loadingState)}</span><br />
-      <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
-    </div>
+      Scroll to bottom
+    </button>
   {/if}
-</div>
-
-{#if !scrollToBottom}
-  <button
-    class="scroll-to-bottom"
-    onclick={() => {
-      scrollToBottom = true
-      scrollToTarget()
-    }}
-  >
-    Scroll to bottom
-  </button>
 {/if}
 
 <style>
@@ -395,7 +399,7 @@
     background: none;
     border-color: var(--color-accent-hover);
   }
-  .header-button button.main {
+  .header-button button.selected {
     color: var(--color-accent);
     font-weight: bold;
     background: none;

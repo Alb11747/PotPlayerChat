@@ -114,6 +114,7 @@
     flex: 0 1 calc(clientHeight);
     display: flex;
     width: 100%;
+    height: 100%;
     flex-direction: column;
     padding: 1rem;
     background-color: var(--color-black-soft);
