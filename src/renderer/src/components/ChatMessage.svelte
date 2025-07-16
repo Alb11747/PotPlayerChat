@@ -2,18 +2,13 @@
   import { isActionMessage, parseFullMessage, type Segment } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
   import {
-    getTwitchUserIdByName,
-    mainBadgeService,
-    mainCheerEmoteService,
+    TwitchBadgeService,
+    TwitchEmoteService,
+    TwitchUserService,
     type CheerEmote,
-    type TwitchBadgeService,
     type TwitchCheerEmoteService
   } from '@core/chat/twitch-api'
-  import {
-    mainEmoteService,
-    type NativeTwitchEmote,
-    type TwitchEmoteService
-  } from '@core/chat/twitch-emotes'
+  import type { NativeTwitchEmote } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { Collection, TwitchEmote } from '@mkody/twitch-emoticons'
 
@@ -80,7 +75,6 @@
     }
   }
 
-  let emoteService: TwitchEmoteService | null = $state(null)
   let channelUserId: number | null = $state(null)
   let badges: [string, HelixChatBadgeVersion][] = $state([])
   const badgeInfo: Map<string, string> | undefined = $derived(message?.badgeInfo)
@@ -88,48 +82,40 @@
   let cheerEmotes: Map<string, CheerEmote> | null = $state(null)
 
   async function loadServices(): Promise<void> {
-    const id = await getTwitchUserIdByName(message.channel)
+    const id = await TwitchUserService.getUserIdByName(message.channel)
     if (id) channelUserId = parseInt(id, 10)
 
     if (enableBadges) {
       // Load badge service
-      mainBadgeService.then((badgeService) => {
-        if (badgeService) loadBadges(badgeService)
-      })
+      loadBadges()
     }
 
     if (enableEmotes) {
       // Load emote service
-      mainEmoteService.then((emoteServiceInstance) => {
-        if (!emoteServiceInstance) return
-        const fetchPromise = channelUserId
-          ? emoteServiceInstance.fetchAllEmotes(channelUserId)
-          : emoteServiceInstance.fetchAllEmotes()
-        fetchPromise.then(() => {
-          emoteService = emoteServiceInstance
-        })
-      })
+      TwitchEmoteService.fetchAllEmotes(channelUserId)
 
       // Load cheer emote service
-      mainCheerEmoteService.then((cheerEmoteService) => {
-        if (cheerEmoteService) loadCheerEmotes(cheerEmoteService)
-      })
+      loadCheerEmotes()
     }
   }
 
-  async function loadBadges(badgeService: TwitchBadgeService): Promise<void> {
-    if (!badgeService || !channelUserId || !message || message.type !== 'chat') return
+  async function loadBadges(): Promise<void> {
+    if (!channelUserId || !message || message.type !== 'chat') return
     const badgeList = message.badges
     if (!badgeList) return
     badges.length = 0
     for (const [badgeId, version] of badgeList) {
-      const badgeData = await badgeService.getBadgeInfo(badgeId, version, channelUserId.toString())
+      const badgeData = await TwitchBadgeService.getBadgeInfo(
+        badgeId,
+        version,
+        channelUserId.toString()
+      )
       if (badgeData) badges.push([badgeId, badgeData])
     }
   }
 
-  async function loadCheerEmotes(cheerEmoteService: TwitchCheerEmoteService): Promise<void> {
-    if (!message?.bits || !cheerEmoteService || !channelUserId) return
+  async function loadCheerEmotes(): Promise<void> {
+    if (!message?.bits || !channelUserId) return
     const msgBits = parseInt(message.bits, 10)
     if (isNaN(msgBits)) return
 
@@ -144,7 +130,11 @@
       if (isNaN(bits)) continue // Skip if bits is not a number
       if (bits > msgBits) continue // Skip if bits is greater than message bits
 
-      const info = await cheerEmoteService.getCheerEmoteInfo(name, bits, channelUserId?.toString())
+      const info = await TwitchCheerEmoteService.getCheerEmoteInfo(
+        name,
+        bits,
+        channelUserId?.toString()
+      )
       if (info) cheerEmotesMap.set(emote, info)
     }
 
@@ -163,7 +153,7 @@
       return { escapedUsername: '', parsedMessageSegments: undefined }
 
     // Get base emotes
-    let emotes = emoteService?.getEmotes(channelUserId ?? undefined)
+    let emotes = TwitchEmoteService.getEmotes(channelUserId ?? undefined)
     if (emotes && cheerEmotes) {
       emotes = new Collection(emotes)
       for (const [name, emote] of cheerEmotes.entries()) {

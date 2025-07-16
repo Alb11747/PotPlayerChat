@@ -5,7 +5,7 @@ import { logTime } from '@/utils/debug'
 import { isEqual, isSorted } from '@/utils/objects'
 import AsyncLock from 'async-lock'
 import { JustLogAPI } from './justlog'
-import { userIdCache } from './twitch-api'
+import { TwitchUserService } from './twitch-api'
 import type { TwitchMessage } from './twitch-msg'
 
 export interface ChatSettings {
@@ -302,7 +302,7 @@ export class ChatService {
       const channel = msg.channel
       const roomId = msg.roomId
       if (!channel || !roomId) continue
-      userIdCache.set(channel, roomId)
+      TwitchUserService.userIdCache.set(channel, roomId)
     }
   }
 

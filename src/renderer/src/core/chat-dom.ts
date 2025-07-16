@@ -1,4 +1,4 @@
-import type { CheerEmote } from '@/core/chat/twitch-api'
+import type { CheerEmote } from '@/core/chat/twitch-emotes'
 import { regExpEscape, removePrefix } from '@/utils/strings'
 import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchChatMessage } from '@core/chat/twitch-msg'
