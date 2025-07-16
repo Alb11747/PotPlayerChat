@@ -1,3 +1,4 @@
+import { isDescendantWindow } from '@/utils/electron'
 import type { BrowserWindow } from 'electron'
 import electron from 'electron'
 import contextMenuModule from 'electron-context-menu'
@@ -54,19 +55,10 @@ function createContextMenu(mainWindow: BrowserWindow, window: BrowserWindow): vo
   })
 }
 
-function isChildWindow(parentWindow: BrowserWindow, window: BrowserWindow): boolean {
-  let parent = window.getParentWindow()
-  while (parent) {
-    if (parent === parentWindow) return true
-    parent = parent.getParentWindow()
-  }
-  return false
-}
-
 export function initContextMenus(mainWindow: BrowserWindow): void {
   createContextMenu(mainWindow, mainWindow)
 
   electron.app.on('browser-window-created', (_, window) => {
-    if (isChildWindow(mainWindow, window)) createContextMenu(mainWindow, window)
+    if (isDescendantWindow(mainWindow, window)) createContextMenu(mainWindow, window)
   })
 }

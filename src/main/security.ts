@@ -1,3 +1,4 @@
+import { isDescendantWindow } from '@/utils/electron'
 import electron, { type BrowserWindow } from 'electron'
 
 function setAccessControlHeaders(window: BrowserWindow): void {
@@ -18,19 +19,10 @@ function setAccessControlHeaders(window: BrowserWindow): void {
   })
 }
 
-function isChildWindow(parentWindow: BrowserWindow, window: BrowserWindow): boolean {
-  let parent = window.getParentWindow()
-  while (parent) {
-    if (parent === parentWindow) return true
-    parent = parent.getParentWindow()
-  }
-  return false
-}
-
 export function initSecurity(mainWindow: BrowserWindow): void {
   setAccessControlHeaders(mainWindow)
 
   electron.app.on('browser-window-created', (_, window) => {
-    if (isChildWindow(mainWindow, window)) setAccessControlHeaders(window)
+    if (isDescendantWindow(mainWindow, window)) setAccessControlHeaders(window)
   })
 }
