@@ -7,7 +7,7 @@
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --plugin prettier-plugin-svelte --write .",
-    "lint": "eslint --fix --cache .",
+    "lint": "eslint --fix --cache --max-warnings=0 .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "svelte-check": "svelte-check --fail-on-warnings --tsconfig ./tsconfig.json",
@@ -24,7 +24,7 @@
   },
   "lint-staged": {
     "*.{js,ts,mjs,cjs,svelte}": [
-      "eslint --fix --cache",
+      "eslint --fix --cache --max-warnings=0",
       "prettier --plugin prettier-plugin-svelte --write"
     ]
   },
@@ -63,6 +63,7 @@
     "electron-vite": "^3.1.0",
     "eslint": "^9.30.0",
     "eslint-plugin-svelte": "^3.10.1",
+    "eslint-plugin-unused-imports": "^4.1.4",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.9",
     "prettier": "^3.6.2",
