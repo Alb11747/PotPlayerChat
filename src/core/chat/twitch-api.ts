@@ -1,3 +1,4 @@
+import { logTime } from '@/utils/debug'
 import type { HelixChatBadgeSet, HelixChatBadgeVersion, HelixCheermoteList } from '@twurple/api'
 import { ApiClient } from '@twurple/api'
 import type {
@@ -34,8 +35,9 @@ export async function getTwitchUserIdByName(username: string): Promise<string | 
         return null
       }
 
-      console.debug(`Fetching Twitch user ID for username: ${username}`)
-      const user = await api.users.getUserByName(username)
+      const user = await logTime(`Fetching Twitch user ID for username: ${username}`, () =>
+        api.users.getUserByName(username)
+      )
       const userId = user?.id ?? null
       userIdCache.set(username, userId)
       return userId
@@ -59,11 +61,9 @@ export class TwitchBadgeService {
     return lock.acquire(`badges:channel:${channelId}`, async () => {
       if (this.channelBadgeCache.has(channelId)) return
       try {
-        const fetchLabel = `Fetching channel badges for channel ID '${channelId}'`
-        console.debug(fetchLabel)
-        console.time(fetchLabel)
-        const badges = await api.chat.getChannelBadges(channelId)
-        console.timeEnd(fetchLabel)
+        const badges = await logTime(`Fetching channel badges for channel ID '${channelId}'`, () =>
+          api.chat.getChannelBadges(channelId)
+        )
         this.processAndCacheChannelBadges(channelId, badges)
       } catch (error) {
         console.error(`Failed to fetch badges for channel ${channelId}:`, error)
@@ -91,11 +91,7 @@ export class TwitchBadgeService {
       if (this.globalBadgeCache.size > 0) return
 
       try {
-        const fetchLabel = 'Fetching global badges'
-        console.debug(fetchLabel)
-        console.time(fetchLabel)
-        const badges = await api.chat.getGlobalBadges()
-        console.timeEnd(fetchLabel)
+        const badges = await logTime('Fetching global badges', () => api.chat.getGlobalBadges())
         for (const badge of badges) {
           const versions = new Map<string, HelixChatBadgeVersion>()
           for (const version of badge.versions) versions.set(version.id, version)
@@ -187,10 +183,7 @@ export class TwitchCheerEmoteService {
         const fetchLabel = channelId
           ? `Fetching cheer emotes for channel '${channelId}'`
           : 'Fetching global cheer emotes'
-        console.debug(fetchLabel)
-        console.time(fetchLabel)
-        const cheerEmotes = await api.bits.getCheermotes(channelId)
-        console.timeEnd(fetchLabel)
+        const cheerEmotes = await logTime(fetchLabel, () => api.bits.getCheermotes(channelId))
 
         if (channelId) {
           this.channelCheerEmotes.set(channelId, cheerEmotes)

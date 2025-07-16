@@ -1,7 +1,8 @@
-import type { WindowApi } from '@/types/preload'
 import type { HWND } from '@/types/globals'
-import { isEqual, isSorted } from '@/utils/objects'
+import type { WindowApi } from '@/types/preload'
 import { getMessagesBetween, getMessagesForTime } from '@/utils/chat'
+import { logTime } from '@/utils/debug'
+import { isEqual, isSorted } from '@/utils/objects'
 import AsyncLock from 'async-lock'
 import { JustLogAPI } from './justlog'
 import { userIdCache } from './twitch-api'
@@ -159,19 +160,20 @@ export class ChatService {
             // Check for new data if the cached data is incomplete (fetched on the same day)
             const complete = !this.isSameUTCDate(date, new Date())
 
-            console.debug(`Fetching chat for ${channel} on ${year}/${month}/${day}`)
-            const timeLabel = `Fetched chat data for ${channel} on ${year}/${month}/${day}`
-            console.time(timeLabel)
-            const data = await this.justLogApi.getChannelLogsByDate(
-              {
-                channelStr: channel,
-                year,
-                month,
-                day
-              },
-              { baseUrl: this.settings.chat.justlogUrl }
+            const data = await logTime(
+              `Fetching chat data for ${channel} on ${year}/${month}/${day}`,
+              () =>
+                this.justLogApi.getChannelLogsByDate(
+                  {
+                    channelStr: channel,
+                    year,
+                    month,
+                    day
+                  },
+                  { baseUrl: this.settings.chat.justlogUrl }
+                )
             )
-            console.timeEnd(timeLabel)
+
             if (data == null) {
               console.warn(`Failed to fetch chat for ${year}/${month}/${day}`)
               this.chatCache[cacheKey] = { messages: [], complete }
@@ -364,18 +366,18 @@ export class ChatService {
       )
         return false
 
-      console.debug(`Prefetching messages for ${channel} from ${startDate} to ${endDate}`)
-      const timeLabel = `Prefetched messages for ${channel} from ${startDate} to ${endDate}`
-      console.time(timeLabel)
-      const prefetchedMessages = await this.justLogApi.getChannelLogs(
-        {
-          channelStr: channel,
-          fromTime: startDate,
-          toTime: endDate
-        },
-        { baseUrl: this.settings.chat.justlogUrl }
+      const prefetchedMessages = await logTime(
+        `Prefetching messages for ${channel} from ${startDate} to ${endDate}`,
+        () =>
+          this.justLogApi.getChannelLogs(
+            {
+              channelStr: channel,
+              fromTime: startDate,
+              toTime: endDate
+            },
+            { baseUrl: this.settings.chat.justlogUrl }
+          )
       )
-      console.timeEnd(timeLabel)
       if (prefetchedMessages == null) {
         console.warn(`Failed to prefetch messages for ${channel} from ${startDate} to ${endDate}`)
         return false

@@ -1,4 +1,5 @@
 import type { HWND } from '@/types/globals'
+import { logTime } from '@/utils/debug'
 import koffi from 'koffi'
 import NodeCache from 'node-cache'
 import { tasklist, type TasklistWindow, type TasklistWindowVerbose } from 'tasklist'
@@ -89,33 +90,32 @@ export async function findHwndByPidAndTitle(
   const hwnds: { hwnd: HWND; title: string }[] = []
   let hwndCount = 0
 
-  try {
-    console.time('FindWindowByPidAndTitle')
-    let hCurWnd: HWND = await FindWindowExA(0, 0, 0, 0)
+  await logTime('FindWindowByPidAndTitle', async () => {
+    try {
+      let hCurWnd: HWND = await FindWindowExA(0, 0, 0, 0)
 
-    while (hCurWnd) {
-      hwndCount++
+      while (hCurWnd) {
+        hwndCount++
 
-      const pidBuffer = Buffer.alloc(4)
-      await GetWindowThreadProcessId(hCurWnd, pidBuffer)
-      const foundPid = pidBuffer.readUInt32LE(0)
-      if (foundPid === pid) {
-        const currentTitle = await getWindowText(hCurWnd, false)
-        if (currentTitle === title) {
-          hwnds.push({ hwnd: hCurWnd, title: await getWindowText(hCurWnd, true) })
-          if (process.env['NODE_ENV'] === 'production') break
+        const pidBuffer = Buffer.alloc(4)
+        await GetWindowThreadProcessId(hCurWnd, pidBuffer)
+        const foundPid = pidBuffer.readUInt32LE(0)
+        if (foundPid === pid) {
+          const currentTitle = await getWindowText(hCurWnd, false)
+          if (currentTitle === title) {
+            hwnds.push({ hwnd: hCurWnd, title: await getWindowText(hCurWnd, true) })
+            if (process.env['NODE_ENV'] === 'production') break
+          }
         }
-      }
 
-      hCurWnd = await FindWindowExA(0, hCurWnd, 0, 0)
+        hCurWnd = await FindWindowExA(0, hCurWnd, 0, 0)
+      }
+    } catch (error) {
+      console.error(`Error while searching for window with PID ${pid} and title "${title}":`, error)
     }
-  } catch (error) {
-    console.error(`Error while searching for window with PID ${pid} and title "${title}":`, error)
-    return null
-  } finally {
-    console.timeEnd('FindWindowByPidAndTitle')
-    console.debug(`Searched ${hwndCount} windows for PID ${pid}`)
-  }
+  })
+
+  console.debug(`Searched ${hwndCount} windows for PID ${pid}`)
 
   if (hwnds.length === 0) {
     return null
@@ -148,11 +148,10 @@ export async function getWindowsByExe<V extends boolean>(
   verbose: V
 ): Promise<V extends true ? TasklistWindowVerbose[] : TasklistWindow[]> {
   console.debug(`Fetching windows for executable: ${exeName}`)
-  console.time('TaskList')
-  const result = await tasklist({
-    filter: [`IMAGENAME eq ${exeName}`],
-    verbose
-  })
-  console.timeEnd('TaskList')
-  return result
+  return await logTime('TaskList', () =>
+    tasklist({
+      filter: [`IMAGENAME eq ${exeName}`],
+      verbose
+    })
+  )
 }

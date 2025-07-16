@@ -3,6 +3,7 @@ import { removeSuffix } from '@/utils/strings'
 import AsyncLock from 'async-lock'
 import regedit from 'regedit'
 import { getHwndByPidAndTitle, getWindowsByExe, getWindowText, sendMessage } from './windows'
+import { logTime } from '@/utils/debug'
 
 const lock = new AsyncLock()
 
@@ -84,10 +85,7 @@ export async function getStreamHistory(): Promise<({ url: string; title: string 
   const key = 'HKCU\\Software\\DAUM\\PotPlayerMini64\\UrlHistory'
 
   return lock.acquire('potplayer-url-history', async () => {
-    console.debug('Reading PotPlayer URL history from registry:', key)
-    const timeLabel = `Read PotPlayer URL history from registry: ${key}`
-    console.time(timeLabel)
-    try {
+    return await logTime(`Reading PotPlayer URL history from registry: ${key}`, async () => {
       const result = await regedit.promisified.list([key])
       const entry = result[key]
       if (!entry || !entry.exists || !entry.values) return []
@@ -113,8 +111,6 @@ export async function getStreamHistory(): Promise<({ url: string; title: string 
         }
       }
       return arr
-    } finally {
-      console.timeEnd(timeLabel)
-    }
+    })
   })
 }
