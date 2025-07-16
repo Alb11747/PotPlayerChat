@@ -1,9 +1,9 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
+import type { WindowApi } from '@/types/preload'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { electronAPI } from '@electron-toolkit/preload'
 import { exposeConf } from 'electron-conf/preload'
 import { contextBridge, ipcRenderer } from 'electron/renderer'
-import type { WindowApi } from '@/types/preload'
 
 exposeConf()
 
@@ -43,6 +43,8 @@ const api: WindowApi = {
   openSearchWindow: (args) => ipcRenderer.invoke('openSearchWindow', args),
   getLinkPreview: (...args: unknown[]) => ipcRenderer.invoke('getLinkPreview', ...args),
   sanitizeHtml: (html: string) => ipcRenderer.invoke('sanitizeHtml', html),
+  onSetOffset: (callback) => ipcRenderer.on('setOffset', callback as never),
+  offSetOffset: (callback) => ipcRenderer.off('setOffset', callback as never),
   onSetCurrentTime: (callback) => ipcRenderer.on('updateCurrentVideoTime', callback as never),
   offSetCurrentTime: (callback) => ipcRenderer.off('updateCurrentVideoTime', callback as never),
   onPotPlayerInstancesChanged: (callback) => {

@@ -1,0 +1,67 @@
+diff --git a/node_modules/electron-context-menu/index.d.ts b/node_modules/electron-context-menu/index.d.ts
+index 657d377..3f29b9e 100644
+--- a/node_modules/electron-context-menu/index.d.ts
++++ b/node_modules/electron-context-menu/index.d.ts
+@@ -148,7 +148,7 @@ export type Options = {
+ 		parameters: ContextMenuParams,
+ 		browserWindow: BrowserWindow | BrowserView | Electron.WebviewTag | WebContents,
+ 		event: ElectronEvent
+-	) => MenuItemConstructorOptions[];
++	) => MenuItemConstructorOptions[] | Promise<MenuItemConstructorOptions[]>;
+ 
+ 	/**
+ 	Should return an array of [menu items](https://electronjs.org/docs/api/menu-item) to be appended to the context menu.
+@@ -160,7 +160,7 @@ export type Options = {
+ 		parameters: ContextMenuParams,
+ 		browserWindow: BrowserWindow | BrowserView | Electron.WebviewTag | WebContents,
+ 		event: ElectronEvent
+-	) => MenuItemConstructorOptions[];
++	) => MenuItemConstructorOptions[] | Promise<MenuItemConstructorOptions[]>;
+ 
+ 	/**
+ 	Show the `Learn Spelling {selection}` menu item when right-clicking text.
+@@ -347,7 +347,7 @@ export type Options = {
+ 		browserWindow: BrowserWindow | BrowserView | Electron.WebviewTag | WebContents,
+ 		dictionarySuggestions: MenuItemConstructorOptions[],
+ 		event: ElectronEvent
+-	) => MenuItemConstructorOptions[];
++	) => MenuItemConstructorOptions[] | Promise<MenuItemConstructorOptions[]>;
+ 
+ 	/**
+ 	Called when the context menu is shown.
+diff --git a/node_modules/electron-context-menu/index.js b/node_modules/electron-context-menu/index.js
+index 8ec2624..7a4b198 100644
+--- a/node_modules/electron-context-menu/index.js
++++ b/node_modules/electron-context-menu/index.js
+@@ -27,7 +27,7 @@ const removeUnusedMenuItems = menuTemplate => {
+ };
+ 
+ const create = (win, options) => {
+-	const handleContextMenu = (event, properties) => {
++	const handleContextMenu = async (event, properties) => {
+ 		if (typeof options.shouldShowMenu === 'function' && options.shouldShowMenu(event, properties) === false) {
+ 			return;
+ 		}
+@@ -296,11 +296,11 @@ const create = (win, options) => {
+ 		];
+ 
+ 		if (options.menu) {
+-			menuTemplate = options.menu(defaultActions, properties, win, dictionarySuggestions, event);
++			menuTemplate = await options.menu(defaultActions, properties, win, dictionarySuggestions, event);
+ 		}
+ 
+ 		if (options.prepend) {
+-			const result = options.prepend(defaultActions, properties, win, event);
++			const result = await options.prepend(defaultActions, properties, win, event);
+ 
+ 			if (Array.isArray(result)) {
+ 				menuTemplate.unshift(...result);
+@@ -308,7 +308,7 @@ const create = (win, options) => {
+ 		}
+ 
+ 		if (options.append) {
+-			const result = options.append(defaultActions, properties, win, event);
++			const result = await options.append(defaultActions, properties, win, event);
+ 
+ 			if (Array.isArray(result)) {
+ 				menuTemplate.push(...result);

@@ -31,6 +31,7 @@
     message: TwitchMessage
     videoStartTime?: number
     videoEndTime?: number
+    elapsedTime?: number
     urlTracker: UrlTracker
     usernameColorMap?: Map<string, { color: string; timestamp: number }>
     searchQuery?: string | RegExp
@@ -48,6 +49,7 @@
     message,
     videoStartTime,
     videoEndTime,
+    elapsedTime,
     urlTracker,
     usernameColorMap,
     searchQuery,
@@ -191,10 +193,18 @@
   }
 </script>
 
-<div class="chat-message" class:first-message={message.firstMsg === '1'}>
+<div
+  class="chat-message"
+  class:first-message={message.firstMsg === '1'}
+  timestamp={message.timestamp}
+>
   {#if settings.interface.showTimestamps}
     <span class="chat-time">
-      {formatTime(message.timestamp, videoStartTime, videoEndTime)}
+      {formatTime(message.timestamp, {
+        startTime: videoStartTime,
+        endTime: videoEndTime,
+        elapsedTime
+      })}
     </span>
   {/if}
   {#if message.type === 'chat'}

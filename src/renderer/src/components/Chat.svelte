@@ -81,6 +81,18 @@
     await chatService.updateVideoInfo(selectedPotplayerInfo)
   })
 
+  window.api.onSetOffset(async (_, { targetTimestamp }: { targetTimestamp: number }) => {
+    if (!selectedPotplayerInfo) return
+    const startTime = selectedPotplayerInfo.startTime
+    const currentVideoTime = await window.api.getCurrentVideoTime(selectedPotplayerInfo.hwnd)
+
+    settings.chat._sessionTimestampOffset = targetTimestamp - (startTime + currentVideoTime)
+
+    updateChatMessages()
+    scrollToBottom = true
+    scrollToTarget()
+  })
+
   function scrollToTarget(): void {
     if (!vlistRef) return
 
@@ -106,7 +118,9 @@
 
     const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
     if (predictedTime === null) return
-    const newMessages = await chatService.getMessagesForTime(predictedTime, true)
+    const effectiveTime =
+      predictedTime + settings.chat.timestampOffset + settings.chat._sessionTimestampOffset
+    const newMessages = await chatService.getMessagesForTime(effectiveTime, true)
     if (!newMessages || newMessages.length === 0) return
     const lastMessage = messages[messages.length - 1] || null
     const nextMessage =
@@ -294,6 +308,14 @@
           message={msg}
           videoStartTime={selectedPotplayerInfo.startTime}
           videoEndTime={selectedPotplayerInfo.endTime}
+          elapsedTime={selectedPotplayerInfo.startTime
+            ? Math.floor(
+                msg.timestamp -
+                  selectedPotplayerInfo.startTime -
+                  settings.chat.timestampOffset -
+                  settings.chat._sessionTimestampOffset
+              )
+            : undefined}
           {urlTracker}
           usernameColorMap={chatService.usernameColorCache}
           onUrlClick={handleUrlClick}

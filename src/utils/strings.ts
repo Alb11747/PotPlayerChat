@@ -52,9 +52,22 @@ export const regExpEscape: (str: string) => string =
  * @param endTime Optional end time in milliseconds to limit the maximum time.
  * @returns A formatted string representing the relative or absolute time.
  */
-export function formatTime(timeMs: number, startTime?: number, endTime?: number): string {
-  const totalSeconds = startTime ? Math.floor((timeMs - startTime) / 1000) : null
-  if (totalSeconds === null || totalSeconds < 0 || (endTime !== undefined && timeMs > endTime)) {
+export function formatTime(
+  timeMs: number,
+  {
+    startTime,
+    endTime,
+    elapsedTime
+  }: { startTime?: number; endTime?: number; elapsedTime?: number } = {}
+): string {
+  const totalDuration =
+    endTime !== undefined && startTime !== undefined ? endTime - startTime : undefined
+  elapsedTime ??= startTime ? timeMs - startTime : undefined
+  if (
+    elapsedTime === undefined ||
+    elapsedTime < 0 ||
+    (totalDuration !== undefined && elapsedTime > totalDuration)
+  ) {
     const realTime = new Date(timeMs)
     const now = new Date()
     const sameDayYear = realTime.getFullYear() === now.getFullYear()
@@ -78,9 +91,10 @@ export function formatTime(timeMs: number, startTime?: number, endTime?: number)
     }
   }
 
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
+  const elapsedSeconds = Math.floor(elapsedTime / 1000)
+  const hours = Math.floor(elapsedSeconds / 3600)
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60)
+  const seconds = elapsedSeconds % 60
 
   const hoursStr = hours.toString()
   const minutesStr = minutes.toString().padStart(2, '0')

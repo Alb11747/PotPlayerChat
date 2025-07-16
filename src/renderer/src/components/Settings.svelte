@@ -22,6 +22,14 @@
       <input type="number" bind:value={settings.chat.chatMessageLimit} min="1" />
     </label>
     <label>
+      <span class="label-text">Timestamp Offset:</span>
+      <input type="number" bind:value={settings.chat.timestampOffset} />
+    </label>
+    <label>
+      <span class="label-text">Session Timestamp Offset (Not Saved):</span>
+      <input type="number" bind:value={settings.chat._sessionTimestampOffset} />
+    </label>
+    <label>
       <span class="label-text">JustLog URL:</span>
       <input type="text" bind:value={settings.chat.justlogUrl} />
     </label>

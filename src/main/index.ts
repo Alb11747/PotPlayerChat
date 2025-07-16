@@ -8,9 +8,9 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import AsyncLock from 'async-lock'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { Conf } from 'electron-conf/main'
-import contextMenuModule from 'electron-context-menu'
 import { join } from 'path'
 import sanitizeHtml from 'sanitize-html'
+import { initContextMenus } from './context-menu'
 import {
   getCurrentVideoTime,
   getPotPlayerInstances,
@@ -39,17 +39,6 @@ function setAccessControlHeaders(window: BrowserWindow): void {
   })
 }
 
-// Fix typing for contextMenu
-const contextMenu = (contextMenuModule as unknown as { default: typeof contextMenuModule }).default
-
-contextMenu({
-  showSaveImageAs: true,
-  showCopyImage: true,
-  showCopyImageAddress: true,
-  showSaveImage: true,
-  showCopyLink: true
-})
-
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 600,
@@ -63,6 +52,7 @@ function createWindow(): void {
   })
 
   setAccessControlHeaders(mainWindow)
+  initContextMenus(mainWindow)
 
   const conf = new Conf()
   const lock = new AsyncLock()
