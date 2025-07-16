@@ -22,7 +22,6 @@ function createContextMenu(mainWindow: BrowserWindow, window: BrowserWindow): vo
 
       function getTimestamp(parameters: { x: number; y: number }): string | null {
         const elements = document.elementsFromPoint(parameters.x, parameters.y)
-        console.log(elements)
         const chatMessages = elements.filter((element) =>
           element.classList.contains('chat-message')
         )
