@@ -1,5 +1,5 @@
 import type { CheerEmote } from '@/core/chat/twitch-emotes'
-import { regExpEscape, removePrefix } from '@/utils/strings'
+import { regExpEscape, removePrefix, utf8IndexToUtf16IndexMap } from '@/utils/strings'
 import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchChatMessage } from '@core/chat/twitch-msg'
 import type { Collection } from '@mkody/twitch-emoticons'
@@ -249,6 +249,9 @@ export function parseFullMessage(
   processedUsername = processedUsername.replace(PUA_UNICODE_REGEX, '')
   processedMessage = processedMessage.replace(PUA_UNICODE_REGEX, '')
 
+  const isAscii = /^\p{ASCII}+$/u.test(processedMessage)
+  const utf16IndexMap = !isAscii ? utf8IndexToUtf16IndexMap(processedMessage) : undefined
+
   type CharIndex = {
     index: number
     char: string
@@ -287,16 +290,36 @@ export function parseFullMessage(
   if (enableEmotes && messageObj) {
     const twitchEmotes = messageObj.emotes
     if (twitchEmotes) {
-      for (const { id, startIndex, endIndex } of twitchEmotes) {
-        const endIndexAdjusted = endIndex + 1 // Adjust for inclusive end index
-        const emoteName = message.slice(startIndex, endIndexAdjusted)
+      for (const {
+        id,
+        startIndex: utf8StartIndex,
+        endIndex: utf8EndIndexInclusive
+      } of twitchEmotes) {
+        let startIndex: number | undefined
+        let endIndex: number | undefined
+        if (utf16IndexMap) {
+          startIndex = utf16IndexMap[utf8StartIndex]
+          endIndex = utf16IndexMap[utf8EndIndexInclusive + 1]
+          if (startIndex === undefined || endIndex === undefined) {
+            console.warn(
+              `Invalid emote index: ${utf8StartIndex} - ${utf8EndIndexInclusive}`,
+              message
+            )
+            continue
+          }
+        } else {
+          startIndex = utf8StartIndex
+          endIndex = utf8EndIndexInclusive + 1
+        }
+
+        const emoteName = message.slice(startIndex, endIndex)
         markIndices.push({
           index: startIndex,
           char: MarkType.TwitchEmoteStart,
           otherIndex: endIndex
         })
         markIndices.push({
-          index: endIndexAdjusted,
+          index: endIndex,
           char: MarkType.TwitchEmoteEnd,
           otherIndex: startIndex
         })

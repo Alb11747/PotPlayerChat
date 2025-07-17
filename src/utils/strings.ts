@@ -44,6 +44,21 @@ export const regExpEscape: (str: string) => string =
   ((str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 
 /**
+ * Creates a map that converts UTF-8 indices to UTF-16 indices.
+ * @param str The string to convert.
+ * @returns A map of UTF-16 indices for each UTF-8 index.
+ */
+export function utf8IndexToUtf16IndexMap(str: string): Record<number, number> {
+  const map: Array<number> = []
+  let utf16Index = 0
+  for (const codePoint of str) {
+    map.push(utf16Index)
+    utf16Index += codePoint.length
+  }
+  return map
+}
+
+/**
  * Formats a time value relative to a given start time.
  * - During playback time, returns the elapsed time as "[H:MM:SS]" or "[M:SS]".
  * - Otherwise, returns the absolute local date/time in a readable format.
