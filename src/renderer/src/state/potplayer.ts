@@ -33,6 +33,7 @@ export async function getPotplayerExtraInfo<
     }
   }
 
+  const now = new Date().getTime()
   let newPotPlayerInfo: (T & { channel: string; startTime: number; endTime: number }) | null = null
 
   const streamHistory = await window.api.getStreamHistory()
@@ -58,7 +59,8 @@ export async function getPotplayerExtraInfo<
       endTime = startTime + videoDuration
     }
 
-    const data = { channel, startTime, endTime }
+    const isStreamPossiblyRunning = now - startTime < 2 * 24 * 60 * 60 * 1000
+    const data = { channel, startTime, endTime: !isStreamPossiblyRunning ? endTime : undefined }
     const existing = titleCache.get(stream.title)
     if (existing && (existing.channel !== data.channel || existing.startTime !== data.startTime))
       console.warn('Title cache collision', stream.title, existing, data)
