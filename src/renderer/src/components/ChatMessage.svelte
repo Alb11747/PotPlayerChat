@@ -11,7 +11,7 @@
   } from '@core/chat/twitch-api'
   import type { NativeTwitchEmote } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
-  import { Collection, TwitchEmote } from '@mkody/twitch-emoticons'
+  import { Collection, TwitchEmote, type Emote } from '@mkody/twitch-emoticons'
 
   import type { CheermoteDisplayInfo, HelixChatBadgeVersion } from '@twurple/api'
   import { onMount } from 'svelte'
@@ -40,6 +40,7 @@
     enableEmotes?: boolean
     enableBadges?: boolean
     requireHttpInUrl?: boolean
+    reloadServicesFunction?: () => void
   }
 
   let {
@@ -57,7 +58,8 @@
     enableEmotePreviews = settings.interface.enableEmotePreviews,
     enableEmotes = settings.interface.enableEmotes,
     enableBadges = settings.interface.enableBadges,
-    requireHttpInUrl = settings.interface.requireHttpInUrl
+    requireHttpInUrl = settings.interface.requireHttpInUrl,
+    reloadServicesFunction = $bindable()
   }: Props = $props()
 
   // Handle URL click
@@ -96,12 +98,18 @@
 
     if (enableEmotes) {
       // Load emote service
-      TwitchEmoteService.fetchAllEmotes(channelUserId)
-
+      loadEmotes()
       // Load cheer emote service
-      loadCheerEmotes()
+      loadCheerEmotes().then(loadEmotes)
     }
   }
+
+  onMount(() => {
+    reloadServicesFunction = loadServices
+    return () => {
+      if (reloadServicesFunction === loadServices) reloadServicesFunction = undefined
+    }
+  })
 
   async function loadBadges(): Promise<void> {
     if (!channelUserId || !message || message.type !== 'chat') return
@@ -151,22 +159,27 @@
     message.type === 'system' ? message?.getSystemTextAndMessage() || [] : []
   )
 
+  let emotes: Collection<string, Emote> | null = $state(null)
+
+  async function loadEmotes(): Promise<void> {
+    // Get base emotes
+    let tempEmotes = await TwitchEmoteService.getEmotes(channelUserId ?? undefined)
+    if (tempEmotes && cheerEmotes) {
+      tempEmotes = new Collection(tempEmotes)
+      for (const [name, emote] of cheerEmotes.entries()) {
+        tempEmotes.set(name, emote)
+      }
+    }
+    emotes = tempEmotes
+  }
+
   // Highlight search terms in the message and parse emotes and parse emotes
   const { escapedUsername, parsedMessageSegments } = $derived.by(() => {
     if (!message || (message.type === 'system' && !systemMsg))
       return { escapedUsername: '', parsedMessageSegments: undefined }
 
-    // Get base emotes
-    let emotes = TwitchEmoteService.getEmotes(channelUserId ?? undefined)
-    if (emotes && cheerEmotes) {
-      emotes = new Collection(emotes)
-      for (const [name, emote] of cheerEmotes.entries()) {
-        emotes.set(name, emote)
-      }
-    }
-
     return parseFullMessage(message, {
-      twitchEmotes: emotes,
+      twitchEmotes: emotes ?? undefined,
       enableEmotes,
       showName: settings.interface.showName,
       searchQuery,

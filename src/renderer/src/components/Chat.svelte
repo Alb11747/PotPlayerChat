@@ -5,6 +5,7 @@
   import { onMount, untrack } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
 
+  import { TwitchUserService, clearAll } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import type { PotPlayerInstance } from '@/core/os/potplayer'
   import {
@@ -241,6 +242,11 @@
     if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
       event.preventDefault()
       window.api.openSearchWindow(getSearchInfo())
+    } else if ((event.ctrlKey && event.key === 'r') || (event.altKey && event.key === 'r')) {
+      TwitchUserService.getUserIdByName(selectedPotplayerInfo.channel).then((userId) => {
+        clearAll(userId ?? undefined)
+        reloadChatMessageServices()
+      })
     }
   }
 
@@ -249,6 +255,19 @@
     window.addEventListener('keydown', handleKeydown)
     return () => window.removeEventListener('keydown', handleKeydown)
   })
+
+  const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
+
+  $effect(() => {
+    for (const [key, value] of Object.entries(reloadServicesFunctionMap)) {
+      if (value === undefined) delete reloadServicesFunctionMap[key]
+    }
+  })
+
+  function reloadChatMessageServices(): void {
+    for (const reloadServicesFunction of Object.values(reloadServicesFunctionMap))
+      reloadServicesFunction?.()
+  }
 </script>
 
 <LinkPreview />
@@ -302,7 +321,7 @@
         onscroll={handleScroll}
         ssrCount={20}
       >
-        {#snippet children(msg)}
+        {#snippet children(msg, i)}
           <ChatMessage
             message={msg}
             videoStartTime={selectedPotplayerInfo.startTime}
@@ -320,6 +339,7 @@
             onUrlClick={handleUrlClick}
             onUsernameClick={handleUsernameClick}
             onEmoteLoad={scrollToTarget}
+            bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
           />
         {/snippet}
       </VList>
