@@ -8,6 +8,7 @@ export interface InterfaceSettings {
   enableEmotes: boolean
   enableLinkPreviews: boolean
   enableEmotePreviews: boolean
+  defaultPreviewPosition: 'top' | 'bottom'
   stickyPreviews: boolean
   keepScrollPosition: boolean
   showTimestamps: boolean
@@ -44,6 +45,7 @@ export const defaultSettings: Settings = {
     enableEmotes: true,
     enableLinkPreviews: true,
     enableEmotePreviews: true,
+    defaultPreviewPosition: 'top',
     stickyPreviews: true,
     keepScrollPosition: true,
     showTimestamps: true,

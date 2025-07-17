@@ -67,6 +67,13 @@
       Enable Emote Previews
     </label>
     <label>
+      <span class="label-text">Default Preview Position:</span>
+      <select bind:value={settings.interface.defaultPreviewPosition}>
+        <option value="top">Top</option>
+        <option value="bottom">Bottom</option>
+      </select>
+    </label>
+    <label>
       <input type="checkbox" bind:checked={settings.interface.stickyPreviews} />
       Sticky Previews
     </label>

@@ -1,5 +1,8 @@
 <script lang="ts">
   import { previewState } from '../state/preview.svelte'
+  import { settings } from '../state/settings.svelte'
+
+  const { defaultPosition }: { defaultPosition?: 'top' | 'bottom' } = $props()
 
   let previewElement: HTMLDivElement | null = $state(null)
   let previewStyle = $state('')
@@ -26,23 +29,46 @@
     const windowHeight = window.innerHeight
     const windowWidth = window.innerWidth
 
-    let top = previewState.mousePosition.y + 20
-    if (top + rect.height > windowHeight) {
-      top = previewState.mousePosition.y - rect.height - 10
+    const marginTop = 8
+    const marginBottom = 25
+    const isTopDefault = defaultPosition ?? settings.interface.defaultPreviewPosition === 'top'
+
+    let top: number
+
+    const bottomPositionTop = previewState.mousePosition.y + marginBottom
+    const topPositionTop = previewState.mousePosition.y - rect.height - marginTop
+    if (
+      isTopDefault
+        ? topPositionTop < marginTop
+        : bottomPositionTop + rect.height > windowHeight - marginBottom
+    ) {
+      const bottomOverlap = bottomPositionTop + rect.height - (windowHeight - marginBottom)
+      const topOverlap = marginTop - topPositionTop
+      if (bottomOverlap > topOverlap) top = topPositionTop
+      else top = bottomPositionTop
+    } else {
+      top = isTopDefault ? topPositionTop : bottomPositionTop
     }
 
     let left = previewState.mousePosition.x - rect.width / 2
-    const margin = 5
-    if (left < margin) {
-      left = margin
-    } else if (left + rect.width + margin > windowWidth) {
-      left = windowWidth - rect.width - margin
+    const marginX = 5
+    if (left < marginX) {
+      left = marginX
+    } else if (left + rect.width + marginX > windowWidth) {
+      left = windowWidth - rect.width - marginX
     }
 
     previewStyle = `top: ${top}px; left: ${left}px;`
   }
 
   $effect(updatePosition)
+
+  let sanitizedTooltipHtml: string | null = $state(null)
+
+  $effect(async () => {
+    if (!preview?.tooltip) return
+    sanitizedTooltipHtml = await sanitizeTooltip(preview.tooltip)
+  })
 
   const preview = $derived(previewState.urlTrackerInstance?.getCachedPreview(previewState.url))
   const emoteSegment = $derived(previewState.emoteSegment)
@@ -84,12 +110,12 @@
             {/if}
             {#if preview.tooltip}
               <div class="preview-tooltip">
-                {#await sanitizeTooltip(preview.tooltip)}
+                {#if !sanitizedTooltipHtml}
                   <span>Loading...</span>
-                {:then sanitizedHtml}
+                {:else}
                   <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                  {@html sanitizedHtml}
-                {/await}
+                  {@html sanitizedTooltipHtml}
+                {/if}
               </div>
             {/if}
             <div class="preview-url">{preview.link}</div>
