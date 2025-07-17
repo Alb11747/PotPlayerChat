@@ -1,3 +1,4 @@
+import { loadTTLSetting, saveTTLSetting } from '@/utils/config'
 import { logTime } from '@/utils/debug'
 import {
   Channel,
@@ -32,14 +33,15 @@ const configPromise = new Promise<Conf>((resolve) => {
 
 /* eslint-disable @typescript-eslint/no-namespace */
 
+const ttl = 24 * 60 * 60 * 1000
+
 export namespace TwitchUserService {
   export const userIdCache = new Map<string, string | null>()
 
   const configKey = 'cache:twitch-user-id'
-  configPromise.then((config: Conf) => {
-    config.get(configKey).then((cache) => {
-      if (cache) for (const [key, value] of Object.entries(cache)) userIdCache.set(key, value)
-    })
+  type CacheValue = Record<string, string | null>
+  loadTTLSetting<CacheValue>(configPromise, configKey, ttl).then((data) => {
+    if (data) for (const [key, value] of Object.entries(data)) userIdCache.set(key, value)
   })
 
   /**
@@ -69,9 +71,7 @@ export namespace TwitchUserService {
   }
 
   function saveCache(): void {
-    configPromise.then((config: Conf) => {
-      config.set(configKey, userIdCache)
-    })
+    saveTTLSetting<CacheValue>(configPromise, configKey, Object.fromEntries(userIdCache.entries()))
   }
 }
 
@@ -90,6 +90,8 @@ export namespace TwitchEmoteService {
   })()
   const channelCache: Map<number | undefined, boolean> = new Map()
 
+  type CacheValue = EmoteObject[]
+
   /**
    * Fetches all emotes (Twitch, BTTV, FFZ, 7TV) for a channel and caches them.
    * Uses async-lock to prevent duplicate fetches for the same channel.
@@ -105,8 +107,11 @@ export namespace TwitchEmoteService {
       if (!fetcher) return
 
       // Load cached emotes
-      const config = (await configPromise) as Conf<Record<string, EmoteObject[]>>
-      const cachedEmotesObjects = await config.get(getCacheKey(channelId))
+      const cachedEmotesObjects = await loadTTLSetting<CacheValue>(
+        configPromise,
+        getCacheKey(channelId),
+        ttl
+      )
       if (cachedEmotesObjects) {
         await lock.acquire(`emotes-${channelId}`, () => {
           if (channelCache.get(channelId)) return
@@ -211,9 +216,8 @@ export namespace TwitchEmoteService {
     if (!emotes) return
     const emotesObjects = emotes
       .values()
-      .map((emote) => (emote as unknown as { toObject: () => object }).toObject())
-    const config = (await configPromise) as Conf<Record<string, EmoteObject[]>>
-    config.set(getCacheKey(channelId), Array.from(emotesObjects))
+      .map((emote) => (emote as unknown as { toObject: () => EmoteObject }).toObject())
+    saveTTLSetting<CacheValue>(configPromise, getCacheKey(channelId), Array.from(emotesObjects))
   }
 }
 
@@ -224,10 +228,9 @@ export namespace TwitchBadgeService {
   >()
 
   const configKey = 'cache:twitch-badges'
-  configPromise.then((config: Conf) => {
-    config.get(configKey).then((cache) => {
-      if (cache) for (const [key, value] of Object.entries(cache)) channelBadgeCache.set(key, value)
-    })
+  type CacheValue = Record<string, Map<string, Map<string, HelixChatBadgeVersion>>>
+  loadTTLSetting<CacheValue>(configPromise, configKey, ttl).then((data) => {
+    if (data) for (const [key, value] of Object.entries(data)) channelBadgeCache.set(key, value)
   })
 
   export async function fetchChannelBadges(channelId: string): Promise<void> {
@@ -315,20 +318,22 @@ export namespace TwitchBadgeService {
   }
 
   function saveCache(): void {
-    configPromise.then((config: Conf) => {
-      config.set(configKey, channelBadgeCache)
-    })
+    saveTTLSetting<CacheValue>(
+      configPromise,
+      configKey,
+      Object.fromEntries(channelBadgeCache.entries())
+    )
   }
 }
 
 export namespace TwitchCheerEmoteService {
   export const channelCheerEmotesCache = new Map<string | null, HelixCheermoteList>()
+
   const configKey = 'cache:twitch-cheer-emotes'
-  configPromise.then((config: Conf) => {
-    config.get(configKey).then((cache) => {
-      if (cache)
-        for (const [key, value] of Object.entries(cache)) channelCheerEmotesCache.set(key, value)
-    })
+  type CacheValue = Record<string, HelixCheermoteList>
+  loadTTLSetting<CacheValue>(configPromise, configKey, ttl).then((data) => {
+    if (data)
+      for (const [key, value] of Object.entries(data)) channelCheerEmotesCache.set(key, value)
   })
 
   export async function fetchCheerEmotes(channelId?: string): Promise<void> {
@@ -388,8 +393,10 @@ export namespace TwitchCheerEmoteService {
   }
 
   function saveCache(): void {
-    configPromise.then((config: Conf) => {
-      config.set(configKey, channelCheerEmotesCache)
-    })
+    saveTTLSetting<CacheValue>(
+      configPromise,
+      configKey,
+      Object.fromEntries(channelCheerEmotesCache.entries())
+    )
   }
 }
