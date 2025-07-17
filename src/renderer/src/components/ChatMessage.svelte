@@ -2,11 +2,12 @@
   import { isActionMessage, parseFullMessage, type Segment } from '@/renderer/src/core/chat-dom'
   import { formatTime } from '@/utils/strings'
   import {
+    setConfig,
     TwitchBadgeService,
+    TwitchCheerEmoteService,
     TwitchEmoteService,
     TwitchUserService,
-    type CheerEmote,
-    type TwitchCheerEmoteService
+    type CheerEmote
   } from '@core/chat/twitch-api'
   import type { NativeTwitchEmote } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
@@ -14,6 +15,7 @@
 
   import type { CheermoteDisplayInfo, HelixChatBadgeVersion } from '@twurple/api'
   import { onMount } from 'svelte'
+  import conf from '../state/config'
   import {
     currentPreviewType,
     onMouseLeavePreviewElement,
@@ -82,6 +84,8 @@
   let cheerEmotes: Map<string, CheerEmote> | null = $state(null)
 
   async function loadServices(): Promise<void> {
+    setConfig(conf)
+
     const id = await TwitchUserService.getUserIdByName(message.channel)
     if (id) channelUserId = parseInt(id, 10)
 
