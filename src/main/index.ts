@@ -41,9 +41,10 @@ function createWindow(): void {
 
   // Create search window
   function createSearchWindow(args: SearchInfo): BrowserWindow {
+    const mainBounds = mainWindow.getBounds()
     const searchWindow = new BrowserWindow({
-      width: 400,
-      height: 600,
+      width: mainBounds.width * 0.8,
+      height: mainBounds.height * 0.8,
       show: false,
       autoHideMenuBar: true,
       parent: mainWindow,
