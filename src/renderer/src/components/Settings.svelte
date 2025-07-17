@@ -1,6 +1,11 @@
 <script lang="ts">
   import conf from '../state/config'
-  import { normalizeSettings, settings, settingsConfigKey } from '../state/settings.svelte'
+  import {
+    defaultSettings,
+    normalizeSettings,
+    settings,
+    settingsConfigKey
+  } from '../state/settings.svelte'
 
   $effect(() => {
     normalizeSettings()
@@ -10,10 +15,18 @@
   $effect(() => {
     window.api.setPollingIntervals($state.snapshot(settings.intervals))
   })
+
+  function resetAllSettings(): void {
+    Object.assign(settings, defaultSettings)
+    conf.set(settingsConfigKey, $state.snapshot(settings))
+  }
 </script>
 
 <div class="settings-panel">
-  <h2 class="title">Settings</h2>
+  <div class="header-section">
+    <h2 class="title">Settings</h2>
+    <button class="reset-button" onclick={resetAllSettings}> Reset All Settings </button>
+  </div>
 
   <fieldset>
     <legend>Chat Settings</legend>
@@ -124,11 +137,34 @@
     cursor: default;
   }
 
+  .header-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
   .title {
     color: var(--color-white);
     font-size: 1.8rem;
-    text-align: center;
-    margin-bottom: 0.5rem;
+    margin: 0;
+    margin-left: 1rem;
+  }
+  .reset-button {
+    background-color: var(--color-black-deep);
+    color: var(--color-white);
+    border: 1px solid var(--color-gray-4);
+    border-radius: 6px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  .reset-button:hover {
+    background-color: var(--color-accent, #e74c3c);
+  }
+  .reset-button:active {
+    transform: translateY(1px);
   }
 
   fieldset {
