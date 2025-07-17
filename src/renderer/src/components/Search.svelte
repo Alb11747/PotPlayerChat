@@ -280,6 +280,7 @@
   .search-container {
     width: 100%;
     height: 100%;
+    min-height: fit-content;
     background: var(--color-black-dark);
     color: var(--color-text-light);
 
@@ -355,6 +356,11 @@
 
   .search-results {
     flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
     width: 100%;
     height: calc(100% - var(--header-height));
     overflow: visible;
@@ -382,8 +388,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 200px;
     text-align: center;
+    height: 200px;
     padding: 40px;
   }
 
@@ -391,7 +397,7 @@
   .placeholder-icon {
     font-size: 48px;
     margin-bottom: 16px;
-    opacity: 0.5;
+    opacity: 0.9;
   }
 
   .no-results-text,

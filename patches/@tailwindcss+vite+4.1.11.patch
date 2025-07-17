@@ -1,0 +1,12 @@
+diff --git a/node_modules/@tailwindcss/vite/package.json b/node_modules/@tailwindcss/vite/package.json
+index c4610f1..682d4dd 100644
+--- a/node_modules/@tailwindcss/vite/package.json
++++ b/node_modules/@tailwindcss/vite/package.json
+@@ -17,6 +17,7 @@
+     "provenance": true,
+     "access": "public"
+   },
++  "types": "./dist/index.d.mts",
+   "exports": {
+     ".": {
+       "types": "./dist/index.d.mts",

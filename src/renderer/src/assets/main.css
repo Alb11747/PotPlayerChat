@@ -73,6 +73,14 @@ code {
   justify-content: center;
 }
 
+.color-muted {
+  color: var(--color-text-muted);
+}
+
+.color-error-soft {
+  color: var(--color-error-soft);
+}
+
 .logo {
   margin-bottom: 20px;
   height: 128px;
@@ -118,7 +126,11 @@ code {
 }
 
 .svelte {
-  background: -webkit-linear-gradient(315deg, var(--color-accent-orange) 35%, var(--color-accent-blue));
+  background: -webkit-linear-gradient(
+    315deg,
+    var(--color-accent-orange) 35%,
+    var(--color-accent-blue)
+  );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -126,7 +138,11 @@ code {
 }
 
 .ts {
-  background: -webkit-linear-gradient(315deg, var(--color-accent-ts) 45%, var(--color-accent-yellow));
+  background: -webkit-linear-gradient(
+    315deg,
+    var(--color-accent-ts) 45%,
+    var(--color-accent-yellow)
+  );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;

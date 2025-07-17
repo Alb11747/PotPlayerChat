@@ -32,10 +32,11 @@
     }
 
     let left = previewState.mousePosition.x - rect.width / 2
-    if (left < 0) {
-      left = 5
-    } else if (left + rect.width > windowWidth) {
-      left = windowWidth - rect.width - 5
+    const margin = 5
+    if (left < margin) {
+      left = margin
+    } else if (left + rect.width + margin > windowWidth) {
+      left = windowWidth - rect.width - margin
     }
 
     previewStyle = `top: ${top}px; left: ${left}px;`
@@ -62,23 +63,25 @@
   >
     {#if previewState.url && previewState.urlTrackerInstance}
       {#if previewState.urlTrackerInstance.hasPreview(previewState.url)}
-        {#if preview && preview.status === 200}
-          {#if preview.thumbnail}
-            {#if !previewState.urlTrackerInstance.isFailedUrl(preview.link)}
-              <img
-                src={preview.thumbnail}
-                onload={updatePosition}
-                onerror={() => {
-                  previewState.urlTrackerInstance.markFailedUrl(preview.link)
-                }}
-                alt="Link preview"
-                class="preview-thumbnail"
-              />
-            {:else}
-              <span class="preview-error-text">Image failed to load</span>
+        {#if preview && 200 <= preview.status && preview.status < 300}
+          <div class="p-2 flex-1">
+            {#if preview.thumbnail}
+              {#if !previewState.urlTrackerInstance.isFailedUrl(preview.link)}
+                <img
+                  src={preview.thumbnail}
+                  onload={updatePosition}
+                  onerror={() => {
+                    previewState.urlTrackerInstance.markFailedUrl(preview.link)
+                  }}
+                  alt="Link preview"
+                  class="preview-thumbnail"
+                />
+              {:else}
+                <span class="flex font-medium text-center justify-center color-error-soft pt-6 pb-2"
+                  >Image failed to load</span
+                >
+              {/if}
             {/if}
-          {/if}
-          <div class="preview-content">
             {#if preview.tooltip}
               <div class="preview-tooltip">
                 {#await sanitizeTooltip(preview.tooltip)}
@@ -91,22 +94,22 @@
             {/if}
             <div class="preview-url">{preview.link}</div>
           </div>
-        {:else if preview && preview.status === 0}
+        {:else if preview}
           <div class="preview-error-content">
-            <div class="preview-error-icon">⚠️</div>
-            <div class="preview-error-text">Failed to load preview</div>
+            <div class="text-4xl pb-3">⚠️</div>
+            <div class="font-medium text-error-soft">Failed to load preview</div>
             <div class="preview-url">{preview.link}</div>
           </div>
         {/if}
       {:else if previewState.urlTrackerInstance.isPreviewLoading(previewState.url)}
         <div class="preview-loading-content">
-          <div class="preview-loading-spinner">⏳</div>
-          <div class="preview-loading-text">Loading preview...</div>
+          <div class="text-4xl animate-spin">⏳</div>
+          <div class="font-medium">Loading preview...</div>
           <div class="preview-url">{previewState.url}</div>
         </div>
       {/if}
     {:else if emoteSegment}
-      <div class="emote-preview-content">
+      <div class="p-3 flex flex-col items-center gap-2">
         <img src={emoteSegment.url} alt={emoteSegment.name} class="emote-preview-image" />
         <div class="emote-preview-name">{emoteSegment.name}</div>
         <div class="emote-preview-source">
@@ -147,7 +150,7 @@
     border: 1px solid var(--color-gray-5);
     border-radius: 8px;
     box-shadow: 0 4px 12px var(--color-shadow-modal);
-    max-width: 400px;
+    max-width: 80vw;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -163,50 +166,16 @@
     gap: 8px;
   }
 
-  .preview-error-icon,
-  .preview-loading-spinner {
-    font-size: 24px;
-  }
-
-  .preview-loading-spinner {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .preview-error-text {
-    color: var(--color-error-soft);
-    font-size: 14px;
-    font-weight: 500;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .preview-loading-text {
-    color: var(--color-accent-hover);
-    font-size: 14px;
-    font-weight: 500;
-  }
-
   .preview-thumbnail {
-    width: 100%;
-    height: 200px;
-    object-fit: contain;
     display: block;
-  }
-
-  .preview-content {
-    padding: 12px;
-    flex: 1;
+    flex: 1 1 auto;
+    width: fit-content;
+    height: fit-content;
+    max-width: 400px;
+    max-height: 250px;
+    object-fit: contain;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .preview-tooltip {
@@ -223,17 +192,11 @@
     word-break: break-all;
   }
 
-  .emote-preview-content {
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-
   .emote-preview-image {
-    max-width: 16rem;
-    max-height: 8rem;
+    width: min(16rem, fit-content);
+    height: min(8rem, fit-content);
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
   }
 
@@ -248,6 +211,7 @@
     font-size: 12px;
     color: var(--color-text-muted);
     line-height: 0.8;
+    text-align: center;
   }
 
   .emote-preview-divider {

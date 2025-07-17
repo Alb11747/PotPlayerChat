@@ -1,7 +1,8 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
-import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolve } from 'path'
+import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   main: {
@@ -11,7 +12,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin(), tsconfigPaths()]
   },
   renderer: {
-    plugins: [svelte(), tsconfigPaths()],
+    plugins: [svelte(), tsconfigPaths(), tailwindcss()],
     build: {
       rollupOptions: {
         input: {

@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   /* Base colors */
   --color-white: #ffffff;

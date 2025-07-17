@@ -206,7 +206,7 @@
   timestamp={message.timestamp}
 >
   {#if settings.interface.showTimestamps}
-    <span class="chat-time">
+    <span class="chat-time color-muted mr-0.5">
       {formatTime(message.timestamp, {
         startTime: videoStartTime,
         endTime: videoEndTime,
@@ -216,10 +216,10 @@
   {/if}
   {#if message.type === 'chat'}
     {#if enableBadges && badges.length > 0}
-      <span class="chat-badges">
+      <span class="chat-badges inline-flex items-center justify-center gap-0.5 align-middle">
         {#each badges as [badgeId, badge] (badgeId)}
           <img
-            class="chat-badge"
+            class="chat-badge h-5.8 object-contain inline-flex items-center align-text-bottom"
             src={badge.getImageUrl(4)}
             alt={badge.title}
             title={badgeId === 'subscriber'
@@ -234,7 +234,7 @@
       </span>
     {/if}
     <span
-      class="chat-username"
+      class="chat-username ml-0.5 font-bold"
       role="link"
       tabindex="-1"
       style="color: {message.color}"
@@ -246,7 +246,7 @@
       {@html escapedUsername + ': '}
     </span>
   {:else if message.type === 'system'}
-    <span class="chat-text chat-system"
+    <span class="chat-system whitespace-pre-wrap text-system"
       >{#if parsedMessageSegments}
         {systemText + ': '}
       {:else}
@@ -256,7 +256,7 @@
   {/if}
   {#if parsedMessageSegments}
     <span
-      class="chat-text"
+      class="chat-text whitespace-pre-wrap"
       style={isActionMessage(message.message) ? `color: ${message.color}` : ''}
     >
       {#each parsedMessageSegments.entries() || [] as [index, segment] ((message.getId(), index))}
@@ -359,10 +359,6 @@
     background-color: var(--color-success-alpha);
   }
 
-  .chat-time {
-    color: var(--color-text-muted);
-    margin-right: 0.2rem;
-  }
   .chat-username {
     margin-left: 0.1rem;
     font-weight: bold;
