@@ -195,6 +195,7 @@
       window.api.setSelectedPotPlayerHWND(instance.hwnd).then(resetVideoTimeHistory)
 
       const currentSelectedPotPlayerInfo = await getPotplayerExtraInfo(instance)
+      if (!currentSelectedPotPlayerInfo) return null
 
       await resetVideoTimeHistory()
       await chatService.updateVideoInfo(currentSelectedPotPlayerInfo)
@@ -347,8 +348,11 @@
       <div class="chat-message system center">Loading chat...</div>
     {:else if loadingState?.state === 'error'}
       <div class="chat-message error center">{loadingState.errorMessage}</div>
-    {:else if loadingState?.state === 'channel-not-found'}
-      <div class="chat-message system center">Channel not found.</div>
+    {:else if loadingState?.state === 'no-potplayer-info'}
+      <div class="chat-message system center">
+        No PotPlayer info available.<br />
+        Try to pause and unpause the video or reopen the video.
+      </div>
     {:else if !selectedPotplayerInfo.hwnd}
       <div class="chat-message system center">No PotPlayer instance selected.</div>
     {:else if !selectedPotplayerInfo.startTime}

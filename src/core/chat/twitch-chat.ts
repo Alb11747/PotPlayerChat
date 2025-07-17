@@ -22,7 +22,7 @@ export interface PotPlayerInfo {
 }
 
 export interface LoadingState {
-  state: 'idle' | 'loading' | 'loaded' | 'error' | 'channel-not-found'
+  state: 'idle' | 'loading' | 'loaded' | 'error' | 'no-potplayer-info'
   errorMessage: string
 }
 
@@ -120,15 +120,17 @@ export class ChatService {
   }
 
   async loadChat(): Promise<void> {
-    if (!this.currentPotPlayerInfo) {
-      this.state.state = 'idle'
+    const { hwnd, channel, startTime: videoStartTime, endTime } = this.currentPotPlayerInfo ?? {}
+    if (!hwnd || !channel || !videoStartTime) {
+      this.state.state = 'no-potplayer-info'
       this.state.errorMessage = 'No PotPlayer info available for chat loading.'
-      console.warn('No PotPlayer info available for chat loading.')
+      console.warn('No PotPlayer info available for chat loading.', {
+        ...this.currentPotPlayerInfo
+      })
       return
     }
 
     try {
-      const { hwnd, channel, startTime: videoStartTime, endTime } = this.currentPotPlayerInfo
       const videoEndTime = endTime ?? videoStartTime + (await this.api.getTotalVideoTime(hwnd))
 
       const datePadding = ChatService.loadChatTimePadding
