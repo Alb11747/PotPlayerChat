@@ -44,7 +44,7 @@ export class ChatService {
   public usernameColorCache: Map<string, { color: string; timestamp: number }> | null = null
   public currentPotPlayerInfo: PotPlayerInfo | null = null
 
-  private currentChatData: TwitchMessage[] = []
+  public currentChatData: TwitchMessage[] = []
 
   // Caching chat data per day
   private chatCache: Record<string, { messages: TwitchMessage[]; complete: boolean }> = {}
@@ -78,7 +78,7 @@ export class ChatService {
     if (loadChatDelay > 0) {
       this.loadChatCached()
       setTimeout(this.loadChat.bind(this), loadChatDelay)
-    } else {
+    } else if (loadChatDelay === 0) {
       await this.loadChat()
     }
     return true

@@ -221,8 +221,8 @@
     const searchRangeBuffer = 60 * 60 * 1000
     return {
       potplayerInfo: $state.snapshot(selectedPotplayerInfo),
-      initialMessagesRaw:
-        messages.length > 0 ? convertTwitchMessagesToRawIrcMessages(messages) : undefined,
+      messagesRaw: convertTwitchMessagesToRawIrcMessages(chatService.currentChatData),
+      initialMessagesRaw: convertTwitchMessagesToRawIrcMessages(messages),
       searchRange: settings.search.showAllMessages
         ? {
             startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,

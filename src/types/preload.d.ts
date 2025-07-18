@@ -29,6 +29,7 @@ export type PollingIntervals = {
 
 export type SearchInfo = {
   potplayerInfo: PotPlayerInfo
+  messagesRaw?: string
   initialMessagesRaw?: string
   initialSearch?: string
   searchRange?: {

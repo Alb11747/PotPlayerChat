@@ -29,3 +29,21 @@ export function getMessagesForTime<T extends { timestamp: number }>(
   const startIdx = Math.max(0, lastIdx - limit + 1)
   return messages.slice(startIdx, lastIdx + (next ? 2 : 1))
 }
+
+/**
+ * Check if a range is contained in the given messages
+ * @param messages - The messages to check
+ * @param startTime - The start time of the range
+ * @param endTime - The end time of the range
+ * @returns True if the range is in the messages, false otherwise
+ */
+export function isRangeInMessages<T extends { timestamp: number }>(
+  messages: T[],
+  startTime: number,
+  endTime: number
+): boolean {
+  // If there is a msg before startTime and a msg after endTime, then the range is in the messages
+  const startIdx = bounds.ge(messages, { timestamp: startTime } as T, cmp)
+  const endIdx = bounds.le(messages, { timestamp: endTime } as T, cmp)
+  return startIdx !== -1 && endIdx !== -1 && startIdx < endIdx
+}

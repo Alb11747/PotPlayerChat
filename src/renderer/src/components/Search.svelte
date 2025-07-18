@@ -7,6 +7,7 @@
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
   import type {} from '@/types/preload'
+  import { isRangeInMessages } from '@/utils/chat'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
@@ -76,9 +77,18 @@
 
       if (searchInfo.initialMessagesRaw) {
         const initialMsgs = convertRawIrcMessagesToTwitchMessages(searchInfo.initialMessagesRaw)
-        console.debug('Preloaded messages:', initialMsgs.length)
+        console.debug('Initial messages:', initialMsgs.length)
         initialMessages = initialMsgs
         loadMessages(initialMsgs)
+        scrollToInitialMessages()
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      if (searchInfo.messagesRaw) {
+        const messages = convertRawIrcMessagesToTwitchMessages(searchInfo.messagesRaw)
+        console.debug('Preloaded messages:', messages.length)
+        loadMessages(messages)
         scrollToInitialMessages()
       }
 
@@ -93,25 +103,19 @@
       }
 
       const currentTime = await window.api.getCurrentVideoTime(searchInfo.potplayerInfo.hwnd)
-      chatService.updateVideoInfo(searchInfo.potplayerInfo)
+      const defaultStartTime = currentTime - 60 * 60 * 1000 // 1 hour before
+      const defaultEndTime = currentTime
+      const { startTime = defaultStartTime, endTime = defaultEndTime } =
+        searchInfo.searchRange || {}
 
-      let loadedMsgs: TwitchMessage[] = []
+      if (!isRangeInMessages(initialMessages, startTime, endTime)) {
+        await chatService.updateVideoInfo(searchInfo.potplayerInfo, 0)
+        const loadedMsgs = await chatService.getMessagesBetweenTimes(startTime, endTime)
 
-      const { startTime, endTime } = searchInfo.searchRange || {}
-      if (startTime && endTime) {
-        await chatService.loadChat()
-        loadedMsgs = await chatService.getMessagesBetweenTimes(startTime, endTime)
-      } else {
-        loadedMsgs = await chatService.getMessagesAroundTime(
-          currentTime,
-          60 * 60 * 1000, // 1 hour before
-          0
-        )
+        console.debug('Loaded messages:', loadedMsgs.length)
+        loadMessages(loadedMsgs)
+        scrollToInitialMessages()
       }
-
-      console.debug('Loaded messages:', loadedMsgs.length)
-      loadMessages(loadedMsgs)
-      scrollToInitialMessages()
     } catch (error) {
       console.error('Failed to load messages for search:', error)
     }
