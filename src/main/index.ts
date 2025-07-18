@@ -29,7 +29,7 @@ function createWindow(): void {
   initStorage()
   initContextMenus(mainWindow)
   initLinks()
-  initPotplayerHandlers(mainWindow)
+  initPotplayerHandlers(mainWindow, conf)
 
   mainWindow.on('ready-to-show', mainWindow.show)
 

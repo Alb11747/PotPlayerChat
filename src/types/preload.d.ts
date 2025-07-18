@@ -1,10 +1,12 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type {
   getCurrentVideoTime,
+  getPlaylists,
   getStreamHistory,
   getTotalVideoTime,
   PotPlayerInstance
 } from '@/core/os/potplayer'
+import type { getPotplayerExtraInfo } from '@/core/potplayer/potplayer'
 import type { getLinkPreview } from '@/main/links'
 import type { HWND } from '@/types/globals'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
@@ -48,7 +50,9 @@ export interface WindowApi {
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>
   getCurrentVideoTime: typeof getCurrentVideoTime
   getTotalVideoTime: typeof getTotalVideoTime
+  getPlaylists: typeof getPlaylists
   getStreamHistory: typeof getStreamHistory
+  getPotplayerExtraInfo: typeof getPotplayerExtraInfo
   openUrl: (url: string) => Promise<void>
   openSearchWindow: (args: SearchInfo) => Promise<void>
   getLinkPreview: typeof getLinkPreview

@@ -1,18 +1,21 @@
-import type { HWND } from '@/types/globals'
-import { RecentValue } from '@/utils/state'
-import electron, { type BrowserWindow } from 'electron'
-import type { PollingIntervals } from '@/types/preload'
-import { isEqual } from '@/utils/objects'
 import {
   getCurrentVideoTime,
+  getPlaylists,
   getPotPlayerInstances,
   getStreamHistory,
   getTotalVideoTime,
   type PotPlayerInstance
 } from '@/core/os/potplayer'
 import { getForegroundWindow } from '@/core/os/windows'
+import { getPotplayerExtraInfo, initCache } from '@/core/potplayer/potplayer'
+import type { HWND } from '@/types/globals'
+import type { PollingIntervals } from '@/types/preload'
+import { isEqual } from '@/utils/objects'
+import { RecentValue } from '@/utils/state'
+import electron, { type BrowserWindow } from 'electron'
+import type { Conf } from 'electron-conf/main'
 
-export function initPotplayerHandlers(mainWindow: BrowserWindow): void {
+export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): void {
   const ipcMain = electron.ipcMain
 
   let selectedPotplayerHwnd: HWND | null = null
@@ -196,7 +199,17 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow): void {
     return getTotalVideoTime(hwnd)
   })
 
+  ipcMain.handle('getPlaylists', async () => {
+    return await getPlaylists()
+  })
+
   ipcMain.handle('getStreamHistory', async () => {
     return await getStreamHistory()
+  })
+
+  initCache(conf)
+
+  ipcMain.handle('getPotplayerExtraInfo', async (_event, args) => {
+    return await getPotplayerExtraInfo(args)
   })
 }

@@ -1,9 +1,11 @@
 import type { HWND } from '@/types/globals'
+import { logTime } from '@/utils/debug'
 import { removeSuffix } from '@/utils/strings'
 import AsyncLock from 'async-lock'
+import { readdir, readFile } from 'fs/promises'
+import path from 'path'
 import regedit from 'regedit'
 import { getHwndByPidAndTitle, getWindowsByExe, getWindowText, sendMessage } from './windows'
-import { logTime } from '@/utils/debug'
 
 const lock = new AsyncLock()
 
@@ -79,8 +81,48 @@ export async function getVideoPlayStatus(hwnd: HWND): Promise<PlayStatus> {
   }
 }
 
+/**
+ * Reads the files in %APPDATA%\PotPlayerMini64\Playlist\*.dpl
+ * @returns A list of playlists with their name and URL
+ */
+export async function getPlaylists(): Promise<{ name: string; url: string }[]> {
+  const appData = process.env['APPDATA']
+  if (!appData) {
+    console.error('APPDATA is not set')
+    return []
+  }
+  const files = await readdir(path.join(appData, 'PotPlayerMini64', 'Playlist'), {
+    withFileTypes: true
+  })
+  const playlistFiles = files.filter((file) => file.isFile() && file.name.endsWith('.dpl'))
+  const playlists: Awaited<ReturnType<typeof getPlaylists>> = []
+  for (const playlistFile of playlistFiles) {
+    const playlistName = removeSuffix(playlistFile.name, '.dpl')
+    const playlistPath = path.join(playlistFile.parentPath, playlistFile.name)
+    const playlistRaw = await readFile(playlistPath)
+    const lines = playlistRaw.toString().split('\n')
+
+    if (lines[0]?.trim() !== 'DAUMPLAYLIST')
+      console.warn(`Playlist ${playlistPath} is not a valid playlist file`)
+
+    for (const line of lines) {
+      const [key, value] = line.split('=', 2)
+      if (value === undefined) continue
+      if (key === 'playname') {
+        if (value) playlists.push({ name: playlistName, url: value })
+        else console.warn(`Playlist ${playlistPath} has no 'playname'`)
+      }
+    }
+  }
+  return playlists
+}
+
 regedit.setExternalVBSLocation('resources/regedit/vbs')
 
+/**
+ * Reads the URL history from the registry
+ * @returns A list of URLs with their title
+ */
 export async function getStreamHistory(): Promise<({ url: string; title: string } | null)[]> {
   const key = 'HKCU\\Software\\DAUM\\PotPlayerMini64\\UrlHistory'
 

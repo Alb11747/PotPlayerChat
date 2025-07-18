@@ -6,6 +6,17 @@ export function getStreamerFromUrl(url: string): string | null {
   return match ? (match[1] ?? null) : null
 }
 
+export function getTitleFromUrl(url: string): string | null {
+  if (!url || typeof url !== 'string') return null
+  const match = url.match(/\/streams?\/[^/]+\/([^/]+)/)
+  if (!match) return null
+  const titlePath = match[1]
+  if (!titlePath) return null
+  const [title] = titlePath.split('?', 2)
+  if (!title) return null
+  return decodeURIComponent(title)
+}
+
 export function getStartTimeFromTitle(title: string): Date | null {
   if (!title || typeof title !== 'string') return null
 

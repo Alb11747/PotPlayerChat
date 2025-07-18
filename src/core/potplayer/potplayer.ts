@@ -1,14 +1,23 @@
 import type { HWND } from '@/types/globals'
-import { getStreamerFromUrl as getChannelFromUrl, getStartTimeFromTitle } from '@/utils/stream'
-import conf from './config'
+import {
+  getStreamerFromUrl as getChannelFromUrl,
+  getStartTimeFromTitle,
+  getTitleFromUrl
+} from '@/utils/stream'
+import type { Conf } from 'electron-conf/main'
+import { getPlaylists, getStreamHistory, getTotalVideoTime } from '../os/potplayer'
 
 const titleCache: Map<string, { channel: string; startTime: number; endTime?: number } | null> =
   new Map()
 
 const configKey = 'cache:title'
-conf.get(configKey).then((cache) => {
+let config: Conf | null = null
+
+export function initCache(conf: Conf): void {
+  config = conf
+  const cache = conf.get(configKey)
   if (cache) for (const [key, value] of Object.entries(cache)) titleCache.set(key, value)
-})
+}
 
 export async function getPotplayerExtraInfo<
   T extends {
@@ -16,14 +25,14 @@ export async function getPotplayerExtraInfo<
     title: string
   }
 >(instance: T): Promise<(T & { channel: string; startTime: number; endTime: number }) | null> {
-  const title = instance.title
-  const cachedInfo = titleCache.get(title) || null
+  const currentTitle = instance.title
+  const cachedInfo = titleCache.get(currentTitle) || null
   if (cachedInfo) {
     if (cachedInfo.endTime === undefined) {
-      const videoDuration = await window.api.getTotalVideoTime(instance.hwnd)
+      const videoDuration = await getTotalVideoTime(instance.hwnd)
       cachedInfo.endTime = cachedInfo.startTime + videoDuration
-      titleCache.set(title, cachedInfo)
-      conf.set(configKey, titleCache)
+      titleCache.set(currentTitle, cachedInfo)
+      config?.set(configKey, titleCache)
     }
     return {
       ...instance,
@@ -36,47 +45,65 @@ export async function getPotplayerExtraInfo<
   const now = new Date().getTime()
   let newPotPlayerInfo: (T & { channel: string; startTime: number; endTime: number }) | null = null
 
-  const streamHistory = await window.api.getStreamHistory()
-  for (const stream of streamHistory.reverse()) {
-    if (!stream || !stream.url || !stream.title) continue
-    const isCurrentStream = stream.title === title
+  async function processData(data: { url: string; title?: string } | null): Promise<void> {
+    if (!data?.url) return
+    const url = data.url
+    const title = data.title ?? getTitleFromUrl(data.url)
+    if (!title) return
 
-    const channel = getChannelFromUrl(stream.url)
+    const isCurrentStream = title === currentTitle
+
+    const channel = getChannelFromUrl(url)
     if (!channel) {
-      if (isCurrentStream) console.warn('No channel found for URL:', stream.url)
-      continue
+      if (isCurrentStream) console.warn('No channel found for URL:', url)
+      return
     }
 
-    const startTime = getStartTimeFromTitle(stream.title)?.getTime()
+    const startTime = getStartTimeFromTitle(title)?.getTime()
     if (!startTime) {
-      if (isCurrentStream) console.warn('No start time found for title:', stream.title)
-      continue
+      if (isCurrentStream) console.warn('No start time found for title:', title)
+      return
     }
 
     let endTime: number | undefined
     if (isCurrentStream) {
-      const videoDuration = await window.api.getTotalVideoTime(instance.hwnd)
+      const videoDuration = await getTotalVideoTime(instance.hwnd)
       endTime = startTime + videoDuration
     }
 
     const isStreamPossiblyRunning = now - startTime < 2 * 24 * 60 * 60 * 1000
-    const data = { channel, startTime, endTime: !isStreamPossiblyRunning ? endTime : undefined }
-    const existing = titleCache.get(stream.title)
-    if (existing && (existing.channel !== data.channel || existing.startTime !== data.startTime))
-      console.warn('Title cache collision', stream.title, existing, data)
-    titleCache.set(stream.title, data)
+    const cacheData = {
+      channel,
+      startTime,
+      endTime: !isStreamPossiblyRunning ? endTime : undefined
+    }
+    const existing = titleCache.get(title)
+    if (
+      existing &&
+      (existing.channel !== cacheData.channel || existing.startTime !== cacheData.startTime)
+    )
+      console.warn('Title cache collision', title, existing, cacheData)
+    titleCache.set(title, cacheData)
 
     if (isCurrentStream && !newPotPlayerInfo && endTime)
       newPotPlayerInfo = { ...instance, channel, startTime, endTime }
   }
 
-  conf.set(configKey, Object.fromEntries(titleCache.entries()))
+  const playlists = await getPlaylists()
+  for (const playlist of playlists) await processData(playlist)
 
   if (!newPotPlayerInfo) {
-    console.warn('No valid stream found for title:', title)
-    console.debug('Available streams:', streamHistory)
-    return null
+    const streamHistory = await getStreamHistory()
+    for (const stream of streamHistory.reverse()) await processData(stream)
+
+    if (!newPotPlayerInfo) {
+      console.warn('No valid stream found for title:', currentTitle)
+      console.debug('Available playlists:', playlists)
+      console.debug('Available streams:', streamHistory)
+    }
   }
+
+  config?.set(configKey, Object.fromEntries(titleCache.entries()))
 
   return newPotPlayerInfo
 }

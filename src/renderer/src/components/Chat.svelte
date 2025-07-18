@@ -18,7 +18,6 @@
 
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
-  import { getPotplayerExtraInfo } from '../state/potplayer'
   import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../state/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
@@ -76,7 +75,8 @@
     if (!newSelectedPotplayerInstanceInfo) {
       const selectedPotplayerInstance = instances.find((i) => i.selected)
       if (!selectedPotplayerInstance?.hwnd) return
-      newSelectedPotplayerInstanceInfo = await getPotplayerExtraInfo(selectedPotplayerInstance)
+      newSelectedPotplayerInstanceInfo =
+        await window.api.getPotplayerExtraInfo(selectedPotplayerInstance)
     }
 
     selectedPotplayerInfo = newSelectedPotplayerInstanceInfo || {}
@@ -194,7 +194,7 @@
       selectedPotplayerInfo.hwnd = instance.hwnd
       window.api.setSelectedPotPlayerHWND(instance.hwnd).then(resetVideoTimeHistory)
 
-      const currentSelectedPotPlayerInfo = await getPotplayerExtraInfo(instance)
+      const currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
       if (!currentSelectedPotPlayerInfo) return null
 
       await resetVideoTimeHistory()
