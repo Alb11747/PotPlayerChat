@@ -67,20 +67,45 @@
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
-  window.api.onPotPlayerInstancesChanged(async (_: Event, instances) => {
+  async function getSelectedPotplayerInstance(
+    instances: PotPlayerInstance[]
+  ): Promise<PotPlayerInfo | null> {
+    if (instances.length === 1) return instances[0]
+    let selectedPotplayerInstance = instances.find((i) => i.selected)
+    if (selectedPotplayerInstance?.hwnd) return selectedPotplayerInstance
+    const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
+    if (!selectedHwnd) return null
+    return instances.find((i) => i.hwnd === selectedHwnd)
+  }
+
+  async function onPotPlayerInstancesChanged(instances: PotPlayerInstance[]): Promise<void> {
     let newSelectedPotplayerInstanceInfo: PotPlayerInfo | null = null
     if (changingPotPlayerPromise) newSelectedPotplayerInstanceInfo = await changingPotPlayerPromise
     potplayerInstances = instances
 
     if (!newSelectedPotplayerInstanceInfo) {
-      const selectedPotplayerInstance = instances.find((i) => i.selected)
-      if (!selectedPotplayerInstance?.hwnd) return
-      newSelectedPotplayerInstanceInfo =
-        await window.api.getPotplayerExtraInfo(selectedPotplayerInstance)
+      const selectedPotplayerInstance = await getSelectedPotplayerInstance(instances)
+
+      if (
+        selectedPotplayerInstance.hwnd === selectedPotplayerInfo.hwnd &&
+        selectedPotplayerInstance.title === selectedPotplayerInfo.title
+      )
+        return
+
+      newSelectedPotplayerInstanceInfo = await window.api.getPotplayerExtraInfo(
+        $state.snapshot(selectedPotplayerInstance)
+      )
     }
 
     selectedPotplayerInfo = newSelectedPotplayerInstanceInfo || {}
     await chatService.updateVideoInfo(selectedPotplayerInfo)
+  }
+  window.api.onPotPlayerInstancesChanged(async (_: Event, instances) =>
+    onPotPlayerInstancesChanged(instances)
+  )
+  onMount(async () => {
+    potplayerInstances = await window.api.getPotPlayers()
+    onPotPlayerInstancesChanged(potplayerInstances)
   })
 
   window.api.onSetOffset(async (_, { targetTimestamp }: { targetTimestamp: number }) => {
