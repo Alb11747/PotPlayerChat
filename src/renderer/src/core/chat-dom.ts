@@ -637,6 +637,17 @@ export function parseFullMessage(
     }
   }
 
+  // Prevents weird highlighting behavior when searching 'username: '
+  const firstSegment = segments[0]
+  if (
+    firstSegment &&
+    firstSegment.type === 'highlight' &&
+    firstSegment.fullText === MarkType.HighlightEnd
+  ) {
+    processedUsername += firstSegment.fullText
+    segments.shift()
+  }
+
   // Reconstruct segments with emotes and URLs
   if (debug) {
     const msg = segments.map((seg) => seg.fullText).join('')
