@@ -1,8 +1,15 @@
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
-import type { PotPlayerInstance } from '@/core/os/potplayer'
+import type {
+  getCurrentVideoTime,
+  getStreamHistory,
+  getTotalVideoTime,
+  PotPlayerInstance
+} from '@/core/os/potplayer'
+import type { getLinkPreview } from '@/main/links'
 import type { HWND } from '@/types/globals'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { IpcRenderer } from 'electron/renderer'
+import type sanitizeHtml from 'sanitize-html'
 
 declare global {
   interface Window {
@@ -39,24 +46,15 @@ export interface WindowApi {
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>
-  getCurrentVideoTime: (hwnd: HWND) => Promise<number>
-  getTotalVideoTime: (hwnd: HWND) => Promise<number>
-  getStreamHistory: () => Promise<({ url: string; title: string } | null)[]>
+  getCurrentVideoTime: typeof getCurrentVideoTime
+  getTotalVideoTime: typeof getTotalVideoTime
+  getStreamHistory: typeof getStreamHistory
   openUrl: (url: string) => Promise<void>
-  openSearchWindow: ({
-    potplayerInfo,
-    messages,
-    initialSearch
-  }: {
-    potplayerInfo: PotPlayerInfo
-    messages?: TwitchMessage[]
-    initialSearch?: string
-  }) => Promise<void>
-  getLinkPreview: (
-    url: string,
-    chatterinoBaseUrl?: string
-  ) => Promise<{ status: number; thumbnail?: string; tooltip?: string; link: string } | null>
-  sanitizeHtml: (html: string) => Promise<string>
+  openSearchWindow: (args: SearchInfo) => Promise<void>
+  getLinkPreview: typeof getLinkPreview
+  sanitizeHtml: (
+    ...args: Parameters<typeof sanitizeHtml>
+  ) => Promise<ReturnType<typeof sanitizeHtml>>
   onSetOffset: (callback: (event: Event, args: { targetTimestamp: number }) => void) => void
   offSetOffset: (callback: (event: Event, args: { targetTimestamp: number }) => void) => void
   onSetCurrentTime: (callback: (event: Event, time: number) => void) => void
