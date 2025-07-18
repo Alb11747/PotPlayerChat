@@ -120,6 +120,13 @@
     scrollToTarget()
   })
 
+  function isEqualSimple(a: TwitchMessage[], b: TwitchMessage[]): boolean {
+    if (a.length !== b.length) return false
+    if (a[0].getId() !== b[0].getId()) return false
+    if (a[a.length - 1].getId() !== b[b.length - 1].getId()) return false
+    return true
+  }
+
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(potplayerInfo?: PotPlayerInfo): Promise<void> {
     if (chatIntervalId) clearTimeout(chatIntervalId)
@@ -144,7 +151,7 @@
       scrollToBottom = true
       clearTargetElement()
       scrollToTarget()
-    } else if (!isEqual(messages, newMessages)) {
+    } else if (!isEqualSimple(messages, newMessages)) {
       if (!settings.interface.keepScrollPosition) clearTargetElement()
       else {
         ;({ targetElement, targetViewportOffset } = calculateTargetElement(vlistRef, messages))

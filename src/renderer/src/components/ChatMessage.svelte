@@ -165,7 +165,7 @@
     // Get base emotes
     let tempEmotes = await TwitchEmoteService.getEmotes(channelUserId ?? undefined)
     if (tempEmotes && cheerEmotes) {
-      tempEmotes = new Collection(tempEmotes)
+      // tempEmotes = new Collection(tempEmotes) // Don't copy for performance
       for (const [name, emote] of cheerEmotes.entries()) {
         tempEmotes.set(name, emote)
       }
