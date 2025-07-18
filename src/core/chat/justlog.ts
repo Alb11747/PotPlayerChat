@@ -1,5 +1,11 @@
 import { validatePropertiesExist } from '@/utils/objects'
-import { parseIrcMessage, parseIrcMessages } from './irc'
+import { parseIrcMessage } from './irc'
+import {
+  convertRawIrcMessagesToTwitchMessages,
+  TwitchChatMessage,
+  TwitchSystemMessage,
+  type TwitchMessage
+} from './twitch-msg'
 import type {
   AllChannelsJSON,
   Channel,
@@ -12,7 +18,6 @@ import type {
   UserLogList,
   UsernameToIdFunc
 } from './types/justlog'
-import { TwitchChatMessage, TwitchSystemMessage, type TwitchMessage } from './twitch-msg'
 
 export class JustLogAPI {
   public baseApiUrl?: string
@@ -177,7 +182,7 @@ export class JustLogAPI {
 
       if (!rawData || typeof rawData !== 'string') return null
 
-      const messages = this.parseRawMessages(rawData)
+      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
       return { messages }
     } else {
       const responseData = await this.sendRequestJson(
@@ -247,7 +252,7 @@ export class JustLogAPI {
 
       if (!rawData || typeof rawData !== 'string') return null
 
-      const messages = this.parseRawMessages(rawData)
+      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
       return { messages }
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
@@ -312,7 +317,7 @@ export class JustLogAPI {
 
       if (!rawData || typeof rawData !== 'string') return null
 
-      const messages = this.parseRawMessages(rawData)
+      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
       return { messages }
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
@@ -365,7 +370,7 @@ export class JustLogAPI {
 
       if (!rawData || typeof rawData !== 'string') return null
 
-      const messages = this.parseRawMessages(rawData)
+      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
       return { messages }
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
@@ -415,7 +420,7 @@ export class JustLogAPI {
 
       if (!rawData || typeof rawData !== 'string') return null
 
-      const messages = this.parseRawMessages(rawData)
+      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
       return { messages }
     } else {
       const responseData = await this.sendRequestJson(
@@ -478,7 +483,7 @@ export class JustLogAPI {
 
       if (!rawData || typeof rawData !== 'string') return null
 
-      const messages = this.parseRawMessages(rawData)
+      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
       return { messages }
     } else {
       const responseData = await this.sendRequestJson('GET', endpoint, {
@@ -816,21 +821,6 @@ export class JustLogAPI {
   }
 
   // --- Helper methods ---
-
-  private parseRawMessages(rawData: string): TwitchMessage[] {
-    const messages: TwitchMessage[] = []
-
-    for (const msg of parseIrcMessages(rawData)) {
-      if (!msg) continue
-      if (msg.command === 'PRIVMSG') {
-        messages.push(TwitchChatMessage.fromIrcMessage(msg))
-      } else {
-        messages.push(TwitchSystemMessage.fromIrcMessage(msg))
-      }
-    }
-
-    return messages
-  }
 
   private convertJustLogChatMessageToTwitchMessage(chatMessage: JustLogChatMessage): TwitchMessage {
     if (chatMessage.type === 1) {

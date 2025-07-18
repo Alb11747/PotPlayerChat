@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TwitchMessage } from '@core/chat/twitch-msg'
+  import { convertTwitchMessagesToRawIrcMessages, type TwitchMessage } from '@core/chat/twitch-msg'
   import { VList } from 'virtua/svelte'
 
   import { onMount, untrack } from 'svelte'
@@ -221,7 +221,8 @@
     const searchRangeBuffer = 60 * 60 * 1000
     return {
       potplayerInfo: $state.snapshot(selectedPotplayerInfo),
-      messages: messages.length > 0 ? messages.slice(0, 200) : undefined,
+      initialMessagesRaw:
+        messages.length > 0 ? convertTwitchMessagesToRawIrcMessages(messages) : undefined,
       searchRange: settings.search.showAllMessages
         ? {
             startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,

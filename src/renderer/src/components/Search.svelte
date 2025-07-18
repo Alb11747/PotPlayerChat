@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChatService, type LoadingState } from '@/core/chat/twitch-chat'
   import {
+    convertRawIrcMessagesToTwitchMessages,
     TwitchChatMessage,
     TwitchSystemMessage,
     type TwitchMessage
@@ -73,10 +74,11 @@
 
       if (searchInfo.initialSearch) searchQuery = searchInfo.initialSearch
 
-      if (searchInfo.messages) {
-        console.debug('Preloaded messages:', searchInfo.messages.length)
-        loadMessages(searchInfo.messages)
-        initialMessages = messages.slice()
+      if (searchInfo.initialMessagesRaw) {
+        const initialMsgs = convertRawIrcMessagesToTwitchMessages(searchInfo.initialMessagesRaw)
+        console.debug('Preloaded messages:', initialMsgs.length)
+        initialMessages = initialMsgs
+        loadMessages(initialMsgs)
         scrollToInitialMessages()
       }
 

@@ -9,7 +9,6 @@ import type {
 import type { getPotplayerExtraInfo } from '@/core/potplayer/potplayer'
 import type { getLinkPreview } from '@/main/links'
 import type { HWND } from '@/types/globals'
-import type { TwitchMessage } from '@core/chat/twitch-msg'
 import { IpcRenderer } from 'electron/renderer'
 import type sanitizeHtml from 'sanitize-html'
 
@@ -30,7 +29,7 @@ export type PollingIntervals = {
 
 export type SearchInfo = {
   potplayerInfo: PotPlayerInfo
-  messages?: TwitchMessage[]
+  initialMessagesRaw?: string
   initialSearch?: string
   searchRange?: {
     startTime: number
