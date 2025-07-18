@@ -151,7 +151,7 @@
   // Filter messages when search query changes
   $effect(updateFilteredMessages)
   function updateFilteredMessages(): void {
-    if (!searchQuery.trim()) {
+    if (!searchQuery) {
       filteredMessages = []
       return
     }
@@ -178,7 +178,7 @@
 
   // Computed search pattern for highlighting
   const searchPattern = $derived.by(() => {
-    if (!searchQuery.trim()) return undefined
+    if (!searchQuery) return undefined
     if (useRegex || !caseSensitive) {
       try {
         const escapedQuery = useRegex ? searchQuery : RegExp.escape(searchQuery)
@@ -231,7 +231,7 @@
         </label>
       </div>
       <div class="search-stats">
-        {#if searchQuery.trim()}
+        {#if searchQuery}
           {filteredMessages.length} result{filteredMessages.length !== 1 ? 's' : ''} found
         {:else}
           Enter search terms above
@@ -266,7 +266,7 @@
           </button>
         {/snippet}
       </VList>
-    {:else if searchQuery.trim() && filteredMessages.length === 0}
+    {:else if searchQuery && filteredMessages.length === 0}
       <div class="no-results">
         <div class="no-results-icon">🔍</div>
         <div class="no-results-text">No messages found</div>

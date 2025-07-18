@@ -642,7 +642,8 @@ export function parseFullMessage(
   if (
     firstSegment &&
     firstSegment.type === 'highlight' &&
-    firstSegment.fullText === MarkType.HighlightEnd
+    firstSegment.fullText === MarkType.HighlightEnd &&
+    !processedUsername.endsWith(MarkType.HighlightStart)
   ) {
     processedUsername += firstSegment.fullText
     segments.shift()
