@@ -353,6 +353,8 @@
         No PotPlayer info available.<br />
         Try to pause and unpause the video or reopen the video.
       </div>
+    {:else if loadingState?.state === 'chat-not-found'}
+      <div class="chat-message system center">Chat data not found.</div>
     {:else if !selectedPotplayerInfo.hwnd}
       <div class="chat-message system center">No PotPlayer instance selected.</div>
     {:else if !selectedPotplayerInfo.startTime}
