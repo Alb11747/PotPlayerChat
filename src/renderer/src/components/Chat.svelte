@@ -28,7 +28,7 @@
   const urlTracker = new UrlTracker(settings.chat)
 
   let potplayerInstances: PotPlayerInstance[] = $state([])
-  let selectedPotplayerInfo: PotPlayerInfo = $state({})
+  let selectedPotplayerInfo: PotPlayerInfo | null = $state(null)
   let showSettings = $state(false)
   let changingPotPlayerPromise: Promise<PotPlayerInfo | null> | null = $state(null)
 
@@ -87,8 +87,9 @@
       const selectedPotplayerInstance = await getSelectedPotplayerInstance(instances)
 
       if (
-        selectedPotplayerInstance.hwnd === selectedPotplayerInfo.hwnd &&
-        selectedPotplayerInstance.title === selectedPotplayerInfo.title
+        !selectedPotplayerInstance ||
+        (selectedPotplayerInstance.hwnd === selectedPotplayerInfo?.hwnd &&
+          selectedPotplayerInstance.title === selectedPotplayerInfo?.title)
       )
         return
 
@@ -223,10 +224,13 @@
         return null
       }
       autoSelectPotPlayer = false
+      selectedPotplayerInfo = selectedPotplayerInfo || {}
       selectedPotplayerInfo.hwnd = instance.hwnd
       window.api.setSelectedPotPlayerHWND(instance.hwnd).then(resetVideoTimeHistory)
 
-      const currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
+      const currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(
+        $state.snapshot(instance)
+      )
       if (!currentSelectedPotPlayerInfo) return null
 
       await resetVideoTimeHistory()
@@ -251,6 +255,7 @@
 
   function getSearchInfo(): SearchInfo {
     const searchRangeBuffer = 60 * 60 * 1000
+    if (!selectedPotplayerInfo) throw new Error('No selected PotPlayer info')
     return {
       potplayerInfo: $state.snapshot(selectedPotplayerInfo),
       messagesRaw: convertTwitchMessagesToRawIrcMessages(chatService.currentChatData),
@@ -265,6 +270,7 @@
   }
 
   function handleUsernameClick(info: { username: string }): void {
+    if (!selectedPotplayerInfo) return
     window.api.openSearchWindow({
       ...getSearchInfo(),
       initialSearch: `${info.username}: `
@@ -273,6 +279,7 @@
 
   // Handle keyboard shortcuts
   function handleKeydown(event: KeyboardEvent): void {
+    if (!selectedPotplayerInfo) return
     if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
       event.preventDefault()
       window.api.openSearchWindow(getSearchInfo())
@@ -318,9 +325,9 @@
 
     {#each potplayerInstances as inst (inst.hwnd)}
       <button
-        class:selected={inst.hwnd === selectedPotplayerInfo.hwnd}
+        class:selected={inst.hwnd === selectedPotplayerInfo?.hwnd}
         onclick={() => setPotPlayerInstance(inst)}
-        aria-pressed={inst.hwnd === selectedPotplayerInfo.hwnd}
+        aria-pressed={inst.hwnd === selectedPotplayerInfo?.hwnd}
       >
         {inst.title}
       </button>
@@ -358,12 +365,12 @@
         {#snippet children(msg, i)}
           <ChatMessage
             message={msg}
-            videoStartTime={selectedPotplayerInfo.startTime}
-            videoEndTime={selectedPotplayerInfo.endTime}
-            elapsedTime={selectedPotplayerInfo.startTime
+            videoStartTime={selectedPotplayerInfo?.startTime}
+            videoEndTime={selectedPotplayerInfo?.endTime}
+            elapsedTime={selectedPotplayerInfo?.startTime
               ? Math.floor(
                   msg.timestamp -
-                    selectedPotplayerInfo.startTime -
+                    selectedPotplayerInfo?.startTime -
                     settings.chat.timestampOffset -
                     settings.chat._sessionTimestampOffset
                 )
@@ -388,9 +395,9 @@
       </div>
     {:else if loadingState?.state === 'chat-not-found'}
       <div class="chat-message system center">Chat data not found.</div>
-    {:else if !selectedPotplayerInfo.hwnd}
+    {:else if !selectedPotplayerInfo?.hwnd}
       <div class="chat-message system center">No PotPlayer instance selected.</div>
-    {:else if !selectedPotplayerInfo.startTime}
+    {:else if !selectedPotplayerInfo?.startTime}
       <div class="chat-message system center">
         No start time set for the selected PotPlayer instance.
       </div>
