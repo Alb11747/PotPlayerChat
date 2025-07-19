@@ -37,6 +37,7 @@ export interface SevenTVEmote extends SevenTVEmoteBase {
 // Monkey patch SevenTVEmote to support extra data
 const sevenTVEmotePrototype = SevenTVEmoteBase.prototype as unknown as {
   _setup: (this: SevenTVEmote, data: Record<string, unknown>) => void
+  toObject: (this: SevenTVEmote) => object
 }
 
 const originalSevenTVEmoteSetup = sevenTVEmotePrototype._setup
@@ -45,6 +46,14 @@ sevenTVEmotePrototype._setup = function (data) {
   const emote = this as SevenTVEmote
   const flags = typeof data['flags'] === 'number' ? data['flags'] : 0
   emote.zeroWidth = flags & 0b00000001 ? true : false
+}
+
+const originalSevenTVEmoteToObject = sevenTVEmotePrototype.toObject
+sevenTVEmotePrototype.toObject = function () {
+  const emote = this as SevenTVEmote
+  const object = originalSevenTVEmoteToObject.call(emote) as Record<string, unknown>
+  object['zeroWidth'] = emote.zeroWidth
+  return object
 }
 
 export class CheerEmote implements CheermoteDisplayInfo {

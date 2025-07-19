@@ -135,6 +135,11 @@ export namespace TwitchEmoteService {
           await lock.acquire(`emotes-${channelId}`, () => {
             if (fetcher.channels.has(channelId as unknown as string)) return
             const cachedEmotes = fetcher.fromObject(cachedEmotesObjects)
+            for (const [i, emote] of cachedEmotesObjects.entries())
+              if ('zeroWidth' in emote && emote.zeroWidth)
+                (cachedEmotes[i] as unknown as Record<string, unknown>)['zeroWidth'] =
+                  emote.zeroWidth
+
             const channel = fetcher.channels.get(channelId as unknown as string)
             if (channel) {
               for (const emote of cachedEmotes)
