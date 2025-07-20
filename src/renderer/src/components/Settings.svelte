@@ -16,7 +16,7 @@
     window.api.setPollingIntervals($state.snapshot(settings.intervals))
   })
 
-  function resetAllSettings(): void {
+  async function resetAllSettings(): Promise<void> {
     Object.assign(settings, defaultSettings)
     conf.set(settingsConfigKey, $state.snapshot(settings))
   }

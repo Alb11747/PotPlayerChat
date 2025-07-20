@@ -21,6 +21,8 @@ const api: WindowApi = {
   loadDataFile: (...args) => ipcRenderer.invoke('loadDataFile', ...args),
   saveDataFile: (...args) => ipcRenderer.invoke('saveDataFile', ...args),
   loadKeys: (...args) => ipcRenderer.invoke('loadKeys', ...args),
+  getDefaultPollingIntervals: (...args) =>
+    ipcRenderer.invoke('getDefaultPollingIntervals', ...args),
   getPollingIntervals: (...args) => ipcRenderer.invoke('getPollingIntervals', ...args),
   setPollingIntervals: (...args) => ipcRenderer.invoke('setPollingIntervals', ...args),
   getSearchInfo: async () => await searchInfo,

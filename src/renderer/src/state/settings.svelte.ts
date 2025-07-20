@@ -100,6 +100,11 @@ export function removeTemporarySettings(): void {
 }
 
 export const settings: Settings = $state(defaultSettings)
+window.api.getDefaultPollingIntervals().then((defaultIntervals) => {
+  defaultSettings.intervals = defaultIntervals
+  const entries = Object.entries(settings.intervals) as [keyof PollingIntervals, number][]
+  for (const [key, value] of entries) if (!value) settings.intervals[key] = defaultIntervals[key]
+})
 
 export const settingsConfigKey = 'settings'
 conf.get(settingsConfigKey).then((data) => {

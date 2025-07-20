@@ -53,18 +53,22 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
     await updatePotplayerInstances()
   })
 
-  const pollingIntervals: PollingIntervals = {
+  const defaultPollingIntervals: PollingIntervals = {
     potplayerInstances: 5 * 60 * 1000,
     videoTime: 1000,
     activeWindow: 1000
   }
 
+  const pollingIntervals: PollingIntervals = { ...defaultPollingIntervals }
+
+  ipcMain.handle('getDefaultPollingIntervals', () => defaultPollingIntervals)
   ipcMain.handle('getPollingIntervals', () => pollingIntervals)
   ipcMain.handle('setPollingIntervals', (_event, args: Partial<PollingIntervals>) => {
     if (
       args.potplayerInstances &&
       args.potplayerInstances !== pollingIntervals.potplayerInstances
     ) {
+      args.potplayerInstances = Math.max(args.potplayerInstances, 500)
       console.debug(
         `Updating pollingIntervals.potplayerInstances: ${pollingIntervals.potplayerInstances} -> ${args.potplayerInstances}`
       )
@@ -72,6 +76,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
       updatePotplayerInstances()
     }
     if (args.videoTime && args.videoTime !== pollingIntervals.videoTime) {
+      args.videoTime = Math.max(args.videoTime, 500)
       console.debug(
         `Updating pollingIntervals.videoTime: ${pollingIntervals.videoTime} -> ${args.videoTime}`
       )
@@ -79,6 +84,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
       updateCurrentVideoTime()
     }
     if (args.activeWindow && args.activeWindow !== pollingIntervals.activeWindow) {
+      args.activeWindow = Math.max(args.activeWindow, 100)
       console.debug(
         `Updating pollingIntervals.activeWindow: ${pollingIntervals.activeWindow} -> ${args.activeWindow}`
       )
