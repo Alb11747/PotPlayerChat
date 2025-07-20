@@ -139,7 +139,9 @@
     if (!startTime) return
 
     const currentVideoTime = await window.api.getCurrentVideoTime(hwnd)
-    settings.chat._sessionTimestampOffset = targetTimestamp - (startTime + currentVideoTime)
+    const currentOffset = settings.chat.timestampOffset
+    settings.chat._sessionTimestampOffset =
+      targetTimestamp - (startTime + currentVideoTime) - currentOffset
 
     updateChatMessages()
     scrollToBottom = true
