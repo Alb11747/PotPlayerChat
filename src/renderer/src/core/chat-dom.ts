@@ -103,9 +103,9 @@ const markEnds = Object.fromEntries(markData.map(({ start, end }) => [end, start
 
 const PUA_UNICODE_REGEX = new RegExp('[\u{E000}-\u{F8FF}]+', 'gu')
 const HTTP_URL_REGEX =
-  /\bhttps?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)\b/gi
+  /\bhttps?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)\b/gi
 const NON_HTTP_URL_REGEX =
-  /\b[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&//=]*)\b/gi
+  /\b[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b(?:[-a-zA-Z0-9()@:%_+.~#?&//=]*)\b/gi
 
 const highlightStartRegex = new RegExp(MarkType.HighlightStart, 'gu')
 const highlightEndRegex = new RegExp(MarkType.HighlightEnd, 'gu')
