@@ -7,11 +7,11 @@
 
   import { TwitchUserService, clearAll } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
-  import type { PotPlayerInstance } from '@/types/potplayer'
   import {
     calculateTargetElement,
     scrollToTarget as scrollToTargetBase
   } from '@/renderer/src/utils/vlist'
+  import type { PotPlayerInstance } from '@/types/potplayer'
   import type { SearchInfo } from '@/types/preload'
   import { deleteNullishKeysInPlace, isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
@@ -70,6 +70,11 @@
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
+  async function resetVideoTimeHistory(hwnd: HWND | null): Promise<void> {
+    videoTimeHistory.clear()
+    if (hwnd) videoTimeHistory.addSample(await window.api.getCurrentVideoTime(hwnd))
+  }
+
   async function getSelectedPotplayerInstance(
     instances: (PotPlayerInstance & { selected?: boolean })[]
   ): Promise<PotPlayerInstance | null> {
@@ -116,6 +121,9 @@
     } else {
       await chatService.updateVideoInfo(null)
     }
+
+    await resetVideoTimeHistory(selectedPotplayerInfo?.hwnd ?? null)
+    await updateChatMessages()
   }
 
   window.api.onPotPlayerInstancesChanged(async (_: Event, instances) =>
@@ -235,11 +243,6 @@
         scrollToBottom = false
       }
     }
-  }
-
-  async function resetVideoTimeHistory(hwnd: HWND): Promise<void> {
-    videoTimeHistory.clear()
-    videoTimeHistory.addSample(await window.api.getCurrentVideoTime(hwnd))
   }
 
   function setPotPlayerInstance(instanceProxy: PotPlayerInstance | PotPlayerInfo | null): void {
