@@ -49,11 +49,11 @@ export const regExpEscape: (str: string) => string =
  * @returns A map of UTF-16 indices for each UTF-8 index.
  */
 export function utf8IndexToUtf16IndexMap(str: string): Record<number, number> {
-  const map: Array<number> = []
+  const map: Array<number> = [0]
   let utf16Index = 0
   for (const codePoint of str) {
-    map.push(utf16Index)
     utf16Index += codePoint.length
+    map.push(utf16Index)
   }
   return map
 }
