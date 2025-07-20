@@ -21,3 +21,13 @@ export function isSorted<T>(array: T[], compareFn: (a: T, b: T) => number): bool
   }
   return true
 }
+
+export function deleteNullishKeysInPlace<
+  T extends Record<K, unknown>,
+  K extends string | number | symbol
+>(obj: T): Partial<T> {
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === null) delete obj[key as K]
+  }
+  return obj
+}

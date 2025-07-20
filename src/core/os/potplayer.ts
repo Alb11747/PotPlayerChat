@@ -1,11 +1,17 @@
 import type { HWND } from '@/types/globals'
+import type { PotPlayerInstance } from '@/types/potplayer'
 import { logTime } from '@/utils/debug'
 import { removeSuffix } from '@/utils/strings'
 import AsyncLock from 'async-lock'
 import { readdir, readFile } from 'fs/promises'
 import path from 'path'
 import regedit from 'regedit'
-import { getHwndByPidAndTitle, getWindowsByExe, getWindowText, sendMessage } from './windows'
+import {
+  getHwndByPidAndTitle,
+  getWindowsByExe,
+  getWindowText,
+  sendMessage
+} from '@/core/os/windows'
 
 const lock = new AsyncLock()
 
@@ -31,12 +37,6 @@ export function getCurrentVideoTime(hwnd: HWND): Promise<number> {
 
 export function getTotalVideoTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_TOTAL_TIME, 0)
-}
-
-export interface PotPlayerInstance {
-  pid: number
-  hwnd: HWND
-  title: string
 }
 
 export async function getPotPlayerInstances(): Promise<PotPlayerInstance[]> {

@@ -3,37 +3,60 @@ import { escapeIrcText, parseIrcMessages, type IrcMessage } from './irc'
 
 export type TwitchMessage = TwitchChatMessage | TwitchSystemMessage
 
-export class TwitchChatMessage {
+abstract class TwitchBaseMessage {
   public readonly source = 'twitch'
-  public readonly type = 'chat'
+  public readonly type?: 'chat' | 'system'
 
-  public readonly raw: string
-  public readonly tags: Record<string, string>
-  public readonly id: string
-  public readonly timestamp: number
-  public readonly channel: string
-  public readonly username: string
-  public readonly message: string
+  constructor(
+    public readonly raw: string,
+    public readonly tags: Record<string, string>,
+    public readonly timestamp: number
+  ) {}
+
+  public abstract getId(): string
+
+  get bits(): string | undefined {
+    return this.tags['bits']
+  }
+
+  get emotes(): { id: string; startIndex: number; endIndex: number }[] | undefined {
+    const emotesRaw = this.tags['emotes']
+    if (!emotesRaw) return undefined
+
+    // emotes=25:0-4,12-16/1902:6-10;
+    // Split by '/' for each emote id group
+    return emotesRaw.split('/').flatMap((group) => {
+      const [id, ranges] = group.split(':')
+      if (!id || !ranges) return []
+      const emotes: { id: string; startIndex: number; endIndex: number }[] = []
+      for (const range of ranges.split(',')) {
+        const [start, end] = range.split('-').map(Number)
+        if (Number.isNaN(start) || Number.isNaN(end)) continue
+        if (start !== undefined && end !== undefined) {
+          emotes.push({ id, startIndex: start, endIndex: end })
+        }
+      }
+      return emotes
+    })
+  }
+}
+
+export class TwitchChatMessage extends TwitchBaseMessage {
+  public override readonly type = 'chat'
 
   constructor(
     raw: string,
     tags: Record<string, string>,
-    id: string,
+    public readonly id: string,
     timestamp: number,
-    channel: string,
-    username: string,
-    message: string
+    public readonly channel: string,
+    public readonly username: string,
+    public readonly message: string
   ) {
-    this.raw = raw
-    this.tags = tags
-    this.id = id
-    this.timestamp = timestamp
-    this.channel = channel
-    this.username = username
-    this.message = message
+    super(raw, tags, timestamp)
   }
 
-  public getId(): string {
+  public override getId(): string {
     return this.id
   }
 
@@ -65,35 +88,11 @@ export class TwitchChatMessage {
     return TwitchChatMessage.parseBadgeStr(badgesStr)
   }
 
-  get bits(): string | undefined {
-    return this.tags['bits']
-  }
   get clientNonce(): string | undefined {
     return this.tags['client-nonce']
   }
   get color(): string | undefined {
     return this.tags['color']
-  }
-
-  get emotes(): { id: string; startIndex: number; endIndex: number }[] | undefined {
-    const emotesRaw = this.tags['emotes']
-    if (!emotesRaw) return undefined
-
-    // emotes=25:0-4,12-16/1902:6-10;
-    // Split by '/' for each emote id group
-    return emotesRaw.split('/').flatMap((group) => {
-      const [id, ranges] = group.split(':')
-      if (!id || !ranges) return []
-      const emotes: { id: string; startIndex: number; endIndex: number }[] = []
-      for (const range of ranges.split(',')) {
-        const [start, end] = range.split('-').map(Number)
-        if (Number.isNaN(start) || Number.isNaN(end)) continue
-        if (start !== undefined && end !== undefined) {
-          emotes.push({ id, startIndex: start, endIndex: end })
-        }
-      }
-      return emotes
-    })
   }
 
   get firstMsg(): string | undefined {
@@ -192,17 +191,8 @@ export class TwitchChatMessage {
   }
 }
 
-export class TwitchSystemMessage {
-  public readonly source = 'twitch'
-  public readonly type = 'system'
-
-  public readonly raw: string
-  public readonly tags: Record<string, string>
-  public readonly timestamp: number
-  public readonly command?: string
-  public readonly channel: string
-  public readonly message?: string
-  public readonly systemText?: string
+export class TwitchSystemMessage extends TwitchBaseMessage {
+  public override readonly type = 'system'
 
   private tempId: string | undefined
 
@@ -210,21 +200,15 @@ export class TwitchSystemMessage {
     raw: string,
     tags: Record<string, string>,
     timestamp: number,
-    command: string | undefined,
-    channel: string,
-    message: string | undefined,
-    systemText?: string
+    public readonly command: string | undefined,
+    public readonly channel: string,
+    public readonly message: string | undefined,
+    public readonly systemText?: string
   ) {
-    this.raw = raw
-    this.tags = tags
-    this.timestamp = timestamp
-    this.command = command
-    this.channel = channel
-    this.message = message
-    this.systemText = systemText
+    super(raw, tags, timestamp)
   }
 
-  public getId(): string {
+  public override getId(): string {
     if (this.id) return this.id
     if (this.tempId) return this.tempId
     return (this.tempId = `${this.timestamp}-${this.command || 'unknown'}-${this.channel}-${this.message || ''}`)

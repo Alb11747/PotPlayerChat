@@ -3,12 +3,12 @@ import type {
   getCurrentVideoTime,
   getPlaylists,
   getStreamHistory,
-  getTotalVideoTime,
-  PotPlayerInstance
+  getTotalVideoTime
 } from '@/core/os/potplayer'
 import type { getPotplayerExtraInfo } from '@/core/potplayer/potplayer'
 import type { getLinkPreview } from '@/main/links'
 import type { HWND } from '@/types/globals'
+import type { PotPlayerInstance } from '@/types/potplayer'
 import { IpcRenderer } from 'electron/renderer'
 import type sanitizeHtml from 'sanitize-html'
 

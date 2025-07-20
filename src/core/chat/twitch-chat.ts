@@ -1,4 +1,4 @@
-import type { HWND } from '@/types/globals'
+import type { PotPlayerInstance } from '@/types/potplayer'
 import type { WindowApi } from '@/types/preload'
 import { getMessagesBetween, getMessagesForTime, isMessageInMessages } from '@/utils/chat'
 import { logTime } from '@/utils/debug'
@@ -13,10 +13,8 @@ export interface ChatSettings {
   chatMessageLimit: number
 }
 
-export interface PotPlayerInfo {
-  hwnd: HWND
+export interface PotPlayerInfo extends PotPlayerInstance {
   channel: string
-  title: string
   startTime: number
   endTime?: number
 }
@@ -65,7 +63,7 @@ export class ChatService {
   }
 
   public async updateVideoInfo(
-    newPotPlayerInfo: PotPlayerInfo,
+    newPotPlayerInfo: PotPlayerInfo | null,
     loadChatDelay: number = 1000
   ): Promise<boolean> {
     this.currentPotPlayerInfo = newPotPlayerInfo

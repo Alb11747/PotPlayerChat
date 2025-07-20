@@ -1,11 +1,4 @@
 import { validatePropertiesExist } from '@/utils/objects'
-import { parseIrcMessage } from './irc'
-import {
-  convertRawIrcMessagesToTwitchMessages,
-  TwitchChatMessage,
-  TwitchSystemMessage,
-  type TwitchMessage
-} from './twitch-msg'
 import type {
   AllChannelsJSON,
   Channel,
@@ -17,7 +10,14 @@ import type {
   UserLogFile,
   UserLogList,
   UsernameToIdFunc
-} from './types/justlog'
+} from '@/types/justlog'
+import { parseIrcMessage } from './irc'
+import {
+  convertRawIrcMessagesToTwitchMessages,
+  TwitchChatMessage,
+  TwitchSystemMessage,
+  type TwitchMessage
+} from './twitch-msg'
 
 export class JustLogAPI {
   public baseApiUrl?: string

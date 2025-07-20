@@ -1,8 +1,8 @@
 import type { CheerEmote } from '@/core/chat/twitch-emotes'
 import { regExpEscape, removePrefix, utf8IndexToUtf16IndexMap } from '@/utils/strings'
 import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
-import type { TwitchChatMessage } from '@core/chat/twitch-msg'
-import type { Collection } from '@mkody/twitch-emoticons'
+import type { TwitchMessage } from '@core/chat/twitch-msg'
+import type { Collection, Emote } from '@mkody/twitch-emoticons'
 
 /**
  * Escapes HTML special characters in a string.
@@ -203,7 +203,7 @@ type SegmentNoEscape = { fullText: string; text: string } & (
 export type Segment = SegmentNoEscape & { escaped: string }
 
 export function parseFullMessage(
-  messageObj: TwitchChatMessage,
+  messageObj: TwitchMessage,
   {
     twitchEmotes: emotes,
     enableEmotes = true,
@@ -213,7 +213,7 @@ export function parseFullMessage(
     requireHttpInUrl = true,
     debug = true
   }: {
-    twitchEmotes?: Collection<string, TwitchEmote | CheerEmote>
+    twitchEmotes?: Collection<string, Emote | CheerEmote>
     enableEmotes?: boolean
     enableZeroWidthEmotes?: boolean
     showName?: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
@@ -225,11 +225,11 @@ export function parseFullMessage(
   escapedUsername: string
   parsedMessageSegments: Segment[]
 } {
-  const { username, message } = messageObj
+  const { username = '', message = '' } = messageObj
   let processedUsername: string
   let processedMessage: string = message
 
-  if (showName === 'username' || !messageObj.displayName) {
+  if (messageObj.type === 'system' || showName === 'username' || !messageObj.displayName) {
     processedUsername = username || ''
   } else if (
     showName === 'displayName' ||
@@ -300,16 +300,13 @@ export function parseFullMessage(
         if (utf16IndexMap) {
           startIndex = utf16IndexMap[utf8StartIndex]
           endIndex = utf16IndexMap[utf8EndIndexInclusive + 1]
-          if (startIndex === undefined || endIndex === undefined) {
-            console.warn(
-              `Invalid emote index: ${utf8StartIndex} - ${utf8EndIndexInclusive}`,
-              message
-            )
-            continue
-          }
         } else {
           startIndex = utf8StartIndex
           endIndex = utf8EndIndexInclusive + 1
+        }
+        if (startIndex === undefined || endIndex === undefined) {
+          console.warn(`Invalid emote index: ${utf8StartIndex} - ${utf8EndIndexInclusive}`, message)
+          continue
         }
 
         const emoteName = message.slice(startIndex, endIndex)

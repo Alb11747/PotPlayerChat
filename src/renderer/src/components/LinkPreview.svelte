@@ -65,13 +65,26 @@
 
   let sanitizedTooltipHtml: string | null = $state(null)
 
-  $effect(async () => {
+  $effect(() => {
     if (!preview?.tooltip) return
-    sanitizedTooltipHtml = await sanitizeTooltip(preview.tooltip)
+    sanitizeTooltip(preview.tooltip).then((html) => {
+      sanitizedTooltipHtml = html
+    })
   })
 
-  const preview = $derived(previewState.urlTrackerInstance?.getCachedPreview(previewState.url))
+  const preview = $derived(
+    previewState?.url && previewState?.urlTrackerInstance
+      ? previewState.urlTrackerInstance.getCachedPreview(previewState.url)
+      : null
+  )
   const emoteSegment = $derived(previewState.emoteSegment)
+  const emote = $derived(emoteSegment?.emote)
+  const source = $derived.by(() => {
+    if (emote && 'type' in emote) return emote.type
+    if (emoteSegment && 'source' in emoteSegment) return emoteSegment.source
+    if (emote && 'source' in emote) return emote.source
+    return null
+  })
 
   async function sanitizeTooltip(tooltip: string): Promise<string> {
     return await window.api.sanitizeHtml(tooltip)
@@ -92,12 +105,12 @@
         {#if preview && 200 <= preview.status && preview.status < 300}
           <div class="p-2 flex-1">
             {#if preview.thumbnail}
-              {#if !previewState.urlTrackerInstance.isFailedUrl(preview.link)}
+              {#if previewState?.urlTrackerInstance?.isFailedUrl(preview.link) === false}
                 <img
                   src={preview.thumbnail}
                   onload={updatePosition}
                   onerror={() => {
-                    previewState.urlTrackerInstance.markFailedUrl(preview.link)
+                    previewState?.urlTrackerInstance?.markFailedUrl(preview.link)
                   }}
                   alt="Link preview"
                   class="preview-thumbnail"
@@ -138,15 +151,17 @@
       <div class="p-3 flex flex-col items-center gap-2">
         <img src={emoteSegment.url} alt={emoteSegment.name} class="emote-preview-image" />
         <div class="emote-preview-name">{emoteSegment.name}</div>
-        <div class="emote-preview-source">
-          Source: {emoteSegment.emote.type || emoteSegment.source || emoteSegment.emote.source}
-        </div>
-        {#if emoteSegment.emote.ownerName}
+        {#if source}
+          <div class="emote-preview-source">
+            Source: {source}
+          </div>
+        {/if}
+        {#if 'ownerName' in emoteSegment.emote && emoteSegment.emote.ownerName}
           <div class="emote-preview-author">
             Author: {emoteSegment.emote.ownerName}
           </div>
         {/if}
-        {#if emoteSegment.attachedEmotes && emoteSegment.attachedEmotes.length > 0}
+        {#if emoteSegment.type === 'emote' && emoteSegment.attachedEmotes && emoteSegment.attachedEmotes.length > 0}
           <span class="emote-preview-divider"></span>
           <div class="zero-width-emotes-grid">
             {#each emoteSegment.attachedEmotes?.entries() || [] as [index, attachedEmote] (index)}

@@ -1,6 +1,7 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": ["src/renderer/src/**/*", "src/utils/**/*", "src/core/chat/**/*", "src/types/**/*"],
+  "include": ["src/renderer/src/**/*", "src/core/**/*", "src/utils/**/*", "src/types/**/*"],
+  "exclude": ["node_modules", "dist", "out"],
   "compilerOptions": {
     "composite": true,
     "allowJs": true,

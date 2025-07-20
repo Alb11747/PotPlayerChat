@@ -3,12 +3,12 @@ import {
   getPlaylists,
   getPotPlayerInstances,
   getStreamHistory,
-  getTotalVideoTime,
-  type PotPlayerInstance
+  getTotalVideoTime
 } from '@/core/os/potplayer'
 import { getForegroundWindow } from '@/core/os/windows'
 import { getPotplayerExtraInfo, initCache } from '@/core/potplayer/potplayer'
 import type { HWND } from '@/types/globals'
+import { type PotPlayerInstance } from '@/types/potplayer'
 import type { PollingIntervals } from '@/types/preload'
 import { isEqual } from '@/utils/objects'
 import { RecentValue } from '@/utils/state'

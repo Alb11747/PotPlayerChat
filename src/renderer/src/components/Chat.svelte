@@ -7,13 +7,13 @@
 
   import { TwitchUserService, clearAll } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
-  import type { PotPlayerInstance } from '@/core/os/potplayer'
+  import type { PotPlayerInstance } from '@/types/potplayer'
   import {
     calculateTargetElement,
     scrollToTarget as scrollToTargetBase
   } from '@/renderer/src/utils/vlist'
   import type { SearchInfo } from '@/types/preload'
-  import { isEqual } from '@/utils/objects'
+  import { deleteNullishKeysInPlace, isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
 
   import type { HWND } from '@/types/globals'
@@ -28,16 +28,18 @@
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker(settings.chat)
 
+  type SelectedPotplayerInfo = PotPlayerInfo | (PotPlayerInstance & Partial<PotPlayerInfo>)
+  let selectedPotplayerInfo: SelectedPotplayerInfo | null = $state(null)
+
   let potplayerInstances: PotPlayerInstance[] = $state([])
-  let selectedPotplayerInfo: PotPlayerInfo | null = $state(null)
   let showSettings = $state(false)
-  let changingPotPlayerPromise: Promise<PotPlayerInfo | null> | null = $state(null)
+  let changingPotPlayerPromise: Promise<SelectedPotplayerInfo | null> | null = $state(null)
 
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
 
   let vlistRef: VList<TwitchMessage> | null = $state(null)
-  let targetElement: TwitchMessage = $state(null)
+  let targetElement: TwitchMessage | null = $state(null)
   let targetViewportOffset: number = $state(0)
   let scrollToBottom = $state(true)
 
@@ -69,21 +71,23 @@
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
   async function getSelectedPotplayerInstance(
-    instances: PotPlayerInstance[]
-  ): Promise<PotPlayerInfo | null> {
-    if (instances.length === 1) return instances[0]
+    instances: (PotPlayerInstance & { selected?: boolean })[]
+  ): Promise<PotPlayerInstance | null> {
+    if (instances.length === 1) return instances[0]!
     let selectedPotplayerInstance = instances.find((i) => i.selected)
     if (selectedPotplayerInstance?.hwnd) return selectedPotplayerInstance
     const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
     if (!selectedHwnd) return null
-    return instances.find((i) => i.hwnd === selectedHwnd)
+    return instances.find((i) => i.hwnd === selectedHwnd) ?? null
   }
 
   let isPotplayerUpdated: boolean = false
-  async function onPotPlayerInstancesChanged(instances: PotPlayerInstance[]): Promise<void> {
+  async function onPotPlayerInstancesChanged(
+    instances: (PotPlayerInstance & { selected?: boolean })[]
+  ): Promise<void> {
     isPotplayerUpdated = true
 
-    let newSelectedPotplayerInstanceInfo: PotPlayerInfo | null = null
+    let newSelectedPotplayerInstanceInfo: SelectedPotplayerInfo | null = null
     if (changingPotPlayerPromise) newSelectedPotplayerInstanceInfo = await changingPotPlayerPromise
     potplayerInstances = instances
 
@@ -102,8 +106,16 @@
       )
     }
 
-    selectedPotplayerInfo = newSelectedPotplayerInstanceInfo || {}
-    await chatService.updateVideoInfo(selectedPotplayerInfo)
+    selectedPotplayerInfo = newSelectedPotplayerInstanceInfo
+    if (selectedPotplayerInfo && selectedPotplayerInfo.channel && selectedPotplayerInfo.startTime) {
+      await chatService.updateVideoInfo({
+        ...selectedPotplayerInfo,
+        channel: selectedPotplayerInfo.channel,
+        startTime: selectedPotplayerInfo.startTime
+      })
+    } else {
+      await chatService.updateVideoInfo(null)
+    }
   }
 
   window.api.onPotPlayerInstancesChanged(async (_: Event, instances) =>
@@ -112,7 +124,7 @@
 
   // Update potplayer instances if data is not available immediately
   onMount(() => {
-    let id = setTimeout(async () => {
+    let id: ReturnType<typeof setTimeout> | null = setTimeout(async () => {
       id = null
       if (isPotplayerUpdated) return
       potplayerInstances = await window.api.getPotPlayers()
@@ -123,9 +135,10 @@
 
   window.api.onSetOffset(async (_, { targetTimestamp }: { targetTimestamp: number }) => {
     if (!selectedPotplayerInfo) return
-    const startTime = selectedPotplayerInfo.startTime
-    const currentVideoTime = await window.api.getCurrentVideoTime(selectedPotplayerInfo.hwnd)
+    const { hwnd, startTime } = selectedPotplayerInfo
+    if (!startTime) return
 
+    const currentVideoTime = await window.api.getCurrentVideoTime(hwnd)
     settings.chat._sessionTimestampOffset = targetTimestamp - (startTime + currentVideoTime)
 
     updateChatMessages()
@@ -135,13 +148,14 @@
 
   function isEqualSimple(a: TwitchMessage[], b: TwitchMessage[]): boolean {
     if (a.length !== b.length) return false
-    if (a[0].getId() !== b[0].getId()) return false
-    if (a[a.length - 1].getId() !== b[b.length - 1].getId()) return false
+    // Assume the messages are consecutive in time
+    if (a[0]?.getId() !== b[0]?.getId()) return false
+    if (a[a.length - 1]?.getId() !== b[b.length - 1]?.getId()) return false
     return true
   }
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
-  async function updateChatMessages(potplayerInfo?: PotPlayerInfo): Promise<void> {
+  async function updateChatMessages(potplayerInfo?: SelectedPotplayerInfo | null): Promise<void> {
     if (chatIntervalId) clearTimeout(chatIntervalId)
     chatIntervalId = null
 
@@ -159,14 +173,14 @@
       lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
 
     if (!isEqual(selectedPotplayerInfo, potplayerInfo)) {
-      selectedPotplayerInfo = potplayerInfo
+      selectedPotplayerInfo = potplayerInfo ?? null
       messages = newMessages
       scrollToBottom = true
       clearTargetElement()
       scrollToTarget()
     } else if (!isEqualSimple(messages, newMessages)) {
       if (!settings.interface.keepScrollPosition) clearTargetElement()
-      else {
+      else if (vlistRef) {
         ;({ targetElement, targetViewportOffset } = calculateTargetElement(vlistRef, messages))
       }
       messages = newMessages
@@ -226,10 +240,10 @@
     videoTimeHistory.addSample(await window.api.getCurrentVideoTime(hwnd))
   }
 
-  function setPotPlayerInstance(instanceProxy: PotPlayerInstance | null): void {
+  function setPotPlayerInstance(instanceProxy: PotPlayerInstance | PotPlayerInfo | null): void {
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
       const instance = $state.snapshot(instanceProxy)
-      const { hwnd, channel, startTime } = instance ?? {}
+      const hwnd = instance?.hwnd
 
       showSettings = false
       scrollToBottom = true
@@ -239,18 +253,18 @@
         return null
       }
       autoSelectPotPlayer = false
-      selectedPotplayerInfo = selectedPotplayerInfo || {}
-      selectedPotplayerInfo.hwnd = hwnd
+      if (!selectedPotplayerInfo) selectedPotplayerInfo = instanceProxy
+      else selectedPotplayerInfo.hwnd = hwnd
       window.api.setSelectedPotPlayerHWND(hwnd).then(() => resetVideoTimeHistory(hwnd))
 
-      let currentSelectedPotPlayerInfo
+      let currentSelectedPotPlayerInfo: PotPlayerInfo | null = null
 
-      if (!channel || !startTime) {
+      if (!('channel' in instance) || !('startTime' in instance)) {
         currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
         if (!currentSelectedPotPlayerInfo) return null
       } else {
         window.api.getPotplayerExtraInfo(instance).then((info) => {
-          if (info) Object.assign(instanceProxy, info)
+          if (info) instanceProxy = info
         })
         currentSelectedPotPlayerInfo = instance
       }
@@ -278,8 +292,10 @@
   function getSearchInfo(): SearchInfo {
     const searchRangeBuffer = 60 * 60 * 1000
     if (!selectedPotplayerInfo) throw new Error('No selected PotPlayer info')
+    if (!selectedPotplayerInfo.startTime || !selectedPotplayerInfo.endTime)
+      throw new Error('No start or end time set for the selected PotPlayer instance')
     return {
-      potplayerInfo: $state.snapshot(selectedPotplayerInfo),
+      potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
       messagesRaw: convertTwitchMessagesToRawIrcMessages(chatService.currentChatData),
       initialMessagesRaw: convertTwitchMessagesToRawIrcMessages(messages),
       searchRange: settings.search.showAllMessages
@@ -292,7 +308,12 @@
   }
 
   function handleUsernameClick(info: { username: string }): void {
-    if (!selectedPotplayerInfo) return
+    if (
+      !selectedPotplayerInfo ||
+      !selectedPotplayerInfo.startTime ||
+      !selectedPotplayerInfo.endTime
+    )
+      return
     window.api.openSearchWindow({
       ...getSearchInfo(),
       initialSearch: `${info.username}: `
@@ -306,6 +327,7 @@
       event.preventDefault()
       window.api.openSearchWindow(getSearchInfo())
     } else if ((event.ctrlKey && event.key === 'r') || (event.altKey && event.key === 'r')) {
+      if (!selectedPotplayerInfo.channel) return
       TwitchUserService.getUserIdByName(selectedPotplayerInfo.channel).then((userId) => {
         clearAll(userId ?? undefined)
         reloadChatMessageServices()
@@ -322,9 +344,7 @@
   const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
 
   $effect(() => {
-    for (const [key, value] of Object.entries(reloadServicesFunctionMap)) {
-      if (value === undefined) delete reloadServicesFunctionMap[key]
-    }
+    deleteNullishKeysInPlace(reloadServicesFunctionMap)
   })
 
   function reloadChatMessageServices(): void {
@@ -379,10 +399,8 @@
       <VList
         bind:this={vlistRef}
         data={messages}
-        getKey={(_, i) => messages[i].getId()}
-        initialTopMostItemIndex={messages.length - 1}
+        getKey={(_, i) => messages[i]?.getId() ?? i}
         onscroll={handleScroll}
-        ssrCount={20}
       >
         {#snippet children(msg, i)}
           <ChatMessage
@@ -398,7 +416,7 @@
                 )
               : undefined}
             {urlTracker}
-            usernameColorMap={chatService.usernameColorCache}
+            usernameColorMap={chatService.usernameColorCache ?? undefined}
             onUrlClick={handleUrlClick}
             onUsernameClick={handleUsernameClick}
             onEmoteLoad={scrollToTarget}

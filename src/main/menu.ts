@@ -25,7 +25,7 @@ function createContextMenu(mainWindow: BrowserWindow, window: BrowserWindow): vo
         const chatMessages = elements.filter((element) =>
           element.classList.contains('chat-message')
         )
-        return chatMessages.length === 1 ? chatMessages[0]!.getAttribute('timestamp') : null
+        return chatMessages.length === 1 ? chatMessages[0]!.getAttribute('data-timestamp') : null
       }
 
       const timestamp = (await parameters.frame.executeJavaScript(

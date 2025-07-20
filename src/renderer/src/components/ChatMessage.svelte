@@ -6,14 +6,13 @@
     TwitchBadgeService,
     TwitchCheerEmoteService,
     TwitchEmoteService,
-    TwitchUserService,
-    type CheerEmote
+    TwitchUserService
   } from '@core/chat/twitch-api'
-  import type { NativeTwitchEmote } from '@core/chat/twitch-emotes'
+  import type { CheerEmote, NativeTwitchEmote } from '@core/chat/twitch-emotes'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { Collection, TwitchEmote, type Emote } from '@mkody/twitch-emoticons'
 
-  import type { CheermoteDisplayInfo, HelixChatBadgeVersion } from '@twurple/api'
+  import type { HelixChatBadgeVersion } from '@twurple/api'
   import { onMount } from 'svelte'
   import conf from '../state/config'
   import {
@@ -81,7 +80,9 @@
 
   let channelUserId: number | null = $state(null)
   let badges: [string, HelixChatBadgeVersion][] = $state([])
-  const badgeInfo: Map<string, string> | undefined = $derived(message?.badgeInfo)
+  const badgeInfo: Map<string, string> | undefined = $derived(
+    message.type === 'chat' ? message.badgeInfo : undefined
+  )
   const subscriberMonths: string | undefined = $derived(badgeInfo?.get('subscriber'))
   let cheerEmotes: Map<string, CheerEmote> | null = $state(null)
 
@@ -127,17 +128,17 @@
   }
 
   async function loadCheerEmotes(): Promise<void> {
-    if (!message?.bits || !channelUserId) return
+    if (!message.bits || !channelUserId || !message.message) return
     const msgBits = parseInt(message.bits, 10)
     if (isNaN(msgBits)) return
 
-    const cheerEmotesMap: Map<string, CheermoteDisplayInfo> = new Map()
+    const cheerEmotesMap: Map<string, CheerEmote> = new Map()
 
     // Extract cheer emote names from message
-    for (const word of message.message.matchAll(/(?:^|\s)([^\W\d]+\d+)(?:\s|$)/g)) {
-      const match = /([^\W\d]+)(\d+)/.exec(word)
-      if (!match) continue
-      const [emote, name, amount] = match
+    for (const [, emote, name, amount] of message.message.matchAll(
+      /(?:^|\s)(([^\W\d]+)(\d+))(?:\s|$)/g
+    )) {
+      if (!emote || !name || !amount) continue
       const bits = parseInt(amount, 10)
       if (isNaN(bits)) continue // Skip if bits is not a number
       if (bits > msgBits) continue // Skip if bits is greater than message bits
@@ -159,18 +160,20 @@
     message.type === 'system' ? message?.getSystemTextAndMessage() || [] : []
   )
 
-  let emotes: Collection<string, Emote> | null = $state(null)
+  let emotes: Collection<string, Emote | CheerEmote> | null = $state(null)
 
   async function loadEmotes(): Promise<void> {
     // Get base emotes
-    let tempEmotes = await TwitchEmoteService.getEmotes(channelUserId ?? undefined)
+    const tempEmotes = await TwitchEmoteService.getEmotes(channelUserId ?? undefined)
     if (tempEmotes && cheerEmotes) {
-      // tempEmotes = new Collection(tempEmotes) // Don't copy for performance
+      const allEmotes = new Collection(tempEmotes) as Collection<string, Emote | CheerEmote>
       for (const [name, emote] of cheerEmotes.entries()) {
-        tempEmotes.set(name, emote)
+        allEmotes.set(name, emote)
       }
+      emotes = allEmotes
+    } else {
+      emotes = tempEmotes
     }
-    emotes = tempEmotes
   }
 
   // Highlight search terms in the message and parse emotes and parse emotes
@@ -187,7 +190,7 @@
     })
   })
 
-  function mouseUpdateEmote(segment: Segment & { type: 'emote' }): void {
+  function mouseUpdateEmote(segment: Segment & { type: 'emote' | 'cheer' }): void {
     if (enableEmotePreviews && !currentPreviewType()) previewState.emoteSegment = segment
   }
 
@@ -202,8 +205,8 @@
 
 <div
   class="chat-message"
-  class:first-message={message.firstMsg === '1'}
-  timestamp={message.timestamp}
+  class:first-message={message.type === 'chat' && message.firstMsg === '1'}
+  data-timestamp={message.timestamp}
 >
   {#if settings.interface.showTimestamps}
     <span class="chat-time color-muted mr-0.5">
@@ -257,7 +260,9 @@
   {#if parsedMessageSegments}
     <span
       class="chat-text whitespace-pre-wrap"
-      style={isActionMessage(message.message) ? `color: ${message.color}` : ''}
+      style={message.type === 'chat' && isActionMessage(message.message)
+        ? `color: ${message.color}`
+        : ''}
     >
       {#each parsedMessageSegments.entries() || [] as [index, segment] ((message.getId(), index))}
         {#if (segment.type === 'emote' || segment.type === 'cheer') && !urlTracker.isFailedUrl(segment.url)}
@@ -283,24 +288,25 @@
                 if (enableEmotePreviews) onMouseLeavePreviewElement()
               }}
             />
-            {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), index, attachedIndex))}
-              {#if !urlTracker.isFailedUrl(segment.url)}
-                <img
-                  class="chat-emote zero-width-emote"
-                  src={attachedEmote.url}
-                  alt={attachedEmote.alt}
-                  loading="lazy"
-                  decoding="async"
-                  onload={() => {
-                    if (onEmoteLoad) onEmoteLoad(attachedEmote.emote)
-                  }}
-                  onerror={() => {
-                    urlTracker.markFailedUrl(attachedEmote.url)
-                  }}
-                />
-              {/if}
-            {/each}
-            {#if segment.type === 'cheer'}
+            {#if segment.type === 'emote'}
+              {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), index, attachedIndex))}
+                {#if !urlTracker.isFailedUrl(segment.url)}
+                  <img
+                    class="chat-emote zero-width-emote"
+                    src={attachedEmote.url}
+                    alt={attachedEmote.alt}
+                    loading="lazy"
+                    decoding="async"
+                    onload={() => {
+                      if (onEmoteLoad) onEmoteLoad(attachedEmote.emote)
+                    }}
+                    onerror={() => {
+                      urlTracker.markFailedUrl(attachedEmote.url)
+                    }}
+                  />
+                {/if}
+              {/each}
+            {:else if segment.type === 'cheer'}
               <span class="bits">
                 {segment.bits}
               </span>
@@ -323,7 +329,6 @@
           </button>
         {:else if segment.type === 'mention'}
           <span
-            type="button"
             role="link"
             tabindex="-1"
             class="chat-username"

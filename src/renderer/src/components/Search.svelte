@@ -8,6 +8,7 @@
   } from '@/core/chat/twitch-msg'
   import type {} from '@/types/preload'
   import { isRangeInMessages } from '@/utils/chat'
+  import { regExpEscape } from '@/utils/strings'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
@@ -35,6 +36,7 @@
       newObj.formattedMessage = newObj.getSystemText()
       return newObj
     }
+    throw new Error('Invalid message type')
   }
 
   const urlTracker = new UrlTracker(settings.chat)
@@ -45,8 +47,8 @@
 
   let loadedMessages = $state(false)
   const seenMessages = new Set()
+  let initialMessages: TwitchMessage[] = $state.raw([])
   let messages: TwitchMessageFormatted[] = $state.raw([])
-  let initialMessages: TwitchMessageFormatted[] = $state.raw([])
   let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
 
   const initialMessageIds = $derived.by(() => new Set(initialMessages.map((msg) => msg.getId())))
@@ -55,7 +57,9 @@
   let vlistRef: VList<TwitchMessageFormatted> | null = $state(null)
 
   // Load all messages when component mounts
-  $effect(loadAllMessages)
+  $effect(() => {
+    loadAllMessages()
+  })
 
   // Focus search input when component mounts
   onMount(() => {
@@ -95,11 +99,17 @@
       if (!searchInfo.potplayerInfo?.hwnd) {
         const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
         const instances = await window.api.getPotPlayers()
-        searchInfo.potplayerInfo = instances.find((p) => p.hwnd === selectedHwnd)
-        if (!searchInfo.potplayerInfo?.hwnd) {
+        const potplayerInstance = instances.find((p) => p.hwnd === selectedHwnd)
+        if (!potplayerInstance?.hwnd) {
+          console.error('No PotPlayer instance found')
+          return
+        }
+        const potplayerInfo = await window.api.getPotplayerExtraInfo(potplayerInstance)
+        if (!potplayerInfo) {
           console.error('No PotPlayer info available')
           return
         }
+        searchInfo.potplayerInfo = potplayerInfo
       }
 
       const currentTime = await window.api.getCurrentVideoTime(searchInfo.potplayerInfo.hwnd)
@@ -181,7 +191,7 @@
     if (!searchQuery) return undefined
     if (useRegex || !caseSensitive) {
       try {
-        const escapedQuery = useRegex ? searchQuery : RegExp.escape(searchQuery)
+        const escapedQuery = useRegex ? searchQuery : regExpEscape(searchQuery)
         return new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi')
       } catch (error) {
         // Invalid regex, fall back to string search
@@ -194,10 +204,6 @@
 
   function handleKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') window.close()
-  }
-
-  function jumpToMessage(): void {
-    // TODO: Send message to main window to jump to specific time
   }
 
   // Handle URL click
@@ -245,21 +251,17 @@
       <VList
         bind:this={vlistRef}
         data={filteredMessages}
-        getKey={(_, i) => filteredMessages[i].getId()}
+        getKey={(_, i) => filteredMessages[i]?.getId() ?? i}
         itemSize={80}
       >
         {#snippet children(msg)}
-          <button
-            type="button"
-            class="search-result-item"
-            onclick={() => jumpToMessage(msg.timestamp)}
-          >
+          <button type="button" class="search-result-item">
             <ChatMessage
               message={msg}
               videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
               videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
               {urlTracker}
-              usernameColorMap={chatService.usernameColorCache}
+              usernameColorMap={chatService.usernameColorCache ?? undefined}
               searchQuery={searchPattern}
               onUrlClick={handleUrlClick}
             />

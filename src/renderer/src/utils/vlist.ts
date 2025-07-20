@@ -5,8 +5,8 @@ import type { VList } from 'virtua/svelte'
 const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp - b.timestamp
 
 export function calculateTargetElement<T extends { getId: () => string; timestamp: number }>(
-  vlist?: VList<T>,
-  messages?: T[]
+  vlist: VList<T> | null | undefined,
+  messages: T[] | null | undefined
 ): { targetElement: T | null; targetViewportOffset: number } {
   if (!vlist || !messages || messages.length === 0)
     return { targetElement: null, targetViewportOffset: 0 }
@@ -40,15 +40,15 @@ export function calculateTargetElement<T extends { getId: () => string; timestam
 }
 
 export function scrollToTarget<T extends { getId: () => string; timestamp: number }>(
-  vlist: VList<T>,
-  messages: T[],
+  vlist: VList<T> | null | undefined,
+  messages: T[] | null | undefined,
   {
     targetElement = null,
     targetViewportOffset = 0,
     scrollToBottom = false
   }: { targetElement: T | null; targetViewportOffset: number; scrollToBottom: boolean }
 ): void {
-  if (!vlist) return
+  if (!vlist || !messages) return
 
   if (scrollToBottom) {
     vlist.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
