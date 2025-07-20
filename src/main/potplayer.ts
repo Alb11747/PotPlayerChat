@@ -183,8 +183,10 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
   mainWindow.on('ready-to-show', startInterval)
   mainWindow.on('show', startInterval)
   mainWindow.on('restore', startInterval)
+  mainWindow.on('focus', startInterval)
   mainWindow.on('hide', stopInterval)
   mainWindow.on('minimize', stopInterval)
+  mainWindow.on('close', stopInterval)
 
   ipcMain.handle('getPotplayers', async () => {
     await updatePotplayerInstances()

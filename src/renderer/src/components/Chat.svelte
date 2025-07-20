@@ -78,7 +78,10 @@
     return instances.find((i) => i.hwnd === selectedHwnd)
   }
 
+  let isPotplayerUpdated: boolean = false
   async function onPotPlayerInstancesChanged(instances: PotPlayerInstance[]): Promise<void> {
+    isPotplayerUpdated = true
+
     let newSelectedPotplayerInstanceInfo: PotPlayerInfo | null = null
     if (changingPotPlayerPromise) newSelectedPotplayerInstanceInfo = await changingPotPlayerPromise
     potplayerInstances = instances
@@ -101,12 +104,20 @@
     selectedPotplayerInfo = newSelectedPotplayerInstanceInfo || {}
     await chatService.updateVideoInfo(selectedPotplayerInfo)
   }
+
   window.api.onPotPlayerInstancesChanged(async (_: Event, instances) =>
     onPotPlayerInstancesChanged(instances)
   )
-  onMount(async () => {
-    potplayerInstances = await window.api.getPotPlayers()
-    onPotPlayerInstancesChanged(potplayerInstances)
+
+  // Update potplayer instances if data is not available immediately
+  onMount(() => {
+    let id = setTimeout(async () => {
+      id = null
+      if (isPotplayerUpdated) return
+      potplayerInstances = await window.api.getPotPlayers()
+      onPotPlayerInstancesChanged(potplayerInstances)
+    }, 500)
+    return () => id && clearTimeout(id)
   })
 
   window.api.onSetOffset(async (_, { targetTimestamp }: { targetTimestamp: number }) => {

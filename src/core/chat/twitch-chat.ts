@@ -2,7 +2,7 @@ import type { HWND } from '@/types/globals'
 import type { WindowApi } from '@/types/preload'
 import { getMessagesBetween, getMessagesForTime } from '@/utils/chat'
 import { logTime } from '@/utils/debug'
-import { isEqual, isSorted } from '@/utils/objects'
+import { isSorted } from '@/utils/objects'
 import AsyncLock from 'async-lock'
 import { JustLogAPI } from './justlog'
 import { TwitchUserService } from './twitch-api'
@@ -68,18 +68,19 @@ export class ChatService {
     newPotPlayerInfo: PotPlayerInfo,
     loadChatDelay: number = 1000
   ): Promise<boolean> {
-    if (isEqual(this.currentPotPlayerInfo, newPotPlayerInfo)) return false
-
     this.currentPotPlayerInfo = newPotPlayerInfo
     this.currentChatData = []
-    this.state.state = 'loading'
-    this.state.errorMessage = ''
 
-    if (loadChatDelay > 0) {
-      this.loadChatCached()
-      setTimeout(this.loadChat.bind(this), loadChatDelay)
-    } else if (loadChatDelay === 0) {
-      await this.loadChat()
+    if (loadChatDelay >= 0) {
+      this.state.state = 'loading'
+      this.state.errorMessage = ''
+
+      if (loadChatDelay > 0) {
+        this.loadChatCached()
+        setTimeout(this.loadChat.bind(this), loadChatDelay)
+      } else if (loadChatDelay === 0) {
+        await this.loadChat()
+      }
     }
     return true
   }
@@ -137,73 +138,87 @@ export class ChatService {
       const endDate = new Date(videoEndTime + datePadding)
 
       const datesToFetch = this.generateDatesInRange(startDate, endDate)
-      const fetchPromises = datesToFetch.map(async (date: Date): Promise<TwitchMessage[]> => {
-        const cacheKey = this.getCacheKey(channel, date)
-        const year = date.getUTCFullYear()
-        const month = date.getUTCMonth() + 1
-        const day = date.getUTCDate()
+      const datesToFetchData = datesToFetch
+        .map((date: Date) => {
+          const cacheKey = this.getCacheKey(channel, date)
+          if (this.chatCache[cacheKey]) return null
+          const year = date.getUTCFullYear()
+          const month = date.getUTCMonth() + 1
+          const day = date.getUTCDate()
+          return { date, cacheKey, year, month, day }
+        })
+        .filter((d) => d !== null)
 
-        return await this.fetchLock.acquire(cacheKey, async () => {
-          const cached = this.chatCache[cacheKey]
-          let cachedMessages: TwitchMessage[] | null = null
-          let lastTimestamp: number | null = null
-          if (cached && cached.messages) {
-            cachedMessages = cached.messages
-            lastTimestamp =
-              cachedMessages.length > 0
-                ? (cachedMessages[cachedMessages.length - 1]?.timestamp ?? null)
-                : null
-          }
+      // If all dates are cached, we can skip fetching
+      if (datesToFetchData.length === 0) {
+        this.state.state = 'loaded'
+        return
+      }
 
-          if (cachedMessages !== null && cached?.complete) return cachedMessages
+      const fetchPromises = datesToFetchData.map(
+        async ({ date, cacheKey, year, month, day }): Promise<TwitchMessage[]> => {
+          return await this.fetchLock.acquire(cacheKey, async () => {
+            const cached = this.chatCache[cacheKey]
+            let cachedMessages: TwitchMessage[] | null = null
+            let lastTimestamp: number | null = null
+            if (cached && cached.messages) {
+              cachedMessages = cached.messages
+              lastTimestamp =
+                cachedMessages.length > 0
+                  ? (cachedMessages[cachedMessages.length - 1]?.timestamp ?? null)
+                  : null
+            }
 
-          try {
-            // Check for new data if the cached data is incomplete (fetched on the same day)
-            const complete = !this.isSameUTCDate(date, new Date())
+            if (cachedMessages !== null && cached?.complete) return cachedMessages
 
-            const data = await logTime(
-              `Fetching chat data for ${channel} on ${year}/${month}/${day}`,
-              () =>
-                this.justLogApi.getChannelLogsByDate(
-                  {
-                    channelStr: channel,
-                    year,
-                    month,
-                    day
-                  },
-                  { baseUrl: this.settings.chat.justlogUrl }
+            try {
+              // Check for new data if the cached data is incomplete (fetched on the same day)
+              const complete = !this.isSameUTCDate(date, new Date())
+
+              const data = await logTime(
+                `Fetching chat data for ${channel} on ${year}/${month}/${day}`,
+                () =>
+                  this.justLogApi.getChannelLogsByDate(
+                    {
+                      channelStr: channel,
+                      year,
+                      month,
+                      day
+                    },
+                    { baseUrl: this.settings.chat.justlogUrl }
+                  )
+              )
+
+              if (data == null) {
+                console.warn(`Failed to fetch chat for ${year}/${month}/${day}`)
+                this.chatCache[cacheKey] = { messages: [], complete }
+                return cachedMessages || []
+              }
+
+              const newMessages = data.messages
+              this.updateCaches(newMessages)
+
+              let messages: TwitchMessage[]
+              if (cachedMessages && lastTimestamp !== null) {
+                messages = this.mergeMessageArrays(cachedMessages, newMessages, lastTimestamp)
+                const newCount = messages.length - cachedMessages.length
+                console.debug(
+                  `Fetched ${newCount} new lines from ${year}/${month}/${day} (total: ${messages.length})`
                 )
-            )
-
-            if (data == null) {
-              console.warn(`Failed to fetch chat for ${year}/${month}/${day}`)
-              this.chatCache[cacheKey] = { messages: [], complete }
+              } else {
+                messages = newMessages
+                console.debug(`Fetched ${newMessages.length} lines from ${year}/${month}/${day}`)
+              }
+              messages.sort((a, b) => a.timestamp - b.timestamp)
+              this.chatCache[cacheKey] = { messages, complete }
+              return messages
+            } catch (error) {
+              console.warn(`Error fetching chat for ${year}/${month}/${day}:`, error)
               return cachedMessages || []
             }
-
-            const newMessages = data.messages
-            this.updateCaches(newMessages)
-
-            let messages: TwitchMessage[]
-            if (cachedMessages && lastTimestamp !== null) {
-              messages = this.mergeMessageArrays(cachedMessages, newMessages, lastTimestamp)
-              const newCount = messages.length - cachedMessages.length
-              console.debug(
-                `Fetched ${newCount} new lines from ${year}/${month}/${day} (total: ${messages.length})`
-              )
-            } else {
-              messages = newMessages
-              console.debug(`Fetched ${newMessages.length} lines from ${year}/${month}/${day}`)
-            }
-            messages.sort((a, b) => a.timestamp - b.timestamp)
-            this.chatCache[cacheKey] = { messages, complete }
-            return messages
-          } catch (error) {
-            console.warn(`Error fetching chat for ${year}/${month}/${day}:`, error)
-            return cachedMessages || []
-          }
-        })
-      })
+          })
+        }
+      )
 
       this.state.state = 'loading'
       console.debug(`Loading chat for ${channel} starting from ${new Date(videoStartTime)}`)
