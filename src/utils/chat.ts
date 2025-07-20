@@ -47,3 +47,15 @@ export function isRangeInMessages<T extends { timestamp: number }>(
   const endIdx = bounds.le(messages, { timestamp: endTime } as T, cmp)
   return startIdx !== -1 && endIdx !== -1 && startIdx < endIdx
 }
+
+export function isMessageInMessages<T extends { timestamp: number; getId: () => string }>(
+  messages: T[],
+  message: T
+): boolean {
+  const startIdx = bounds.ge(messages, { timestamp: message.timestamp } as T, cmp)
+  const endIdx = bounds.le(messages, { timestamp: message.timestamp } as T, cmp)
+
+  const id = message.getId()
+  for (let i = startIdx; i <= endIdx; i++) if (messages[i]?.getId() === id) return true
+  return false
+}

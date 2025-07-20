@@ -1,6 +1,6 @@
 import type { HWND } from '@/types/globals'
 import type { WindowApi } from '@/types/preload'
-import { getMessagesBetween, getMessagesForTime } from '@/utils/chat'
+import { getMessagesBetween, getMessagesForTime, isMessageInMessages } from '@/utils/chat'
 import { logTime } from '@/utils/debug'
 import { isSorted } from '@/utils/objects'
 import AsyncLock from 'async-lock'
@@ -94,33 +94,72 @@ export class ChatService {
     const { channel, startTime, endTime } = this.currentPotPlayerInfo
     if (!endTime) return false
 
+    const loadStartMark = window.performance.mark(
+      `loadChatCachedStart - ${window.performance.now()}`
+    )
+
     const datePadding = ChatService.loadChatTimePadding
     const startDate = new Date(startTime - datePadding)
     const endDate = new Date(endTime + datePadding)
     const datesToFetch = this.generateDatesInRange(startDate, endDate)
 
-    let allCached = true
-    const allMessages: TwitchMessage[] = []
-    for (const date of datesToFetch) {
-      const cacheKey = this.getCacheKey(channel, date)
-      const cached = this.chatCache[cacheKey]
-      if (cached && cached.messages) {
-        allMessages.push(...cached.messages)
-      } else {
-        allCached = false
+    try {
+      if (datesToFetch.length === 0) return false
+
+      let allCached = true
+
+      // Check if the current chat data is already cached
+      const allCachedMessageData: TwitchMessage[][] = []
+      for (const date of datesToFetch) {
+        const cacheKey = this.getCacheKey(channel, date)
+        const cached = this.chatCache[cacheKey]
+        if (cached && cached.messages) {
+          allCachedMessageData.push(cached.messages)
+        } else {
+          allCached = false
+        }
       }
+
+      // Check if the current chat data is already cached
+      if (allCached && allCachedMessageData.length > 0) {
+        const firstMessageData = allCachedMessageData[0]!
+        const lastMessageData = allCachedMessageData[allCachedMessageData.length - 1]!
+        const firstMessage = firstMessageData[0]!
+        const lastMessage = lastMessageData[lastMessageData.length - 1]!
+        if (
+          isMessageInMessages(this.currentChatData, firstMessage) &&
+          isMessageInMessages(this.currentChatData, lastMessage)
+        ) {
+          // Loaded data is consecutive, so the messages are already loaded
+          return true
+        }
+      }
+
+      const allMessages: TwitchMessage[] = allCachedMessageData.flat()
+      console.assert(
+        isSorted(allMessages, (a, b) => a.timestamp - b.timestamp),
+        'Chat messages are not sorted'
+      )
+      this.currentChatData = allMessages
+      return allCached
+    } finally {
+      const loadEndMark = window.performance.mark(`loadChatCachedEnd - ${window.performance.now()}`)
+      const loadMeasure = window.performance.measure(
+        'loadChatCached',
+        loadStartMark.name,
+        loadEndMark.name
+      )
+      if (loadMeasure.duration > 20)
+        console.warn(
+          `loadChatCached for ${channel} on`,
+          datesToFetch,
+          `took too long:`,
+          loadMeasure
+        )
     }
-
-    console.assert(
-      isSorted(allMessages, (a, b) => a.timestamp - b.timestamp),
-      'Chat messages are not sorted'
-    )
-
-    this.currentChatData = allMessages
-    return allCached
   }
 
-  async loadChat(): Promise<void> {
+  async loadChat(loadDates: Date[] | null = null): Promise<void> {
     const { hwnd, channel, startTime: videoStartTime, endTime } = this.currentPotPlayerInfo ?? {}
     if (!hwnd || !channel || !videoStartTime) {
       this.state.state = 'no-potplayer-info'
@@ -137,7 +176,7 @@ export class ChatService {
       const startDate = new Date(videoStartTime - datePadding)
       const endDate = new Date(videoEndTime + datePadding)
 
-      const datesToFetch = this.generateDatesInRange(startDate, endDate)
+      const datesToFetch = loadDates ?? this.generateDatesInRange(startDate, endDate)
       const datesToFetchData = datesToFetch
         .map((date: Date) => {
           const cacheKey = this.getCacheKey(channel, date)
@@ -420,6 +459,10 @@ export class ChatService {
         endTime: endDate.getTime(),
         complete: isComplete
       }
+
+      // Load chat for the prefetched dates
+      this.loadChat(datesToFetch)
+
       return true
     })
   }

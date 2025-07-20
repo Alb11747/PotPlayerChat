@@ -16,6 +16,7 @@
   import { isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
 
+  import type { HWND } from '@/types/globals'
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
   import { settings } from '../state/settings.svelte'
@@ -220,35 +221,45 @@
     }
   }
 
-  function setPotPlayerInstance(instance: PotPlayerInstance | null): void {
-    async function resetVideoTimeHistory(): Promise<void> {
-      videoTimeHistory.clear()
-      videoTimeHistory.addSample(await window.api.getCurrentVideoTime(instance.hwnd))
-    }
+  async function resetVideoTimeHistory(hwnd: HWND): Promise<void> {
+    videoTimeHistory.clear()
+    videoTimeHistory.addSample(await window.api.getCurrentVideoTime(hwnd))
+  }
 
+  function setPotPlayerInstance(instanceProxy: PotPlayerInstance | null): void {
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
+      const instance = $state.snapshot(instanceProxy)
+      const { hwnd, channel, startTime } = instance ?? {}
+
       showSettings = false
       scrollToBottom = true
-      if (!instance?.hwnd) {
+      if (!hwnd) {
         autoSelectPotPlayer = true
         window.api.setSelectedPotPlayerHWND(null)
         return null
       }
       autoSelectPotPlayer = false
       selectedPotplayerInfo = selectedPotplayerInfo || {}
-      selectedPotplayerInfo.hwnd = instance.hwnd
-      window.api.setSelectedPotPlayerHWND(instance.hwnd).then(resetVideoTimeHistory)
+      selectedPotplayerInfo.hwnd = hwnd
+      window.api.setSelectedPotPlayerHWND(hwnd).then(() => resetVideoTimeHistory(hwnd))
 
-      const currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(
-        $state.snapshot(instance)
-      )
-      if (!currentSelectedPotPlayerInfo) return null
+      let currentSelectedPotPlayerInfo
 
-      await resetVideoTimeHistory()
+      if (!channel || !startTime) {
+        currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
+        if (!currentSelectedPotPlayerInfo) return null
+      } else {
+        window.api.getPotplayerExtraInfo(instance).then((info) => {
+          if (info) Object.assign(instanceProxy, info)
+        })
+        currentSelectedPotPlayerInfo = instance
+      }
+
+      await resetVideoTimeHistory(hwnd)
       await chatService.updateVideoInfo(currentSelectedPotPlayerInfo)
       await updateChatMessages(currentSelectedPotPlayerInfo)
 
-      await resetVideoTimeHistory()
+      await resetVideoTimeHistory(hwnd)
       return currentSelectedPotPlayerInfo
     })()
 
