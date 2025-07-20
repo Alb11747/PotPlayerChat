@@ -9,6 +9,7 @@ import { initContextMenus } from './menu'
 import { initPotplayerHandlers } from './potplayer'
 import { initSecurity } from './security'
 import { initStorage } from './storage'
+import { initAutoUpdater } from './update'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -31,7 +32,10 @@ function createWindow(): void {
   initLinks()
   initPotplayerHandlers(mainWindow, conf)
 
-  mainWindow.on('ready-to-show', mainWindow.show)
+  mainWindow.on('ready-to-show', () => {
+    mainWindow.show()
+    initAutoUpdater()
+  })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
