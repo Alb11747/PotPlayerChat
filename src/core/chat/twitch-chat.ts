@@ -118,20 +118,8 @@ export class ChatService {
         }
       }
 
-      // Check if the current chat data is already cached
-      if (allCached && allCachedMessageData.length > 0) {
-        const firstMessageData = allCachedMessageData[0]!
-        const lastMessageData = allCachedMessageData[allCachedMessageData.length - 1]!
-        const firstMessage = firstMessageData[0]!
-        const lastMessage = lastMessageData[lastMessageData.length - 1]!
-        if (
-          isMessageInMessages(this.currentChatData, firstMessage) &&
-          isMessageInMessages(this.currentChatData, lastMessage)
-        ) {
-          // Loaded data is consecutive, so the messages are already loaded
-          return true
-        }
-      }
+      // If the new data is already loaded, we can skip loading it
+      if (!this.shouldLoadNewData(allCachedMessageData)) return true
 
       const allMessages: TwitchMessage[] = allCachedMessageData.flat()
       console.assert(
@@ -260,21 +248,20 @@ export class ChatService {
       this.state.state = 'loading'
       console.debug(`Loading chat for ${channel} starting from ${new Date(videoStartTime)}`)
       const chatDataArrays = await Promise.all(fetchPromises)
+
       if (
         this.currentPotPlayerInfo?.channel !== channel ||
         this.currentPotPlayerInfo?.startTime !== videoStartTime
       ) {
-        console.debug(`Chat data for ${channel} was updated while loading, skipping`)
-        return
-      }
-
-      const { channel: currentChannel, startTime: currentStartTime } = this.currentPotPlayerInfo
-      if (currentChannel !== channel || currentStartTime !== videoStartTime) {
-        console.warn(
+        console.debug(
           `Chat data for ${channel} at ${new Date(videoStartTime)} was updated while loading, skipping`
         )
         return
       }
+
+      // If the new data is already loaded, we can skip loading it
+      if (!this.shouldLoadNewData(chatDataArrays)) return
+
       const allMessages = chatDataArrays.flat()
 
       console.assert(
@@ -463,6 +450,23 @@ export class ChatService {
 
       return true
     })
+  }
+
+  private shouldLoadNewData(batchedData: TwitchMessage[][]): boolean {
+    // Check if the current chat data is already cached
+    const currentData = this.currentChatData
+    if (currentData.length > 0) {
+      const firstMessagesData = batchedData[0]!
+      const lastMessagesData = batchedData[batchedData.length - 1]!
+      const firstMessage = firstMessagesData[0]!
+      const lastMessage = lastMessagesData[lastMessagesData.length - 1]!
+      // Loaded data is consecutive, so we only need to check if the first and last messages are in the current data
+      return !(
+        isMessageInMessages(currentData, firstMessage) &&
+        isMessageInMessages(currentData, lastMessage)
+      )
+    }
+    return true
   }
 
   public getLoadedMessages(): TwitchMessage[] {
