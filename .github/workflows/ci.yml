@@ -1,0 +1,78 @@
+# This workflow is the entry point for all CI processes.
+# It is from here that all other workflows are launched.
+name: Entry CI
+on:
+  workflow_call:
+    inputs:
+      distribution-channel:
+        description: Distribution channel for release. It can be `beta`, `alpha` or any string.
+        type: string
+        required: true
+
+concurrency:
+  group: ${{github.workflow}}-${{ github.ref }}-${{inputs.distribution-channel}}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  prepare:
+    name: Prepare data for build
+    runs-on: ubuntu-latest
+    outputs:
+      APP_VERSION: ${{ steps.APP_VERSION.outputs.APP_VERSION }}
+      COMMIT_TIMESTAMP: ${{ steps.COMMIT_TIMESTAMP.outputs.COMMIT_TIMESTAMP }}
+      APP_FULL_VERSION: ${{ steps.APP_FULL_VERSION.outputs.APP_FULL_VERSION }}
+      RELEASE_TAG: ${{ steps.RELEASE_TAG.outputs.RELEASE_TAG }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: COMMIT_TIMESTAMP
+        run: echo "COMMIT_TIMESTAMP=$(git show -s --format=%ct ${{ github.sha }})" >> $GITHUB_OUTPUT
+      - id: GIT_HASH
+        run: echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - id: APP_VERSION
+        run: echo "APP_VERSION=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
+      - id: APP_FULL_VERSION
+        run: |
+          echo "APP_FULL_VERSION=${{ steps.APP_VERSION.outputs.APP_VERSION }}-${{ steps.GIT_HASH.outputs.GIT_HASH }}" >> $GITHUB_OUTPUT
+      - id: RELEASE_TAG
+        shell: bash
+        run: |
+          if [[ "${{ inputs.distribution-channel }}" == "stable" ]]; then
+            echo "RELEASE_TAG=${{ steps.APP_VERSION.outputs.APP_VERSION }}" >> $GITHUB_OUTPUT
+          else
+            echo "RELEASE_TAG=${{ steps.APP_FULL_VERSION.outputs.APP_FULL_VERSION }}" >> $GITHUB_OUTPUT
+          fi
+      - run: |
+          echo "- \`COMMIT_TIMESTAMP\`: ${{ steps.COMMIT_TIMESTAMP.outputs.COMMIT_TIMESTAMP }}" >> $GITHUB_STEP_SUMMARY
+          echo "- \`GIT_HASH\`: ${{ steps.GIT_HASH.outputs.GIT_HASH }}" >> $GITHUB_STEP_SUMMARY
+          echo "- \`APP_VERSION\`: ${{ steps.APP_VERSION.outputs.APP_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- \`APP_FULL_VERSION\`: ${{ steps.APP_FULL_VERSION.outputs.APP_FULL_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- \`RELEASE_TAG\`: ${{ steps.RELEASE_TAG.outputs.RELEASE_TAG }}" >> $GITHUB_STEP_SUMMARY
+
+  compile:
+    needs:
+      - prepare
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/compile.yml
+    with:
+      app-version: ${{ needs.prepare.outputs.APP_FULL_VERSION }}
+      distribution-channel: ${{inputs.distribution-channel}}
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    needs:
+      - prepare
+      - compile
+    uses: ./.github/workflows/deploy.yml
+    with:
+      distribution-channel: ${{ inputs.distribution-channel }}
+      app-version: ${{ needs.prepare.outputs.RELEASE_TAG }}
