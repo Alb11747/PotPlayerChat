@@ -1,0 +1,61 @@
+name: Compile and test
+
+on:
+  workflow_call:
+    inputs:
+      app-version:
+        required: true
+        type: string
+      distribution-channel:
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: 'bash'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  NODE_NO_WARNINGS: 1
+  npm_config_audit: false
+  npm_config_fund: false
+
+jobs:
+  typecheck:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm run typecheck --if-present
+
+  compile:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: npm version "${{inputs.app-version}}" --no-git-tag-version
+      - run: npm run compile -- -p never
+        env:
+          VITE_DISTRIBUTION_CHANNEL: ${{inputs.distribution-channel}}
+          VITE_GIT_HASH: ${{ github.sha }}
+          APP_VERSION: ${{inputs.app-version}}
+
+      - run: npm run test --if-present
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/root*, dist/latest*.yml"
+
+      - name: Upload compiled app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{inputs.distribution-channel}}
+          path: dist

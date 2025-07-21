@@ -1,4 +1,4 @@
-# potplayerchat
+# PotPlayerChat
 
 An Electron application with Svelte and TypeScript
 
@@ -11,13 +11,13 @@ An Electron application with Svelte and TypeScript
 ### Install
 
 ```bash
-$ npm install
+npm install
 ```
 
 ### Development
 
 ```bash
-$ npm run dev
+npm run dev
 ```
 
 ### Build
