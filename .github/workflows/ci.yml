@@ -72,7 +72,7 @@ jobs:
       attestations: write
     uses: ./.github/workflows/compile.yml
     with:
-      app-version: ${{ needs.prepare.outputs.APP_FULL_VERSION }}
+      app-version: ${{ needs.prepare.outputs.RELEASE_TAG }}
       distribution-channel: ${{inputs.distribution-channel}}
     secrets: inherit
 
