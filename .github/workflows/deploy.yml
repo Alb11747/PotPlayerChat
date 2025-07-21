@@ -36,6 +36,6 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - run: gh release create v${{inputs.app-version}} dist/*.exe --repo ${{github.repository}} --prerelease ${{inputs.prerelease}}
+      - run: gh release create v${{inputs.app-version}} dist/*.exe --repo ${{github.repository}} --prerelease=${{inputs.prerelease}}
         env:
           GH_TOKEN: ${{ github.token }}
