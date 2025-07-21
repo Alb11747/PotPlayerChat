@@ -10,6 +10,7 @@ import { initPotplayerHandlers } from './potplayer'
 import { initSecurity } from './security'
 import { initStorage } from './storage'
 import { initAutoUpdater } from './update'
+import { initLog } from './log'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -22,6 +23,8 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  initLog(mainWindow)
 
   const conf = new Conf()
   conf.registerRendererListener()

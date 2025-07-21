@@ -25,7 +25,7 @@ const longTimeUnits: Record<string, { singular: string; plural: string }> = {
 }
 
 export function millifyTimedelta(
-  time: number,
+  timeSeconds: number,
   {
     precision = 's',
     maxUnits = 2,
@@ -33,7 +33,7 @@ export function millifyTimedelta(
     long = false
   }: { precision?: string; maxUnits?: number; excludedUnits?: string[]; long?: boolean } = {}
 ): string {
-  let seconds = time
+  let seconds = timeSeconds
   if (seconds < 0) {
     return '-' + millifyTimedelta(-seconds, { precision, maxUnits, excludedUnits, long })
   } else if (seconds === 0) {
@@ -66,7 +66,7 @@ export function millifyTimedelta(
 
   if (timeChunks.length) {
     if (seconds > 0) {
-      const value = Math.floor(seconds)
+      const value = Math.floor(seconds / (timeUnitsToSeconds[precision] ?? 1))
       if (long) {
         const unitName =
           value === 1 ? longTimeUnits[precision]!.singular : longTimeUnits[precision]!.plural

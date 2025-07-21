@@ -3,6 +3,18 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { exposeConf } from 'electron-conf/preload'
 import { contextBridge, ipcRenderer } from 'electron/renderer'
 
+ipcRenderer.on('log', (_, { messages, level }) => {
+  if (level === 'error') {
+    console.error(...messages)
+  } else if (level === 'warn') {
+    console.warn(...messages)
+  } else if (level === 'debug') {
+    console.debug(...messages)
+  } else {
+    console.log(...messages)
+  }
+})
+
 exposeConf()
 
 let searchInfo: Promise<SearchInfo | null> | SearchInfo = new Promise((resolve) => {
