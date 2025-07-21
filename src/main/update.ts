@@ -9,5 +9,6 @@ export function getAutoUpdater(): AppUpdater {
 export function initAutoUpdater(conf: Conf): void {
   const autoUpdater = getAutoUpdater()
   autoUpdater.allowPrerelease = conf.get('prerelease', false) as boolean
+  if (autoUpdater.allowPrerelease) console.debug('Allowing prerelease updates')
   autoUpdater.checkForUpdatesAndNotify()
 }
