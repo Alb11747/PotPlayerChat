@@ -13,14 +13,41 @@ import {
   HelixChatBadgeVersion,
   HelixCheermoteList
 } from '@twurple/api'
+import { type TwitchApiCallFetchOptions } from '@twurple/api-call'
 import type { CheermoteFormat } from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
 import type { HelixCheermoteData } from '@twurple/api/lib/interfaces/endpoints/bits.external'
 import type { HelixChatBadgeVersionData } from '@twurple/api/lib/interfaces/endpoints/chat.external'
-import { AppTokenAuthProvider } from '@twurple/auth'
+import {
+  AppTokenAuthProvider,
+  type AccessTokenMaybeWithUserId,
+  type AccessTokenWithUserId,
+  type AuthProvider
+} from '@twurple/auth'
 import { getRawData } from '@twurple/common'
 import AsyncLock from 'async-lock'
 import { Conf } from 'electron-conf/renderer'
 import { CheerEmote } from './twitch-emotes'
+
+class NoAuthProvider implements AuthProvider {
+  constructor(public clientId: string) {}
+
+  authorizationType?: string | undefined
+  getCurrentScopesForUser(): string[] {
+    return []
+  }
+  getAccessTokenForUser(): Promise<AccessTokenWithUserId | null> {
+    return Promise.resolve(null)
+  }
+  getAnyAccessToken(): Promise<AccessTokenMaybeWithUserId> {
+    return Promise.resolve({
+      accessToken: '',
+      refreshToken: '',
+      scope: [],
+      expiresIn: 0,
+      obtainmentTimestamp: 0
+    })
+  }
+}
 
 const apiPromise = (async () => {
   const keys = await window.api.loadKeys()
@@ -29,7 +56,14 @@ const apiPromise = (async () => {
     return null
   }
   return new ApiClient({
-    authProvider: new AppTokenAuthProvider(keys.twitch.clientId, keys.twitch.clientSecret)
+    authProvider: keys.twitch.clientSecret
+      ? new AppTokenAuthProvider(keys.twitch.clientId, keys.twitch.clientSecret)
+      : new NoAuthProvider(keys.twitch.clientId),
+    fetchOptions: {
+      headers: {
+        'Client-ID': keys.twitch.clientId
+      }
+    } as RequestInit as unknown as TwitchApiCallFetchOptions
   })
 })()
 
@@ -61,7 +95,8 @@ export namespace TwitchUserService {
    * Get a Twitch user ID from a username
    */
   export async function getUserIdByName(username: string): Promise<string | null> {
-    return lock.acquire(`userid:${username}`, async () => {
+    if (userIdCache.has(username)) return userIdCache.get(username) ?? null
+    return await lock.acquire(`userid:${username}`, async () => {
       await loadCachePromise
       if (userIdCache.has(username)) return userIdCache.get(username) ?? null
 

@@ -9,6 +9,11 @@ on:
       distribution-channel:
         required: true
         type: string
+    secrets:
+      TWITCH_CLIENT_ID:
+        required: false
+      TWITCH_CLIENT_SECRET:
+        required: false
 
 permissions:
   contents: write
@@ -31,6 +36,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write Twitch keys JSON
+        run: |
+          $json = @"
+          {
+          "clientId": "$env:TWITCH_CLIENT_ID",
+          "clientSecret": "$env:TWITCH_CLIENT_SECRET"
+          }
+          "@
+          New-Item -ItemType Directory -Path resources -Force | Out-Null
+          Set-Content -Path resources\twitch-keys.json -Value $json -Encoding UTF8
+        shell: pwsh
+        if: ${{ env.TWITCH_CLIENT_ID }}
+        env:
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -50,7 +71,7 @@ jobs:
 
       - uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "dist/*.exe"
+          subject-path: 'dist/*.*'
 
       - name: Upload compiled app
         uses: actions/upload-artifact@v4

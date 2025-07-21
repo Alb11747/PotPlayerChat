@@ -10,6 +10,7 @@ import { initPotplayerHandlers } from './potplayer'
 import { initSecurity } from './security'
 import { initStorage } from './storage'
 import { initAutoUpdater } from './update'
+import { initLog } from './log'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -23,6 +24,8 @@ function createWindow(): void {
     }
   })
 
+  initLog(mainWindow)
+
   const conf = new Conf()
   conf.registerRendererListener()
 
@@ -34,7 +37,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
-    initAutoUpdater()
+    initAutoUpdater(conf)
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

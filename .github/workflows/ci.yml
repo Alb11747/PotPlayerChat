@@ -8,6 +8,16 @@ on:
         description: Distribution channel for release. It can be `beta`, `alpha` or any string.
         type: string
         required: true
+      deploy:
+        description: Whether to deploy the build.
+        type: boolean
+        required: false
+        default: true
+      prerelease:
+        description: Whether to deploy a prerelease.
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ${{github.workflow}}-${{ github.ref }}-${{inputs.distribution-channel}}
@@ -41,10 +51,10 @@ jobs:
       - id: RELEASE_TAG
         shell: bash
         run: |
-          if [[ "${{ inputs.distribution-channel }}" == "stable" ]]; then
-            echo "RELEASE_TAG=${{ steps.APP_VERSION.outputs.APP_VERSION }}" >> $GITHUB_OUTPUT
-          else
+          if [[ ${{ inputs.prerelease }} == true ]]; then
             echo "RELEASE_TAG=${{ steps.APP_FULL_VERSION.outputs.APP_FULL_VERSION }}" >> $GITHUB_OUTPUT
+          else
+            echo "RELEASE_TAG=${{ steps.APP_VERSION.outputs.APP_VERSION }}" >> $GITHUB_OUTPUT
           fi
       - run: |
           echo "- \`COMMIT_TIMESTAMP\`: ${{ steps.COMMIT_TIMESTAMP.outputs.COMMIT_TIMESTAMP }}" >> $GITHUB_STEP_SUMMARY
@@ -64,9 +74,10 @@ jobs:
     with:
       app-version: ${{ needs.prepare.outputs.APP_FULL_VERSION }}
       distribution-channel: ${{inputs.distribution-channel}}
+    secrets: inherit
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ inputs.deploy }}
     permissions:
       contents: write
     needs:
@@ -76,3 +87,4 @@ jobs:
     with:
       distribution-channel: ${{ inputs.distribution-channel }}
       app-version: ${{ needs.prepare.outputs.RELEASE_TAG }}
+      prerelease: ${{ inputs.prerelease }}

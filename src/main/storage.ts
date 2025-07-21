@@ -28,7 +28,7 @@ export async function saveDataFile<T = unknown>(subpath: string, value: T): Prom
 }
 
 const lock = new AsyncLock()
-const keysCache: { twitch?: { clientId: string; clientSecret: string } | null } = {}
+const keysCache: { twitch?: { clientId: string; clientSecret?: string } | null } = {}
 
 export function initStorage(): void {
   const ipcMain = electron.ipcMain
@@ -43,16 +43,30 @@ export function initStorage(): void {
   })
 
   ipcMain.handle('loadKeys', async () => {
+    const twitchClientId = process.env['TWITCH_CLIENT_ID']
+    const twitchClientSecret = process.env['TWITCH_CLIENT_SECRET']
+    if (twitchClientId) {
+      keysCache.twitch = {
+        clientId: twitchClientId,
+        clientSecret: twitchClientSecret
+      }
+      return keysCache
+    }
+
     return await lock.acquire('keysCache', async () => {
       if (keysCache.twitch === undefined) {
-        const twitchKeys = (await loadDataFile<{ clientId: string; clientSecret: string }>(
+        const twitchKeys = await loadDataFile<{ clientId?: string; clientSecret?: string }>(
           'twitch-keys.json'
-        )) || {
-          clientId: '',
-          clientSecret: ''
-        }
-        if (twitchKeys.clientId) keysCache.twitch = twitchKeys
-        else keysCache.twitch = null
+        )
+        if (twitchKeys?.clientId)
+          keysCache.twitch = {
+            clientId: twitchKeys.clientId,
+            clientSecret: twitchKeys.clientSecret
+          }
+        else
+          keysCache.twitch = {
+            clientId: 'kimne78kx3ncx6brgo4mv6wki5h1ko'
+          }
       }
       return keysCache
     })

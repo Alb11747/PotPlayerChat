@@ -332,6 +332,10 @@
       event.preventDefault()
       window.api.openSearchWindow(getSearchInfo())
     } else if ((event.ctrlKey && event.key === 'r') || (event.altKey && event.key === 'r')) {
+      event.preventDefault()
+      chatService.clearInvalidCache()
+      window.api.clearLinkPreviewCache()
+      urlTracker.clearCache()
       if (!selectedPotplayerInfo.channel) return
       TwitchUserService.getUserIdByName(selectedPotplayerInfo.channel).then((userId) => {
         clearAll(userId ?? undefined)

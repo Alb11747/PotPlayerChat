@@ -41,7 +41,7 @@ export type SearchInfo = {
 export interface WindowApi {
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
-  loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret: string } }>
+  loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret?: string } }>
   getDefaultPollingIntervals: () => Promise<PollingIntervals>
   getPollingIntervals: () => Promise<PollingIntervals>
   setPollingIntervals: (args: Partial<PollingIntervals>) => Promise<void>
@@ -57,6 +57,7 @@ export interface WindowApi {
   openUrl: (url: string) => Promise<void>
   openSearchWindow: (args: SearchInfo) => Promise<void>
   getLinkPreview: typeof getLinkPreview
+  clearLinkPreviewCache: () => Promise<void>
   sanitizeHtml: (
     ...args: Parameters<typeof sanitizeHtml>
   ) => Promise<ReturnType<typeof sanitizeHtml>>

@@ -2,8 +2,6 @@ import type { ChatSettings } from '@/core/chat/twitch-chat'
 import type { PollingIntervals } from '@/types/preload'
 import conf from './config'
 
-export interface GeneralSettings {}
-
 export interface InterfaceSettings {
   enableEmotes: boolean
   enableLinkPreviews: boolean
@@ -19,6 +17,10 @@ export interface InterfaceSettings {
 
 export interface SearchSettings {
   showAllMessages: boolean
+}
+
+export interface GeneralSettings {
+  prerelease: boolean
 }
 
 export interface Settings {
@@ -61,7 +63,9 @@ export const defaultSettings: Settings = {
     potplayerInstances: 0,
     activeWindow: 0
   },
-  general: {}
+  general: {
+    prerelease: false
+  }
 }
 
 export function* iterSettingsKeys(): Generator<
