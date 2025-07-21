@@ -61,7 +61,8 @@ export namespace TwitchUserService {
    * Get a Twitch user ID from a username
    */
   export async function getUserIdByName(username: string): Promise<string | null> {
-    return lock.acquire(`userid:${username}`, async () => {
+    if (userIdCache.has(username)) return userIdCache.get(username) ?? null
+    return await lock.acquire(`userid:${username}`, async () => {
       await loadCachePromise
       if (userIdCache.has(username)) return userIdCache.get(username) ?? null
 

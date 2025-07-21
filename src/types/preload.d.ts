@@ -57,6 +57,7 @@ export interface WindowApi {
   openUrl: (url: string) => Promise<void>
   openSearchWindow: (args: SearchInfo) => Promise<void>
   getLinkPreview: typeof getLinkPreview
+  clearLinkPreviewCache: () => Promise<void>
   sanitizeHtml: (
     ...args: Parameters<typeof sanitizeHtml>
   ) => Promise<ReturnType<typeof sanitizeHtml>>

@@ -196,10 +196,10 @@ export class ChatService {
 
             if (cachedMessages !== null && cached?.complete) return cachedMessages
 
-            try {
-              // Check for new data if the cached data is incomplete (fetched on the same day)
-              const complete = !this.isSameUTCDate(date, new Date())
+            // Check for new data if the cached data is incomplete (fetched on the same day)
+            const complete = !this.isSameUTCDate(date, new Date())
 
+            try {
               const data = await logTime(
                 `Fetching chat data for ${channel} on ${year}/${month}/${day}`,
                 () =>
@@ -239,6 +239,7 @@ export class ChatService {
               return messages
             } catch (error) {
               console.warn(`Error fetching chat for ${year}/${month}/${day}:`, error)
+              this.chatCache[cacheKey] = { messages: [], complete }
               return cachedMessages || []
             }
           })
@@ -520,5 +521,19 @@ export class ChatService {
       this.settings.chat.chatMessageLimit,
       next
     )
+  }
+
+  public clearCache(): void {
+    this.chatCache = {}
+    this.lastPrefetchRange = null
+  }
+
+  public clearInvalidCache(): void {
+    // Remove cached data that is empty
+    for (const key in this.chatCache) {
+      const { messages } = this.chatCache[key] ?? {}
+      if (!messages || messages.length === 0) delete this.chatCache[key]
+    }
+    this.lastPrefetchRange = null
   }
 }

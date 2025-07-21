@@ -37,6 +37,7 @@ const api: WindowApi = {
   openUrl: (...args) => ipcRenderer.invoke('openUrl', ...args),
   openSearchWindow: (...args) => ipcRenderer.invoke('openSearchWindow', ...args),
   getLinkPreview: (...args) => ipcRenderer.invoke('getLinkPreview', ...args),
+  clearLinkPreviewCache: (...args) => ipcRenderer.invoke('clearLinkPreviewCache', ...args),
   sanitizeHtml: (...args) => ipcRenderer.invoke('sanitizeHtml', ...args),
   onSetOffset: (callback) => ipcRenderer.on('setOffset', callback as never),
   offSetOffset: (callback) => ipcRenderer.off('setOffset', callback as never),

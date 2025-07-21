@@ -86,6 +86,7 @@ export class UrlTracker {
    */
   clearCache(): void {
     this.cache.clear()
+    this.failedUrls.clear()
   }
 
   /**
