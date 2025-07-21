@@ -34,7 +34,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
-    initAutoUpdater()
+    initAutoUpdater(conf)
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

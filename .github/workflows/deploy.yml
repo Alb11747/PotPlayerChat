@@ -9,6 +9,10 @@ on:
       distribution-channel:
         required: true
         type: string
+      prerelease:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -32,6 +36,6 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - run: gh release create v${{inputs.app-version}} dist/*.exe --repo ${{github.repository}}
+      - run: gh release create v${{inputs.app-version}} dist/*.exe --repo ${{github.repository}} --prerelease ${{inputs.prerelease}}
         env:
           GH_TOKEN: ${{ github.token }}

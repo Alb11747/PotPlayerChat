@@ -16,6 +16,10 @@
     window.api.setPollingIntervals($state.snapshot(settings.intervals))
   })
 
+  $effect(() => {
+    conf.set('prerelease', $state.snapshot(settings.general.prerelease))
+  })
+
   async function resetAllSettings(): Promise<void> {
     Object.assign(settings, defaultSettings)
     conf.set(settingsConfigKey, $state.snapshot(settings))
@@ -125,6 +129,14 @@
     <label>
       <span class="label-text">PotPlayer Instances:</span>
       <input type="number" bind:value={settings.intervals.potplayerInstances} min="500" />
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Update Settings</legend>
+    <label>
+      <input type="checkbox" bind:checked={settings.general.prerelease} />
+      Enable Prerelease Updates (Applies on next restart)
     </label>
   </fieldset>
 </div>
