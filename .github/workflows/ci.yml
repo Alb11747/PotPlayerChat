@@ -8,6 +8,11 @@ on:
         description: Distribution channel for release. It can be `beta`, `alpha` or any string.
         type: string
         required: true
+      deploy:
+        description: Whether to deploy the build.
+        type: boolean
+        required: false
+        default: true
 
 concurrency:
   group: ${{github.workflow}}-${{ github.ref }}-${{inputs.distribution-channel}}
@@ -66,7 +71,7 @@ jobs:
       distribution-channel: ${{inputs.distribution-channel}}
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ inputs.deploy }}
     permissions:
       contents: write
     needs:
