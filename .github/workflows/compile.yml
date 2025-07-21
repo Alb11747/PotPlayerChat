@@ -71,7 +71,7 @@ jobs:
 
       - uses: actions/attest-build-provenance@v2
         with:
-          subject-path: 'dist/*.exe'
+          subject-path: 'dist/*.*'
 
       - name: Upload compiled app
         uses: actions/upload-artifact@v4
