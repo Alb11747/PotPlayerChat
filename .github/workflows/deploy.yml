@@ -40,6 +40,12 @@ jobs:
         run: rm -f dist/*-debug.yml
         shell: bash
 
-      - run: gh release create v${{inputs.app-version}} dist/*.* --repo ${{github.repository}} --prerelease=${{inputs.prerelease}}
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{inputs.app-version}}
+          prerelease: ${{inputs.prerelease}}
+          artifacts: dist/*.*
+          commit: ${{github.sha}}
+          allowUpdates: true
+          generateReleaseNotes: true

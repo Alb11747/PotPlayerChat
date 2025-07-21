@@ -60,7 +60,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npm version "${{inputs.app-version}}" --no-git-tag-version
+      - run: npm version "${{inputs.app-version}}" --allow-same-version --no-git-tag-version
       - run: npm run build:win
         env:
           VITE_DISTRIBUTION_CHANNEL: ${{inputs.distribution-channel}}
