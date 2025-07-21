@@ -16,5 +16,5 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       distribution-channel: ${{ github.ref == 'refs/heads/main' && 'stable' || 'beta' }}
-      prerelease: ${{ github.ref == 'refs/heads/main' && false || true }}
+      prerelease: ${{ github.ref != 'refs/heads/main' }}
     secrets: inherit 
