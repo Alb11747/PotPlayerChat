@@ -45,46 +45,27 @@ export function millifyTimedelta(
   const units = Object.entries(timeUnitsToSeconds)
   let i = 0
 
+  function toTimeChunk(unit: string, value: number): string {
+    if (!long) return `${value}${unit}`
+    const unitName = value === 1 ? longTimeUnits[unit]!.singular : longTimeUnits[unit]!.plural
+    return `${value} ${unitName}`
+  }
+
   // Find where to stop (precision)
   for (; i < units.length; i++) {
     const [unit] = units[i]!
-    if (unit === precision) break
-    if (excluded.has(unit)) continue
+    if (excluded.has(unit) && unit !== precision) continue
     const unitSeconds = units[i]![1]
     if (seconds >= unitSeconds) {
       const value = Math.floor(seconds / unitSeconds)
-      if (long) {
-        const unitName = value === 1 ? longTimeUnits[unit]!.singular : longTimeUnits[unit]!.plural
-        timeChunks.push(`${value} ${unitName}`)
-      } else {
-        timeChunks.push(`${value}${unit}`)
-      }
+      timeChunks.push(toTimeChunk(unit, value))
       seconds %= unitSeconds
     }
     if (timeChunks.length >= maxUnits) break
+    if (unit === precision) break
   }
 
-  if (timeChunks.length) {
-    if (seconds > 0) {
-      const value = Math.floor(seconds / (timeUnitsToSeconds[precision] ?? 1))
-      if (long) {
-        const unitName =
-          value === 1 ? longTimeUnits[precision]!.singular : longTimeUnits[precision]!.plural
-        timeChunks.push(`${value} ${unitName}`)
-      } else {
-        timeChunks.push(`${value}${precision}`)
-      }
-    }
-    return timeChunks.slice(0, maxUnits).join(' ')
-  } else if (seconds > (timeUnitsToSeconds[precision] ?? 1)) {
-    const value = parseFloat(seconds.toFixed(2))
-    if (long) {
-      const unitName =
-        value === 1.0 ? longTimeUnits[precision]!.singular : longTimeUnits[precision]!.plural
-      return `${value} ${unitName}`
-    }
-    return `${value}${precision}`
-  }
+  if (timeChunks.length) return timeChunks.join(' ')
 
   // Continue iterating for sub-precision units
   for (; i < units.length; i++) {
@@ -92,20 +73,15 @@ export function millifyTimedelta(
     if (excluded.has(unit)) continue
     if (seconds >= unitSeconds) {
       const value = parseFloat((seconds / unitSeconds).toPrecision(3))
-      if (long) {
-        const unitName = value === 1.0 ? longTimeUnits[unit]!.singular : longTimeUnits[unit]!.plural
-        return `${value} ${unitName}`
-      }
-      return `${value}${unit}`
+      return toTimeChunk(unit, value)
     }
     if (unit === precision) break
   }
 
-  if (long) {
-    return `${seconds.toExponential(3)} seconds`
-  }
-  return `${seconds.toExponential(3)}s`
+  if (long) return `${seconds.toExponential(3)} seconds`
+  else return `${seconds.toExponential(3)}s`
 }
+
 export class CurrentVideoTimeHistory {
   private history: { time: number; timestamp: number }[] = []
   private lastPredictedTime: number | null = null
