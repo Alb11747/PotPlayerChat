@@ -18,8 +18,10 @@
   }
 
   onMount(() => {
-    document.addEventListener('mousemove', handleMouseMove, { capture: true })
-    return () => document.removeEventListener('mousemove', handleMouseMove, { capture: true })
+    document.addEventListener('mousemove', handleMouseMove, { passive: true, capture: true })
+    return () =>
+      // @ts-ignore svelte-check ignore
+      document.removeEventListener('mousemove', handleMouseMove, { passive: true, capture: true })
   })
 
   function updatePosition(): void {
