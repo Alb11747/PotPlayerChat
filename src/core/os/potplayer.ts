@@ -31,10 +31,20 @@ export enum PotPlayerWParams {
   SEND_VIRTUAL_KEY = 20496
 }
 
+/**
+ * Gets the current video time in milliseconds
+ * @param hwnd The HWND of the PotPlayer window
+ * @returns The current video time in milliseconds
+ */
 export function getCurrentVideoTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_CURRENT_TIME, 0)
 }
 
+/**
+ * Gets the total video time in milliseconds
+ * @param hwnd The HWND of the PotPlayer window
+ * @returns The total video time in milliseconds
+ */
 export function getTotalVideoTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_TOTAL_TIME, 0)
 }

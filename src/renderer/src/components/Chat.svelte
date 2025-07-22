@@ -305,24 +305,28 @@
     window.api.openUrl(url)
   }
 
-  function getSearchInfo(): SearchInfo {
+  function openSearchWindow(info?: Partial<SearchInfo>): void {
     const searchRangeBuffer = 60 * 60 * 1000
     if (!selectedPotplayerInfo) throw new Error('No selected PotPlayer info')
     if (!selectedPotplayerInfo.startTime || !selectedPotplayerInfo.endTime)
       throw new Error('No start or end time set for the selected PotPlayer instance')
+
     const enc = new TextEncoder()
-    return {
+    const msgToData: (msg: TwitchMessage[]) => ArrayBufferLike = (msg) =>
+      enc.encode(convertTwitchMessagesToRawIrcMessages(msg)).buffer
+
+    window.api.openSearchWindow({
       potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
-      messagesRaw: enc.encode(convertTwitchMessagesToRawIrcMessages(chatService.currentChatData))
-        .buffer,
-      initialMessagesRaw: enc.encode(convertTwitchMessagesToRawIrcMessages(messages)).buffer,
+      initialMessagesRaw: msgToData(messages),
       searchRange: settings.search.showAllMessages
         ? {
             startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,
             endTime: selectedPotplayerInfo.endTime + searchRangeBuffer
           }
-        : undefined
-    }
+        : undefined,
+      ...(info ?? {})
+    })
+    window.api.setMessagesRaw(msgToData(chatService.currentChatData))
   }
 
   function handleUsernameClick(info: { username: string }): void {
@@ -332,8 +336,7 @@
       !selectedPotplayerInfo.endTime
     )
       return
-    window.api.openSearchWindow({
-      ...getSearchInfo(),
+    openSearchWindow({
       initialSearch: `${info.username}: `
     })
   }
@@ -343,7 +346,7 @@
     if (!selectedPotplayerInfo) return
     if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
       event.preventDefault()
-      window.api.openSearchWindow(getSearchInfo())
+      openSearchWindow()
     } else if ((event.ctrlKey && event.key === 'r') || (event.altKey && event.key === 'r')) {
       event.preventDefault()
       chatService.clearInvalidCache()

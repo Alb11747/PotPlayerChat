@@ -4,13 +4,14 @@ import { Conf } from 'electron-conf/main'
 import { join } from 'path'
 
 import type { SearchInfo } from '@/types/preload'
+import { IpcPromiseMain } from '@/utils/electron'
 import { initLinks } from './links'
+import { initLog } from './log'
 import { initContextMenus } from './menu'
 import { initPotplayerHandlers } from './potplayer'
 import { initSecurity } from './security'
 import { initStorage } from './storage'
 import { initAutoUpdater } from './update'
-import { initLog } from './log'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -46,8 +47,10 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  const messagesRawIpcPromise = new IpcPromiseMain<ArrayBufferLike>(ipcMain, 'messagesRaw', true)
+
   // Create search window
-  function createSearchWindow(args: SearchInfo): BrowserWindow {
+  function createSearchWindow(): BrowserWindow {
     const mainBounds = mainWindow.getBounds()
     const searchWindow = new BrowserWindow({
       width: mainBounds.width * 0.8,
@@ -69,7 +72,6 @@ function createWindow(): void {
     }
 
     searchWindow.once('ready-to-show', () => {
-      searchWindow.webContents.send('searchInfo', args)
       searchWindow.show()
       searchWindow.focus()
     })
@@ -78,7 +80,9 @@ function createWindow(): void {
   }
 
   ipcMain.handle('openSearchWindow', async (_event, args: SearchInfo) => {
-    createSearchWindow(args)
+    const searchWindow = createSearchWindow()
+    searchWindow.webContents.send('searchInfo', args)
+    searchWindow.webContents.send(messagesRawIpcPromise.channel, await messagesRawIpcPromise.get())
   })
 }
 

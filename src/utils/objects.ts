@@ -31,3 +31,7 @@ export function deleteNullishKeysInPlace<
   }
   return obj
 }
+
+export function isObjectClass(obj: unknown, className: string): boolean {
+  return obj !== null && typeof obj === 'object' && obj.constructor.name === className
+}

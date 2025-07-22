@@ -1,4 +1,5 @@
 import type { SearchInfo, WindowApi } from '@/types/preload'
+import { IpcPromiseRenderer } from '@/utils/electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { exposeConf } from 'electron-conf/preload'
 import { contextBridge, ipcRenderer } from 'electron/renderer'
@@ -17,16 +18,13 @@ ipcRenderer.on('log', (_, { messages, level }) => {
 
 exposeConf()
 
-let searchInfo: Promise<SearchInfo | null> | SearchInfo = new Promise((resolve) => {
-  ipcRenderer.once('searchInfo', (_event, info: SearchInfo) => {
-    console.debug('Preloaded search info:', info)
-    resolve(info)
-    ipcRenderer.on('searchInfo', (_event, info: SearchInfo) => {
-      console.debug('Updated search info:', info)
-      searchInfo = info
-    })
-  })
-})
+const searchInfoIpcPromise = new IpcPromiseRenderer<SearchInfo>(ipcRenderer, 'searchInfo', false)
+
+const messagesRawIpcPromise = new IpcPromiseRenderer<ArrayBufferLike>(
+  ipcRenderer,
+  'messagesRaw',
+  true
+)
 
 // Custom APIs for renderer
 const api: WindowApi = {
@@ -37,7 +35,9 @@ const api: WindowApi = {
     ipcRenderer.invoke('getDefaultPollingIntervals', ...args),
   getPollingIntervals: (...args) => ipcRenderer.invoke('getPollingIntervals', ...args),
   setPollingIntervals: (...args) => ipcRenderer.invoke('setPollingIntervals', ...args),
-  getSearchInfo: async () => await searchInfo,
+  getSearchInfo: () => searchInfoIpcPromise.get(),
+  getMessagesRaw: () => messagesRawIpcPromise.get(),
+  setMessagesRaw: (...args) => ipcRenderer.invoke(messagesRawIpcPromise.channel, ...args),
   getPotPlayers: (...args) => ipcRenderer.invoke('getPotplayers', ...args),
   getSelectedPotPlayerHWND: (...args) => ipcRenderer.invoke('getPotplayerHwnd', ...args),
   setSelectedPotPlayerHWND: (...args) => ipcRenderer.invoke('setPotplayerHwnd', ...args),
