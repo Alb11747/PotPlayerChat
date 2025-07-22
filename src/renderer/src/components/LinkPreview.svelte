@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { previewState } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
 
@@ -16,10 +17,9 @@
     }
   }
 
-  $effect(() => {
-    if (!previewElement) return
+  onMount(() => {
     document.addEventListener('mousemove', handleMouseMove, { capture: true })
-    return () => document.removeEventListener('mousemove', handleMouseMove)
+    return () => document.removeEventListener('mousemove', handleMouseMove, { capture: true })
   })
 
   function updatePosition(): void {
