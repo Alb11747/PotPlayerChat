@@ -34,6 +34,7 @@
 
   /* Accent and brand */
   --color-accent: #4e8cff;
+  --color-accent-light: #6caefe;
   --color-accent-hover: #6b9eff;
   --color-accent-faded: rgba(78, 140, 255, 0.5);
   --color-accent-purple: #a855f7;
