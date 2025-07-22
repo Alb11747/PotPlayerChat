@@ -42,7 +42,7 @@ export async function getPotplayerExtraInfo<
     }
   }
 
-  const now = new Date().getTime()
+  const now = Date.now()
   let newPotPlayerInfo: (T & { channel: string; startTime: number; endTime: number }) | null = null
 
   async function processData(data: { url: string; title?: string } | null): Promise<void> {
