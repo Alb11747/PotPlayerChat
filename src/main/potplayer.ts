@@ -135,7 +135,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
     const potplayerHwnd = getPotplayerHwnd()
     if (potplayerHwnd) {
       const currentTime = await getCurrentVideoTime(potplayerHwnd)
-      const now = new Date().getTime()
+      const now = Date.now()
       if (now - lastCurrentTimeSend > pollingIntervals.videoTime) {
         mainWindow.webContents.send('updateCurrentVideoTime', currentTime)
         lastCurrentTimeSend = now
