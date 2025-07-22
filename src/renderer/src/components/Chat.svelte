@@ -310,10 +310,12 @@
     if (!selectedPotplayerInfo) throw new Error('No selected PotPlayer info')
     if (!selectedPotplayerInfo.startTime || !selectedPotplayerInfo.endTime)
       throw new Error('No start or end time set for the selected PotPlayer instance')
+    const enc = new TextEncoder()
     return {
       potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
-      messagesRaw: convertTwitchMessagesToRawIrcMessages(chatService.currentChatData),
-      initialMessagesRaw: convertTwitchMessagesToRawIrcMessages(messages),
+      messagesRaw: enc.encode(convertTwitchMessagesToRawIrcMessages(chatService.currentChatData))
+        .buffer,
+      initialMessagesRaw: enc.encode(convertTwitchMessagesToRawIrcMessages(messages)).buffer,
       searchRange: settings.search.showAllMessages
         ? {
             startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,
