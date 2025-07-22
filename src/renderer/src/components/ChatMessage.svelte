@@ -357,6 +357,7 @@
     line-height: 1.7;
     font-size: 108%;
     box-sizing: border-box;
+    word-break: break-word;
     user-select: text;
     cursor: default;
   }
