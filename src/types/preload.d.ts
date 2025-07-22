@@ -29,7 +29,6 @@ export type PollingIntervals = {
 
 export type SearchInfo = {
   potplayerInfo: PotPlayerInfo
-  messagesRaw?: ArrayBufferLike
   initialMessagesRaw?: ArrayBufferLike
   initialSearch?: string
   searchRange?: {
@@ -46,6 +45,8 @@ export interface WindowApi {
   getPollingIntervals: () => Promise<PollingIntervals>
   setPollingIntervals: (args: Partial<PollingIntervals>) => Promise<void>
   getSearchInfo: () => Promise<SearchInfo | null>
+  getMessagesRaw: () => Promise<ArrayBufferLike | null>
+  setMessagesRaw: (messagesRaw: ArrayBufferLike) => Promise<void>
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>

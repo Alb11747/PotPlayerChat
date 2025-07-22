@@ -78,6 +78,7 @@
         return
       }
 
+      await chatService.updateVideoInfo(searchInfo.potplayerInfo, -1)
       if (searchInfo.initialSearch) searchQuery = searchInfo.initialSearch
 
       const dec = new TextDecoder()
@@ -94,9 +95,10 @@
 
       await new Promise((resolve) => setTimeout(resolve, 0))
 
-      if (searchInfo.messagesRaw) {
+      const messagesRaw = await window.api.getMessagesRaw()
+      if (messagesRaw) {
         const messages = convertRawIrcMessagesToTwitchMessages(
-          dec.decode(searchInfo.messagesRaw as unknown as ArrayBuffer)
+          dec.decode(messagesRaw as unknown as ArrayBuffer)
         )
         console.debug('Preloaded messages:', messages.length)
         loadMessages(messages)
@@ -119,9 +121,10 @@
         searchInfo.potplayerInfo = potplayerInfo
       }
 
+      const videoStartTime = searchInfo.potplayerInfo.startTime
       const currentTime = await window.api.getCurrentVideoTime(searchInfo.potplayerInfo.hwnd)
-      const defaultStartTime = currentTime - 60 * 60 * 1000 // 1 hour before
-      const defaultEndTime = currentTime
+      const defaultStartTime = videoStartTime + currentTime - 60 * 60 * 1000 // 1 hour before
+      const defaultEndTime = videoStartTime + currentTime
       const { startTime = defaultStartTime, endTime = defaultEndTime } =
         searchInfo.searchRange || {}
 
