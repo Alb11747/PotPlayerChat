@@ -419,7 +419,7 @@ export function parseFullMessage(
     processedMessage = balancedMessage
   }
 
-  const preSegmentedMessage = processedMessage
+  let preSegmentedMessage = processedMessage
   let segments: SegmentNoEscape[] = [
     { type: isAction ? 'action' : 'text', fullText: preSegmentedMessage, text: preSegmentedMessage }
   ]
@@ -644,6 +644,7 @@ export function parseFullMessage(
   ) {
     processedUsername += firstSegment.fullText
     segments.shift()
+    preSegmentedMessage = removePrefix(preSegmentedMessage, firstSegment.fullText)
   }
 
   // Reconstruct segments with emotes and URLs
