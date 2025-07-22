@@ -17,6 +17,7 @@
   import { CurrentVideoTimeHistory } from '@/utils/time'
 
   import type { HWND } from '@/types/globals'
+  import { debounce } from '@/utils/functions'
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
   import { settings } from '../state/settings.svelte'
@@ -38,34 +39,52 @@
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
 
+  let chatContainerRef: HTMLDivElement | null = $state(null)
   let vlistRef: VList<TwitchMessage> | null = $state(null)
   let targetElement: TwitchMessage | null = $state(null)
-  let targetViewportOffset: number = $state(0)
+  let targetViewportOffset: number = 0
   let scrollToBottom = $state(true)
+
+  function isAtBottom(): boolean {
+    if (!vlistRef) return false
+    return vlistRef.getScrollOffset() + vlistRef.getViewportSize() >= vlistRef.getScrollSize() - 1
+  }
+
+  $effect(() => {
+    const containerRef = chatContainerRef
+    if (!containerRef) return
+
+    const onUserScroll = (): void => {
+      if (!isAtBottom()) scrollToBottom = false
+      clearTargetElement()
+    }
+
+    containerRef.addEventListener('wheel', onUserScroll, { passive: true, capture: true })
+    return () => {
+      // @ts-ignore svelte-check ignore
+      containerRef.removeEventListener('wheel', onUserScroll, { passive: true, capture: true })
+    }
+  })
 
   function clearTargetElement(): void {
     targetElement = null
     targetViewportOffset = 0
   }
 
-  function scrollToTarget(): void {
+  const scrollToTargetDebounced = debounce(scrollToTarget, 35)
+
+  function scrollToTarget(_scrollToBottom?: boolean): void {
     const _vlistRef = untrack(() => vlistRef)
     const _messages = untrack(() => messages)
     const _targetElement = untrack(() => targetElement)
     const _targetViewportOffset = untrack(() => targetViewportOffset)
-    const _scrollToBottom = untrack(() => scrollToBottom)
+    _scrollToBottom = _scrollToBottom ?? untrack(() => scrollToBottom)
     scrollToTargetBase(_vlistRef, _messages, {
       targetElement: _targetElement,
       targetViewportOffset: _targetViewportOffset,
       scrollToBottom: _scrollToBottom
     })
   }
-
-  $effect(() => {
-    if (!vlistRef) return
-    document.addEventListener('scroll', clearTargetElement, { capture: true })
-    return () => document.removeEventListener('scroll', clearTargetElement)
-  })
 
   if (!chatService.usernameColorCache)
     chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
@@ -126,22 +145,7 @@
     await updateChatMessages()
   }
 
-  window.api.onPotPlayerInstancesChanged(async (_: Event, instances) =>
-    onPotPlayerInstancesChanged(instances)
-  )
-
-  // Update potplayer instances if data is not available immediately
-  onMount(() => {
-    let id: ReturnType<typeof setTimeout> | null = setTimeout(async () => {
-      id = null
-      if (isPotplayerUpdated) return
-      potplayerInstances = await window.api.getPotPlayers()
-      onPotPlayerInstancesChanged(potplayerInstances)
-    }, 500)
-    return () => id && clearTimeout(id)
-  })
-
-  window.api.onSetOffset(async (_, { targetTimestamp }: { targetTimestamp: number }) => {
+  async function onSetOffset({ targetTimestamp }: { targetTimestamp: number }): Promise<void> {
     if (!selectedPotplayerInfo) return
     const { hwnd, startTime } = selectedPotplayerInfo
     if (!startTime) return
@@ -154,7 +158,7 @@
     updateChatMessages()
     scrollToBottom = true
     scrollToTarget()
-  })
+  }
 
   function isEqualSimple(a: TwitchMessage[], b: TwitchMessage[]): boolean {
     if (a.length !== b.length) return false
@@ -189,10 +193,13 @@
       clearTargetElement()
       scrollToTarget()
     } else if (!isEqualSimple(messages, newMessages)) {
+      const _vlistRef = untrack(() => vlistRef)
       if (!settings.interface.keepScrollPosition) clearTargetElement()
-      else if (vlistRef) {
-        ;({ targetElement, targetViewportOffset } = calculateTargetElement(vlistRef, messages))
-      }
+      else if (_vlistRef) {
+        const target = calculateTargetElement(_vlistRef, messages)
+        targetElement = target.targetElement
+        targetViewportOffset = target.targetViewportOffset
+      } else targetElement = null
       messages = newMessages
       scrollToTarget()
     }
@@ -206,44 +213,48 @@
 
   $effect(() => {
     // Trigger reactivity when chat service state changes
-    if (loadingState.state) updateChatMessages()
+    if (loadingState.state) untrack(() => updateChatMessages())
   })
 
-  function onCurrentTime(_: Event, time: number): void {
+  function onCurrentTime(time: number): void {
     videoTimeHistory.addSample(time)
     updateChatMessages()
   }
 
+  // Update potplayer instances if data is not available immediately
+  onMount(() => {
+    let id: ReturnType<typeof setTimeout> | null = setTimeout(async () => {
+      id = null
+      if (isPotplayerUpdated) return
+      potplayerInstances = await window.api.getPotPlayers()
+      onPotPlayerInstancesChanged(potplayerInstances)
+    }, 500)
+    return () => id && clearTimeout(id)
+  })
+
   onMount(() => {
     updateChatMessages()
-    window.api.onSetCurrentTime(onCurrentTime)
+
+    const onCurrentTimeEvent: Parameters<typeof window.api.onSetCurrentTime>[0] = (_, ...args) =>
+      onCurrentTime(...args)
+    window.api.onSetCurrentTime(onCurrentTimeEvent)
+
+    const onPotPlayerInstancesChangedEvent: Parameters<
+      typeof window.api.onPotPlayerInstancesChanged
+    >[0] = (_, ...args) => onPotPlayerInstancesChanged(...args)
+    window.api.onPotPlayerInstancesChanged(onPotPlayerInstancesChangedEvent)
+
+    const onSetOffsetEvent: Parameters<typeof window.api.onSetOffset>[0] = (_, ...args) =>
+      onSetOffset(...args)
+    window.api.onSetOffset(onSetOffsetEvent)
 
     return () => {
       if (chatIntervalId) clearTimeout(chatIntervalId)
-      window.api.offSetCurrentTime(onCurrentTime)
+      window.api.offSetCurrentTime(onCurrentTimeEvent)
+      window.api.offPotPlayerInstancesChanged(onPotPlayerInstancesChangedEvent)
+      window.api.offSetOffset(onSetOffsetEvent)
     }
   })
-
-  // Handle user scroll detection
-  function handleScroll(currentScrollOffset: number): void {
-    if (!vlistRef) return
-
-    // Check if user is at the bottom
-    const isAtBottom =
-      currentScrollOffset + vlistRef.getViewportSize() >= vlistRef.getScrollSize() - 1
-
-    if (isAtBottom) {
-      if (!scrollToBottom) {
-        // console.debug('User scrolled to bottom, enabling auto-scroll')
-        scrollToBottom = true
-      }
-    } else {
-      if (scrollToBottom) {
-        // console.debug('User scrolled away from bottom, disabling auto-scroll')
-        scrollToBottom = false
-      }
-    }
-  }
 
   function setPotPlayerInstance(instanceProxy: PotPlayerInstance | PotPlayerInfo | null): void {
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
@@ -403,13 +414,13 @@
 {#if showSettings}
   <Settings />
 {:else}
-  <div class="chat-container">
+  <div class="chat-container" bind:this={chatContainerRef}>
     {#if messages && messages.length > 0}
       <VList
         bind:this={vlistRef}
         data={messages}
         getKey={(_, i) => messages[i]?.getId() ?? i}
-        onscroll={handleScroll}
+        onscroll={() => (scrollToBottom = isAtBottom())}
       >
         {#snippet children(msg, i)}
           <ChatMessage
@@ -428,7 +439,7 @@
             usernameColorMap={chatService.usernameColorCache ?? undefined}
             onUrlClick={handleUrlClick}
             onUsernameClick={handleUsernameClick}
-            onEmoteLoad={scrollToTarget}
+            onEmoteLoad={() => scrollToBottom && scrollToTargetDebounced(true)}
             bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
           />
         {/snippet}
