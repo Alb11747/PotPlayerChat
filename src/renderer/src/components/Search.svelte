@@ -46,7 +46,8 @@
   let useRegex = $state(false)
 
   let loadedMessages = $state(false)
-  const seenMessages = new Set()
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const seenMessages = new Set<string>()
   let initialMessages: TwitchMessage[] = $state.raw([])
   let messages: TwitchMessageFormatted[] = $state.raw([])
   let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
@@ -79,8 +80,12 @@
 
       if (searchInfo.initialSearch) searchQuery = searchInfo.initialSearch
 
+      const dec = new TextDecoder()
+
       if (searchInfo.initialMessagesRaw) {
-        const initialMsgs = convertRawIrcMessagesToTwitchMessages(searchInfo.initialMessagesRaw)
+        const initialMsgs = convertRawIrcMessagesToTwitchMessages(
+          dec.decode(searchInfo.initialMessagesRaw as unknown as ArrayBuffer)
+        )
         console.debug('Initial messages:', initialMsgs.length)
         initialMessages = initialMsgs
         loadMessages(initialMsgs)
@@ -90,7 +95,9 @@
       await new Promise((resolve) => setTimeout(resolve, 0))
 
       if (searchInfo.messagesRaw) {
-        const messages = convertRawIrcMessagesToTwitchMessages(searchInfo.messagesRaw)
+        const messages = convertRawIrcMessagesToTwitchMessages(
+          dec.decode(searchInfo.messagesRaw as unknown as ArrayBuffer)
+        )
         console.debug('Preloaded messages:', messages.length)
         loadMessages(messages)
         scrollToInitialMessages()
