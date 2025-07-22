@@ -84,7 +84,7 @@
     message.type === 'chat' ? message.badgeInfo : undefined
   )
   const subscriberMonths: string | undefined = $derived(badgeInfo?.get('subscriber'))
-  let cheerEmotes: Map<string, CheerEmote> | null = $state(null)
+  let cheerEmotes: Map<string, CheerEmote> | null = $state.raw(null)
 
   async function loadServices(): Promise<void> {
     setConfig(conf)
@@ -132,6 +132,7 @@
     const msgBits = parseInt(message.bits, 10)
     if (isNaN(msgBits)) return
 
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const cheerEmotesMap: Map<string, CheerEmote> = new Map()
 
     // Extract cheer emote names from message
