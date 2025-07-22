@@ -317,6 +317,7 @@
           <button
             class="chat-url"
             class:visited={urlTracker.isVisitedUrl(segment.url)}
+            class:loaded={urlTracker.hasCachedPreview(segment.url)}
             onclick={() => handleUrlClick(segment.url)}
             onmouseenter={() => mouseUpdateUrl(segment)}
             onmousemove={() => mouseUpdateUrl(segment)}
@@ -441,12 +442,13 @@
     padding: 0;
     margin: 0;
   }
-
+  .chat-url.loaded {
+    color: var(--color-accent-light);
+  }
   .chat-url:hover {
     color: var(--color-accent-hover);
     text-decoration: none;
   }
-
   .chat-url.visited,
   .chat-url:focus-visible {
     color: var(--color-accent-purple);
