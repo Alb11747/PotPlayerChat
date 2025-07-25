@@ -516,15 +516,16 @@ export namespace TwitchCheerEmoteService {
     await fetchCheerEmotes(channelId)
 
     const channelCheerEmotes = channelId ? channelCheerEmotesCache.get(channelId) : undefined
-    if (channelCheerEmotes) {
+    if (channelCheerEmotes && channelCheerEmotes.getPossibleNames().includes(name.toLowerCase())) {
       const cheerEmote = channelCheerEmotes.getCheermoteDisplayInfo(name, bits, format)
       if (cheerEmote) return new CheerEmote(cheerEmote, `${name}${bits}`, bits)
     }
     const globalCheerEmotes = channelCheerEmotesCache.get(null)
-    if (globalCheerEmotes) {
+    if (globalCheerEmotes && globalCheerEmotes.getPossibleNames().includes(name.toLowerCase())) {
       const cheerEmote = globalCheerEmotes.getCheermoteDisplayInfo(name, bits, format)
       if (cheerEmote) return new CheerEmote(cheerEmote, `${name}${bits}`, bits)
     }
+
     return undefined
   }
 
