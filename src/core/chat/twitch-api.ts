@@ -381,8 +381,8 @@ export namespace TwitchBadgeService {
     if (!api) return
 
     return lock.acquire('badges:global', async () => {
-      const globalBadgeCache = channelBadgeCache.get(null)
-      if (!globalBadgeCache) return
+      if (channelBadgeCache.has(null)) return
+      const globalBadgeCache = new Map<string, Map<string, HelixChatBadgeVersion>>()
 
       try {
         const badges = await logTime('Fetching global badges', () => api.chat.getGlobalBadges())
@@ -391,6 +391,7 @@ export namespace TwitchBadgeService {
           for (const version of badge.versions) versions.set(version.id, version)
           globalBadgeCache.set(badge.id, versions)
         }
+        channelBadgeCache.set(null, globalBadgeCache)
         saveCache()
       } catch (error) {
         console.error('Failed to fetch global badges:', error)
