@@ -71,6 +71,8 @@
     if (!preview?.tooltip) return
     sanitizeTooltip(preview.tooltip).then((html) => {
       sanitizedTooltipHtml = html
+      updatePosition()
+      requestAnimationFrame(updatePosition)
     })
   })
 
@@ -110,7 +112,10 @@
               {#if previewState?.urlTrackerInstance?.isFailedUrl(preview.link) === false}
                 <img
                   src={preview.thumbnail}
-                  onload={updatePosition}
+                  onload={() => {
+                    updatePosition()
+                    requestAnimationFrame(updatePosition)
+                  }}
                   onerror={() => {
                     previewState?.urlTrackerInstance?.markFailedUrl(preview.link)
                   }}
