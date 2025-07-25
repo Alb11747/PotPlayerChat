@@ -168,36 +168,8 @@
     }, 0)
   }
 
-  // Filter messages when search query changes
-  $effect(updateFilteredMessages)
-  function updateFilteredMessages(): void {
-    if (!searchQuery) {
-      filteredMessages = []
-      return
-    }
-
-    filteredMessages = messages.filter((msg) => {
-      if (useRegex) {
-        try {
-          const regex = new RegExp(searchQuery, caseSensitive ? 'g' : 'gi')
-          return regex.test(msg.formattedMessage)
-        } catch (error) {
-          // Invalid regex, fall back to string search
-          console.warn('Invalid regex pattern:', searchQuery, error)
-        }
-      }
-      if (caseSensitive) {
-        return msg.formattedMessage?.includes(searchQuery)
-      } else {
-        return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
-      }
-    })
-
-    scrollToInitialMessages()
-  }
-
   // Computed search pattern for highlighting
-  const searchPattern = $derived.by(() => {
+  const searchPattern: string | RegExp | undefined = $derived.by(() => {
     if (!searchQuery) return undefined
     if (useRegex || !caseSensitive) {
       try {
@@ -211,6 +183,26 @@
     }
     return searchQuery
   })
+
+  // Filter messages when search query changes
+  $effect(() => {
+    updateFilteredMessages()
+  })
+  async function updateFilteredMessages(): Promise<void> {
+    if (!searchQuery) {
+      filteredMessages = []
+      return
+    }
+
+    filteredMessages = messages.filter((msg) => {
+      if (useRegex && typeof searchPattern === 'object')
+        return searchPattern.test(msg.formattedMessage)
+      if (caseSensitive) return msg.formattedMessage?.includes(searchQuery)
+      return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
+    })
+
+    scrollToInitialMessages()
+  }
 
   function handleKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') window.close()
