@@ -29,6 +29,7 @@ export type PollingIntervals = {
 
 export type SearchInfo = {
   potplayerInfo: PotPlayerInfo
+  focusedMessageRaw?: string
   initialMessagesRaw?: ArrayBufferLike
   initialSearch?: string
   searchRange?: {

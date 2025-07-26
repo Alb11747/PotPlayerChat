@@ -1,5 +1,5 @@
 import { millifyTimedelta } from '@/utils/time'
-import { escapeIrcText, parseIrcMessages, type IrcMessage } from './irc'
+import { escapeIrcText, parseIrcMessage, parseIrcMessages, type IrcMessage } from './irc'
 
 export type TwitchMessage = TwitchChatMessage | TwitchSystemMessage
 
@@ -628,12 +628,21 @@ export function convertRawIrcMessagesToTwitchMessages(rawData: string): TwitchMe
 
   for (const msg of parseIrcMessages(rawData)) {
     if (!msg) continue
-    if (msg.command === 'PRIVMSG') {
-      messages.push(TwitchChatMessage.fromIrcMessage(msg))
-    } else {
-      messages.push(TwitchSystemMessage.fromIrcMessage(msg))
-    }
+    messages.push(convertIrcMessageToTwitchMessage(msg))
   }
 
   return messages
+}
+
+export function convertIrcMessageToTwitchMessage(msg: IrcMessage): TwitchMessage {
+  if (msg.command === 'PRIVMSG') {
+    return TwitchChatMessage.fromIrcMessage(msg)
+  } else {
+    return TwitchSystemMessage.fromIrcMessage(msg)
+  }
+}
+
+export function convertRawIrcMessageToTwitchMessage(rawData: string): TwitchMessage {
+  const msg = parseIrcMessage(rawData)
+  return convertIrcMessageToTwitchMessage(msg)
 }
