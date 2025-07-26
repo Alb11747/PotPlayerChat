@@ -64,6 +64,7 @@ export interface WindowApi {
   clearUrlClicked: () => Promise<void>
   openUrl: (url: string) => Promise<void>
   openSearchWindow: (args: SearchInfo) => Promise<void>
+  focusMessage: (messageRaw: string) => Promise<void>
   getLinkPreview: typeof getLinkPreview
   clearLinkPreviewCache: () => Promise<void>
   sanitizeHtml: (
@@ -79,6 +80,8 @@ export interface WindowApi {
   offPotPlayerInstancesChanged: (
     callback: (event: Event, instances: (PotPlayerInstance & { selected?: boolean })[]) => void
   ) => void
+  onFocusMessage: (callback: (event: Event, messageRaw: string) => void) => void
+  offFocusMessage: (callback: (event: Event, messageRaw: string) => void) => void
 }
 
 export {}

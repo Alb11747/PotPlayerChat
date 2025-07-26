@@ -84,6 +84,10 @@ function createWindow(): void {
     searchWindow.webContents.send('searchInfo', args)
     searchWindow.webContents.send(messagesRawIpcPromise.channel, await messagesRawIpcPromise.get())
   })
+
+  ipcMain.handle('focusMessage', async (_event, messageRaw: string) => {
+    mainWindow.webContents.send('focusMessage', messageRaw)
+  })
 }
 
 app.whenReady().then(() => {
