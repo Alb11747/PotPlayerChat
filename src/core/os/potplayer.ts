@@ -1,3 +1,9 @@
+import {
+  getHwndByPidAndTitle,
+  getWindowsByExe,
+  getWindowText,
+  sendMessage
+} from '@/core/os/windows'
 import type { HWND } from '@/types/globals'
 import type { PotPlayerInstance } from '@/types/potplayer'
 import { logTime } from '@/utils/debug'
@@ -6,12 +12,6 @@ import AsyncLock from 'async-lock'
 import { readdir, readFile } from 'fs/promises'
 import path from 'path'
 import regedit from 'regedit'
-import {
-  getHwndByPidAndTitle,
-  getWindowsByExe,
-  getWindowText,
-  sendMessage
-} from '@/core/os/windows'
 
 const lock = new AsyncLock()
 
@@ -54,7 +54,12 @@ export async function getPotPlayerInstances(): Promise<PotPlayerInstance[]> {
     const hwnds: PotPlayerInstance[] = []
     const potPlayerWindows = await getWindowsByExe('PotPlayerMini64.exe', true)
     for (const window of potPlayerWindows) {
-      if (window.imageName !== 'PotPlayerMini64.exe' && window.sessionName == 'Console') continue
+      if (
+        window.imageName !== 'PotPlayerMini64.exe' ||
+        window.sessionName !== 'Console' ||
+        window.windowTitle === 'N/A'
+      )
+        continue
       const { hwnd = null } = (await getHwndByPidAndTitle(window.pid, window.windowTitle)) ?? {}
       if (hwnd === null) {
         console.warn(`No HWND found for PID ${window.pid} with title "${window.windowTitle}"`)
