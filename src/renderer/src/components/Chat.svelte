@@ -417,7 +417,7 @@
 </div>
 
 {#if showSettings}
-  <Settings />
+  <Settings {urlTracker} />
 {:else}
   <div class="chat-container" bind:this={chatContainerRef}>
     {#if messages && messages.length > 0}

@@ -191,6 +191,21 @@
     })
   })
 
+  function isSeenUrl(url: string): boolean {
+    if (urlTracker.isSeenUrl(url)) return true
+    window.api.isUrlSeen(url).then((isSeen) => {
+      if (isSeen) urlTracker.markSeenUrl(url)
+    })
+    return urlTracker.isSeenUrl(url)
+  }
+  function isVisitedUrl(url: string): boolean {
+    if (urlTracker.isVisitedUrl(url)) return true
+    window.api.isUrlClicked(url).then((isVisited) => {
+      if (isVisited) urlTracker.markVisitedUrl(url)
+    })
+    return urlTracker.isVisitedUrl(url)
+  }
+
   function mouseUpdateEmote(segment: Segment & { type: 'emote' | 'cheer' }): void {
     if (enableEmotePreviews && !currentPreviewType()) previewState.emoteSegment = segment
   }
@@ -316,8 +331,8 @@
         {:else if segment.type === 'url'}
           <button
             class="chat-url"
-            class:visited={urlTracker.isVisitedUrl(segment.url)}
-            class:loaded={urlTracker.hasCachedPreview(segment.url)}
+            class:visited={isVisitedUrl(segment.url)}
+            class:seen={isSeenUrl(segment.url)}
             onclick={() => handleUrlClick(segment.url)}
             onmouseenter={() => mouseUpdateUrl(segment)}
             onmousemove={() => mouseUpdateUrl(segment)}
@@ -442,7 +457,7 @@
     padding: 0;
     margin: 0;
   }
-  .chat-url.loaded {
+  .chat-url.seen {
     color: var(--color-accent-light);
   }
   .chat-url:hover {

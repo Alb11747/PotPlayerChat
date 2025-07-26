@@ -33,7 +33,7 @@ function createWindow(): void {
   initSecurity(mainWindow)
   initStorage()
   initContextMenus(mainWindow)
-  initLinks()
+  initLinks(conf)
   initPotplayerHandlers(mainWindow, conf)
 
   mainWindow.on('ready-to-show', () => {
