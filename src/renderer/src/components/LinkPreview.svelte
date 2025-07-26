@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { findChildByText } from '@/utils/dom'
   import { onMount } from 'svelte'
   import { previewState } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
@@ -66,13 +67,31 @@
   $effect(updatePosition)
 
   let sanitizedTooltipHtml: string | null = $state(null)
+  let tooltipElement: HTMLSpanElement | null = $state(null)
+  let foundLinkInToolTip: boolean = $state(false)
 
   $effect(() => {
     if (!preview?.tooltip) return
+    foundLinkInToolTip = false
     sanitizeTooltip(preview.tooltip).then((html) => {
       sanitizedTooltipHtml = html
       updatePosition()
-      requestAnimationFrame(updatePosition)
+      requestAnimationFrame(() => {
+        updatePosition()
+        if (!tooltipElement) return
+        const link = findChildByText(tooltipElement, preview.link)
+        const linkClass = 'preview-url'
+        if (!link) return
+        foundLinkInToolTip = true
+        const linkElement = document.createElement('span')
+        linkElement.classList.add(linkClass)
+        linkElement.appendChild(document.createElement('br'))
+        if (link.previousSibling?.textContent?.trim() === 'URL:') link.previousSibling?.remove()
+        link.textContent = link.textContent?.trim() ?? null
+        linkElement.appendChild(link.cloneNode(true))
+        link.replaceWith(linkElement)
+        sanitizedTooltipHtml = tooltipElement.innerHTML
+      })
     })
   })
 
@@ -133,12 +152,16 @@
                 {#if !sanitizedTooltipHtml}
                   <span>Loading...</span>
                 {:else}
-                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                  {@html sanitizedTooltipHtml}
+                  <span bind:this={tooltipElement}>
+                    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                    {@html sanitizedTooltipHtml}
+                  </span>
                 {/if}
               </div>
             {/if}
-            <div class="preview-url">{preview.link}</div>
+            {#if !foundLinkInToolTip && preview.link}
+              <div class="preview-url">{preview.link}</div>
+            {/if}
           </div>
         {:else if preview}
           <div class="preview-error-content">
@@ -234,7 +257,9 @@
     padding: 2px 0;
   }
 
-  .preview-url {
+  :global(.preview-url) {
+    line-height: 1.2;
+    padding-left: 0;
     color: var(--color-text-muted);
     font-size: 12px;
     word-break: break-all;
