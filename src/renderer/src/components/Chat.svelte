@@ -299,13 +299,10 @@
     })
   }
 
-  // Handle URL click
-  function handleUrlClick(url: string): void {
-    urlTracker.markVisitedUrl(url)
-    window.api.openUrl(url)
-  }
-
-  function openSearchWindow(info?: Partial<SearchInfo>): void {
+  function openSearchWindow(
+    info?: Partial<SearchInfo>,
+    extraData?: { message?: TwitchMessage }
+  ): void {
     const searchRangeBuffer = 60 * 60 * 1000
     if (!selectedPotplayerInfo) throw new Error('No selected PotPlayer info')
     if (!selectedPotplayerInfo.startTime || !selectedPotplayerInfo.endTime)
@@ -317,6 +314,7 @@
 
     window.api.openSearchWindow({
       potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
+      focusedMessageRaw: extraData?.message?.raw,
       initialMessagesRaw: msgToData(messages),
       searchRange: settings.search.showAllMessages
         ? {
@@ -329,16 +327,19 @@
     window.api.setMessagesRaw(msgToData(chatService.currentChatData))
   }
 
-  function handleUsernameClick(info: { username: string }): void {
+  function handleUsernameClick(info: { username: string; message: TwitchMessage }): void {
     if (
       !selectedPotplayerInfo ||
       !selectedPotplayerInfo.startTime ||
       !selectedPotplayerInfo.endTime
     )
       return
-    openSearchWindow({
-      initialSearch: `${info.username}: `
-    })
+    openSearchWindow(
+      {
+        initialSearch: `${info.username}: `
+      },
+      { message: info.message }
+    )
   }
 
   // Handle keyboard shortcuts
@@ -442,7 +443,6 @@
               : undefined}
             {urlTracker}
             usernameColorMap={chatService.usernameColorCache ?? undefined}
-            onUrlClick={handleUrlClick}
             onUsernameClick={handleUsernameClick}
             onEmoteLoad={() => scrollToBottom && scrollToTargetDebounced(true)}
             bind:reloadServicesFunction={reloadServicesFunctionMap[i]}

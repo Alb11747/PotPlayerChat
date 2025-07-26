@@ -2,6 +2,7 @@
   import { ChatService, type LoadingState } from '@/core/chat/twitch-chat'
   import {
     convertRawIrcMessagesToTwitchMessages,
+    convertRawIrcMessageToTwitchMessage,
     TwitchChatMessage,
     TwitchSystemMessage,
     type TwitchMessage
@@ -48,6 +49,7 @@
   let loadedMessages = $state(false)
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const seenMessages = new Set<string>()
+  let focusedMessage: TwitchMessage | null = $state(null)
   let initialMessages: TwitchMessage[] = $state.raw([])
   let messages: TwitchMessageFormatted[] = $state.raw([])
   let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
@@ -80,6 +82,12 @@
 
       await chatService.updateVideoInfo(searchInfo.potplayerInfo, -1)
       if (searchInfo.initialSearch) searchQuery = searchInfo.initialSearch
+
+      if (searchInfo.focusedMessageRaw) {
+        const focusedMsg = convertRawIrcMessageToTwitchMessage(searchInfo.focusedMessageRaw)
+        console.debug('Focused message:', focusedMsg)
+        focusedMessage = focusedMsg
+      }
 
       const dec = new TextDecoder()
 
@@ -160,9 +168,20 @@
   function scrollToInitialMessages(): void {
     setTimeout(() => {
       if (!vlistRef || !filteredMessages || filteredMessages.length === 0) return
-      const targetElementIndex = filteredMessages.findLastIndex((msg) =>
-        initialMessageIds.has(msg.getId())
-      )
+
+      let targetElementIndex = -1
+
+      if (focusedMessage && targetElementIndex === -1) {
+        const focusedMsgId = focusedMessage.getId()
+        targetElementIndex = filteredMessages.findLastIndex((msg) => msg.getId() === focusedMsgId)
+      }
+
+      if (initialMessageIds.size > 0 && targetElementIndex === -1) {
+        targetElementIndex = filteredMessages.findLastIndex((msg) =>
+          initialMessageIds.has(msg.getId())
+        )
+      }
+
       if (targetElementIndex === -1) return
       vlistRef.scrollToIndex(targetElementIndex, { align: 'center' })
     }, 0)
