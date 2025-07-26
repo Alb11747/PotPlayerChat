@@ -6,6 +6,9 @@
     settings,
     settingsConfigKey
   } from '../state/settings.svelte'
+  import type { UrlTracker } from '../state/url-tracker'
+
+  let { urlTracker }: { urlTracker: UrlTracker } = $props()
 
   $effect(() => {
     normalizeSettings()
@@ -63,25 +66,6 @@
       Enable Emotes
     </label>
     <label>
-      <input type="checkbox" bind:checked={settings.interface.enableLinkPreviews} />
-      Enable Link Previews
-    </label>
-    <label>
-      <input type="checkbox" bind:checked={settings.interface.enableEmotePreviews} />
-      Enable Emote Previews
-    </label>
-    <label>
-      <span class="label-text">Default Preview Position:</span>
-      <select bind:value={settings.interface.defaultPreviewPosition}>
-        <option value="top">Top</option>
-        <option value="bottom">Bottom</option>
-      </select>
-    </label>
-    <label>
-      <input type="checkbox" bind:checked={settings.interface.stickyPreviews} />
-      Sticky Previews
-    </label>
-    <label>
       <input type="checkbox" bind:checked={settings.interface.keepScrollPosition} />
       Keep Scroll Position
     </label>
@@ -102,10 +86,44 @@
         <option value="displayFirst">Display Name (Username)</option>
       </select>
     </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Link Preview Settings</legend>
+    <label>
+      <input type="checkbox" bind:checked={settings.interface.enableLinkPreviews} />
+      Enable Link Previews
+    </label>
+    <label>
+      <input type="checkbox" bind:checked={settings.interface.enableEmotePreviews} />
+      Enable Emote Previews
+    </label>
+    <label>
+      <input type="checkbox" bind:checked={settings.interface.stickyPreviews} />
+      Sticky Previews
+    </label>
+    <label>
+      <span class="label-text">Default Preview Position:</span>
+      <select bind:value={settings.interface.defaultPreviewPosition}>
+        <option value="top">Top</option>
+        <option value="bottom">Bottom</option>
+      </select>
+    </label>
     <label>
       <input type="checkbox" bind:checked={settings.interface.requireHttpInUrl} />
       Require HTTP in URL
     </label>
+    <button
+      class="reset-button"
+      onclick={() => {
+        window.api.clearUrlSeen()
+        window.api.clearUrlClicked()
+        urlTracker.clearSeenUrls()
+        urlTracker.clearVisitedUrls()
+      }}
+    >
+      Clear Url Seen and Clicked Data
+    </button>
   </fieldset>
 
   <fieldset>

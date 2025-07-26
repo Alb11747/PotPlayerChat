@@ -11,6 +11,7 @@ export interface LinkPreview {
 
 export class UrlTracker {
   private cache = new SvelteMap<string, LinkPreview>()
+  private seenUrls = new SvelteSet<string>()
   private visitedUrls = new SvelteSet<string>()
   private loadingUrls = new SvelteSet<string>()
   private failedUrls = new SvelteSet<string>()
@@ -22,6 +23,8 @@ export class UrlTracker {
    * Fetch link preview data for a URL
    */
   async getPreview(url: string): Promise<LinkPreview | null> {
+    if (!this.isSeenUrl(url)) this.markSeenUrl(url)
+
     if (this.cache.has(url)) return this.cache.get(url) ?? null
     return await this.lock.acquire(url, async () => {
       if (this.cache.has(url)) return this.cache.get(url) ?? null
@@ -105,6 +108,28 @@ export class UrlTracker {
   }
 
   /**
+   * Check if a URL has been seen
+   */
+  isSeenUrl(url: string): boolean {
+    return this.seenUrls.has(url)
+  }
+
+  /**
+   * Mark a URL as seen
+   */
+  async markSeenUrl(url: string): Promise<void> {
+    this.seenUrls.add(url)
+    await window.api.addUrlSeen(url)
+  }
+
+  /**
+   * Clear the seen URL set
+   */
+  clearSeenUrls(): void {
+    this.seenUrls.clear()
+  }
+
+  /**
    * Check if a URL has been visited
    */
   isVisitedUrl(url: string): boolean {
@@ -115,8 +140,16 @@ export class UrlTracker {
    * Mark a URL as visited
    * This can be used to avoid fetching previews for already visited links
    */
-  markVisitedUrl(url: string): void {
+  async markVisitedUrl(url: string): Promise<void> {
     this.visitedUrls.add(url)
+    await window.api.addUrlClicked(url)
+  }
+
+  /**
+   * Clear the visited URL set
+   */
+  clearVisitedUrls(): void {
+    this.visitedUrls.clear()
   }
 
   /**

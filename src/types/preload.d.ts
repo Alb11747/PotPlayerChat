@@ -55,6 +55,12 @@ export interface WindowApi {
   getPlaylists: typeof getPlaylists
   getStreamHistory: typeof getStreamHistory
   getPotplayerExtraInfo: typeof getPotplayerExtraInfo
+  isUrlSeen: (url: string) => Promise<boolean>
+  addUrlSeen: (url: string) => Promise<void>
+  clearUrlSeen: () => Promise<void>
+  isUrlClicked: (url: string) => Promise<boolean>
+  addUrlClicked: (url: string) => Promise<void>
+  clearUrlClicked: () => Promise<void>
   openUrl: (url: string) => Promise<void>
   openSearchWindow: (args: SearchInfo) => Promise<void>
   getLinkPreview: typeof getLinkPreview
