@@ -276,7 +276,11 @@
         itemSize={80}
       >
         {#snippet children(msg)}
-          <button type="button" class="search-result-item">
+          <button
+            type="button"
+            class="search-result-item"
+            onclick={() => window.api.focusMessage(msg.raw)}
+          >
             <ChatMessage
               message={msg}
               videoStartTime={chatService?.currentPotPlayerInfo?.startTime}

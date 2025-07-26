@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { convertTwitchMessagesToRawIrcMessages, type TwitchMessage } from '@core/chat/twitch-msg'
+  import {
+    convertRawIrcMessageToTwitchMessage,
+    convertTwitchMessagesToRawIrcMessages,
+    type TwitchMessage
+  } from '@core/chat/twitch-msg'
   import { VList } from 'virtua/svelte'
 
   import { onMount, untrack } from 'svelte'
@@ -254,6 +258,25 @@
       window.api.offPotPlayerInstancesChanged(onPotPlayerInstancesChangedEvent)
       window.api.offSetOffset(onSetOffsetEvent)
     }
+  })
+
+  function onFocusMessage(messageRaw: string): void {
+    if (!vlistRef) return
+    const message = convertRawIrcMessageToTwitchMessage(messageRaw)
+    const messageId = message.getId()
+    const messageIndex = messages.findIndex((m) => m.getId() === messageId)
+    if (messageIndex === -1) return
+    targetElement = message
+    targetViewportOffset = (vlistRef.getViewportSize() - vlistRef.getItemSize(messageIndex)) / 2
+    scrollToBottom = false
+    scrollToTarget()
+  }
+
+  onMount(() => {
+    const onFocusMessageEvent: Parameters<typeof window.api.onFocusMessage>[0] = (_, ...args) =>
+      onFocusMessage(...args)
+    window.api.onFocusMessage(onFocusMessageEvent)
+    return () => window.api.offFocusMessage(onFocusMessageEvent)
   })
 
   function setPotPlayerInstance(instanceProxy: PotPlayerInstance | PotPlayerInfo | null): void {

@@ -54,6 +54,7 @@ const api: WindowApi = {
   clearUrlClicked: (...args) => ipcRenderer.invoke('clearUrlClicked', ...args),
   openUrl: (...args) => ipcRenderer.invoke('openUrl', ...args),
   openSearchWindow: (...args) => ipcRenderer.invoke('openSearchWindow', ...args),
+  focusMessage: (...args) => ipcRenderer.invoke('focusMessage', ...args),
   getLinkPreview: (...args) => ipcRenderer.invoke('getLinkPreview', ...args),
   clearLinkPreviewCache: (...args) => ipcRenderer.invoke('clearLinkPreviewCache', ...args),
   sanitizeHtml: (...args) => ipcRenderer.invoke('sanitizeHtml', ...args),
@@ -66,7 +67,9 @@ const api: WindowApi = {
   },
   offPotPlayerInstancesChanged: (callback) => {
     ipcRenderer.off('potplayerInstancesChanged', callback as never)
-  }
+  },
+  onFocusMessage: (callback) => ipcRenderer.on('focusMessage', callback as never),
+  offFocusMessage: (callback) => ipcRenderer.off('focusMessage', callback as never)
 }
 
 if (process.contextIsolated) {
