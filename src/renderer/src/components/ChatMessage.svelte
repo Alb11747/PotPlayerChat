@@ -32,7 +32,7 @@
     usernameColorMap?: Map<string, { color: string; timestamp: number }>
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
-    onUsernameClick?: (info: { username: string }) => void
+    onUsernameClick?: (info: { username: string; message: TwitchMessage }) => void
     onEmoteLoad?: (emote: CheerEmote | TwitchEmote | NativeTwitchEmote) => void
     enableLinkPreviews?: boolean
     enableEmotePreviews?: boolean
@@ -61,12 +61,12 @@
     reloadServicesFunction = $bindable()
   }: Props = $props()
 
-  // Handle URL click
   function handleUrlClick(url: string): void {
     urlTracker.markVisitedUrl(url)
     if (onUrlClick) {
       onUrlClick(url)
     } else {
+      urlTracker.markVisitedUrl(url)
       window.api.openUrl(url)
     }
   }
@@ -257,8 +257,9 @@
       role="link"
       tabindex="-1"
       style="color: {message.color}"
-      onclick={() => onUsernameClick?.(message)}
-      onkeydown={(e) => e.key === 'Enter' && onUsernameClick?.(message)}
+      onclick={() => onUsernameClick?.({ username: escapedUsername, message })}
+      onkeydown={(e) =>
+        e.key === 'Enter' && onUsernameClick?.({ username: escapedUsername, message })}
       style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
     >
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -350,8 +351,9 @@
             tabindex="-1"
             class="chat-username"
             style="color: {usernameColorMap?.get(segment.username)?.color || '#ffffff'}"
-            onclick={() => onUsernameClick?.(segment)}
-            onkeydown={(e) => e.key === 'Enter' && onUsernameClick?.(segment)}
+            onclick={() => onUsernameClick?.({ username: segment.username, message })}
+            onkeydown={(e) =>
+              e.key === 'Enter' && onUsernameClick?.({ username: segment.username, message })}
             style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
           >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
