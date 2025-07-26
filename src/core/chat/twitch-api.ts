@@ -331,7 +331,7 @@ export namespace TwitchBadgeService {
               map2.set(key3, new HelixChatBadgeVersion(value3))
             map.set(key2, map2)
           }
-          channelBadgeCache.set(key, map)
+          channelBadgeCache.set(key || null, map)
         }
       } catch (error) {
         console.error('Failed to load badge cache:', error, data)
