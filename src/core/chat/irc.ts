@@ -9,14 +9,25 @@ export interface IrcMessage {
 
 export function escapeIrcText(text?: string): string {
   if (!text) return ''
-  return (
-    text
-      .replaceAll('\\s', ' ')
-      .replaceAll('\\n', '\n')
-      .replaceAll('\\r', '\r')
-      .replaceAll('\\t', '\t')
-      .replaceAll('\\\\', '\\') || ''
-  )
+  return text.replace(/\\(.)/g, (_, c) => {
+    switch (c) {
+      case 's':
+        return ' '
+      case 'n':
+        return '\n'
+      case 'r':
+        return '\r'
+      case 't':
+        return '\t'
+      case '\\':
+        return '\\'
+      case ':':
+        return ':'
+      default:
+        console.warn(`Unknown escape sequence: \\${c}`)
+        return c
+    }
+  })
 }
 
 export function parseIrcMessages(lines: string): IrcMessage[] {
@@ -45,7 +56,10 @@ export function parseIrcMessage(line: string): IrcMessage {
       let semiIdx = line.indexOf(';', start)
       if (semiIdx === -1 || semiIdx > spaceIdx) semiIdx = spaceIdx
       if (eqIdx !== -1 && eqIdx < semiIdx) {
-        tags.set(line.substring(start, eqIdx), line.substring(eqIdx + 1, semiIdx))
+        const key = line.substring(start, eqIdx)
+        let value = line.substring(eqIdx + 1, semiIdx)
+        if (value.includes('\\')) value = escapeIrcText(value)
+        tags.set(key, value)
       }
       start = semiIdx + 1
     }

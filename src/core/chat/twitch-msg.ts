@@ -1,5 +1,5 @@
 import { millifyTimedelta } from '@/utils/time'
-import { escapeIrcText, parseIrcMessage, parseIrcMessages, type IrcMessage } from './irc'
+import { parseIrcMessage, parseIrcMessages, type IrcMessage } from './irc'
 
 export type TwitchMessage = TwitchChatMessage | TwitchSystemMessage
 
@@ -474,7 +474,7 @@ export class TwitchSystemMessage extends TwitchBaseMessage {
     } else if (this.command === 'USERNOTICE') {
       const msgId = this.tags['msg-id']
       const displayName = this.tags['display-name'] || this.tags['login'] || 'Unknown'
-      const systemMsg = escapeIrcText(this.tags['system-msg'])
+      const systemMsg = this.tags['system-msg']
       switch (msgId) {
         case 'sub':
         case 'resub': {
@@ -483,11 +483,9 @@ export class TwitchSystemMessage extends TwitchBaseMessage {
             msg = systemMsg
           } else {
             console.warn("'sub' or 'resub' message without system-msg tag, using default format")
-            const months = escapeIrcText(
-              this.tags['msg-param-cumulative-months'] || this.tags['msg-param-months']
-            )
-            const streak = escapeIrcText(this.tags['msg-param-streak-months'])
-            const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
+            const months = this.tags['msg-param-cumulative-months'] || this.tags['msg-param-months']
+            const streak = this.tags['msg-param-streak-months']
+            const planName = this.tags['msg-param-sub-plan-name']
             msg = `${displayName} subscribed`
             if (months) msg += ` (${months} months)`
             if (planName) msg += ` with ${planName}`
@@ -501,12 +499,11 @@ export class TwitchSystemMessage extends TwitchBaseMessage {
             msg = systemMsg
           } else {
             console.warn("'subgift' message without system-msg tag, using default format")
-            const recipient = escapeIrcText(
+            const recipient =
               this.tags['msg-param-recipient-display-name'] ||
-                this.tags['msg-param-recipient-user-name'] ||
-                'someone'
-            )
-            const planName = escapeIrcText(this.tags['msg-param-sub-plan-name'])
+              this.tags['msg-param-recipient-user-name'] ||
+              'someone'
+            const planName = this.tags['msg-param-sub-plan-name']
             msg = `${displayName} gifted a sub to ${recipient}`
             if (planName) msg += ` (${planName})`
           }
@@ -518,7 +515,7 @@ export class TwitchSystemMessage extends TwitchBaseMessage {
             msg = systemMsg
           } else {
             console.warn("'submysterygift' message without system-msg tag, using default format")
-            const count = escapeIrcText(this.tags['msg-param-mass-gift-count'])
+            const count = this.tags['msg-param-mass-gift-count']
             msg = `${displayName} gifted ${count || 'some'} mystery subs to the community`
           }
           return [msg, this.message]
@@ -529,20 +526,19 @@ export class TwitchSystemMessage extends TwitchBaseMessage {
             msg = systemMsg
           } else {
             console.warn("'raid' message without system-msg tag, using default format")
-            const raider = escapeIrcText(this.tags['msg-param-displayName'] || displayName)
-            const viewers = escapeIrcText(this.tags['msg-param-viewerCount'])
+            const raider = this.tags['msg-param-displayName'] || displayName
+            const viewers = this.tags['msg-param-viewerCount']
             msg = `${raider} is raiding with ${viewers || 'some'} viewers`
           }
           return [msg, this.message]
         }
         case 'bitsbadgetier': {
-          const threshold = escapeIrcText(this.tags['msg-param-threshold'])
+          const threshold = this.tags['msg-param-threshold']
           return [`${displayName} just earned a new Bits badge tier: ${threshold}`, undefined]
         }
         case 'giftpaidupgrade': {
-          const sender = escapeIrcText(
+          const sender =
             this.tags['msg-param-sender-name'] || this.tags['msg-param-sender-login'] || 'someone'
-          )
           return [`${displayName} received a gift sub from ${sender}`, undefined]
         }
         case 'anongiftpaidupgrade': {
