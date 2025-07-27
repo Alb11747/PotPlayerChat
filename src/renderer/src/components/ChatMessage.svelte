@@ -22,6 +22,7 @@
   } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../state/url-tracker'
+  import EmoteComponent from './Emote.svelte'
 
   interface Props {
     message: TwitchMessage
@@ -206,10 +207,6 @@
     return urlTracker.isVisitedUrl(url)
   }
 
-  function mouseUpdateEmote(segment: Segment & { type: 'emote' | 'cheer' }): void {
-    if (enableEmotePreviews && !currentPreviewType()) previewState.emoteSegment = segment
-  }
-
   function mouseUpdateUrl(segment: Segment & { type: 'url' }): void {
     if (enableLinkPreviews && !currentPreviewType()) {
       previewState.url = segment.url
@@ -283,52 +280,7 @@
     >
       {#each parsedMessageSegments.entries() || [] as [index, segment] ((message.getId(), index))}
         {#if (segment.type === 'emote' || segment.type === 'cheer') && !urlTracker.isFailedUrl(segment.url)}
-          <span
-            class={segment.type === 'cheer' ? 'emote-cheer' : 'emote-group'}
-            style:color={segment.type === 'cheer' ? segment.emote.color : ''}
-          >
-            <img
-              class="chat-emote"
-              src={segment.url}
-              alt={segment.name}
-              loading="lazy"
-              decoding="async"
-              onload={() => {
-                if (onEmoteLoad) onEmoteLoad(segment.emote)
-              }}
-              onerror={() => {
-                urlTracker.markFailedUrl(segment.url)
-              }}
-              onmouseenter={() => mouseUpdateEmote(segment)}
-              onmousemove={() => mouseUpdateEmote(segment)}
-              onmouseleave={() => {
-                if (enableEmotePreviews) onMouseLeavePreviewElement()
-              }}
-            />
-            {#if segment.type === 'emote'}
-              {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), index, attachedIndex))}
-                {#if !urlTracker.isFailedUrl(segment.url)}
-                  <img
-                    class="chat-emote zero-width-emote"
-                    src={attachedEmote.url}
-                    alt={attachedEmote.alt}
-                    loading="lazy"
-                    decoding="async"
-                    onload={() => {
-                      if (onEmoteLoad) onEmoteLoad(attachedEmote.emote)
-                    }}
-                    onerror={() => {
-                      urlTracker.markFailedUrl(attachedEmote.url)
-                    }}
-                  />
-                {/if}
-              {/each}
-            {:else if segment.type === 'cheer'}
-              <span class="bits">
-                {segment.bits}
-              </span>
-            {/if}
-          </span>
+          <EmoteComponent {message} {segment} {urlTracker} {onEmoteLoad} {enableEmotePreviews} />
         {:else if segment.type === 'url'}
           <button
             class="chat-url"
@@ -395,51 +347,6 @@
     color: var(--color-text-system);
     font-style: italic;
     font-weight: 500;
-  }
-
-  .chat-emote {
-    display: inline-block;
-    justify-self: center;
-    align-self: center;
-    vertical-align: middle;
-    max-height: 2.6rem;
-    max-width: 9rem;
-    margin-right: 0.25rem;
-    object-fit: contain;
-    font-weight: 900;
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .emote-group {
-    display: inline-grid;
-    position: relative;
-    vertical-align: text-bottom;
-  }
-  .emote-group > .chat-emote,
-  .emote-group > .zero-width-emote {
-    grid-area: 1 / 1;
-  }
-  .zero-width-emote {
-    grid-area: 1 / 1;
-    width: auto;
-    height: 100%;
-    margin: 0;
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .emote-cheer {
-    display: inline-block;
-    width: fit-content;
-  }
-  .emote-cheer > .chat-emote {
-    margin: 0;
-  }
-  .emote-cheer > .bits {
-    vertical-align: center;
-    margin-left: -0.25rem;
-    margin-right: 0.25rem;
   }
 
   .chat-url {
