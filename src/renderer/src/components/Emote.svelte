@@ -24,12 +24,21 @@
     enableEmotePreviews: boolean
   } = $props()
 
+  let emoteElement: HTMLImageElement | null = $state(null)
+
   const emoteSizeMap: Record<string, string> = {
     '1': '0.5x',
     '2': '1x',
     '3': '1.5x',
     '4': '2x'
   }
+
+  const isTallTwitchEmote = $derived.by(() => {
+    if (!emoteElement) return false
+    if (segment.type !== 'emote') return false
+    if (segment.emote.type !== 'twitch') return false
+    return emoteElement.naturalHeight > emoteElement.naturalWidth
+  })
 
   function mouseUpdateEmote(segment: Segment & { type: 'emote' | 'cheer' }): void {
     if (enableEmotePreviews && !currentPreviewType()) previewState.emoteSegment = segment
@@ -47,7 +56,9 @@
   style:color={segment.type === 'cheer' ? segment.emote.color : ''}
 >
   <img
+    bind:this={emoteElement}
     class="chat-emote"
+    class:tall-twitch-emote={isTallTwitchEmote}
     srcset={urlsToSrcset(segment.urls, emoteSizeMap)}
     alt={segment.name}
     loading="lazy"
@@ -98,6 +109,9 @@
     font-weight: 900;
     grid-column: 1;
     grid-row: 1;
+  }
+  .tall-twitch-emote {
+    max-height: 1.6rem;
   }
 
   .emote-group {
