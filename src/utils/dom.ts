@@ -9,3 +9,12 @@ export function findChildByText(
   }
   return null
 }
+
+export function urlsToSrcset(
+  urls: Record<string, string>,
+  sizeMap?: Record<string, string>
+): string {
+  return Object.entries(urls)
+    .map(([scale, url]) => `${url} ${sizeMap?.[scale] || `${scale}x`}`)
+    .join(', ')
+}

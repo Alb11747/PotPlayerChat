@@ -279,7 +279,7 @@
         : ''}
     >
       {#each parsedMessageSegments.entries() || [] as [index, segment] ((message.getId(), index))}
-        {#if (segment.type === 'emote' || segment.type === 'cheer') && !urlTracker.isFailedUrl(segment.url)}
+        {#if (segment.type === 'emote' || segment.type === 'cheer') && Object.values(segment.urls).some((url) => !urlTracker.isFailedUrl(url))}
           <EmoteComponent {message} {segment} {urlTracker} {onEmoteLoad} {enableEmotePreviews} />
         {:else if segment.type === 'url'}
           <button

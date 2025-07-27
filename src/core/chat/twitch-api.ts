@@ -14,7 +14,11 @@ import {
   HelixCheermoteList
 } from '@twurple/api'
 import { type TwitchApiCallFetchOptions } from '@twurple/api-call'
-import type { CheermoteFormat } from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
+import type {
+  CheermoteDisplayInfo,
+  CheermoteFormat,
+  CheermoteScale
+} from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
 import type { HelixCheermoteData } from '@twurple/api/lib/interfaces/endpoints/bits.external'
 import type { HelixChatBadgeVersionData } from '@twurple/api/lib/interfaces/endpoints/chat.external'
 import {
@@ -452,6 +456,8 @@ export namespace TwitchBadgeService {
 }
 
 export namespace TwitchCheerEmoteService {
+  export const emoteScales: CheermoteScale[] = ['1', '2', '4']
+
   export const channelCheerEmotesCache = new Map<string | null, HelixCheermoteList | undefined>()
 
   const configKey = 'cache:twitch-cheer-emotes'
@@ -508,23 +514,34 @@ export namespace TwitchCheerEmoteService {
     name: string,
     bits: number,
     channelId?: string,
-    format: CheermoteFormat = {
+    format: Omit<CheermoteFormat, 'scale'> = {
       background: 'dark',
-      state: 'animated',
-      scale: '4'
+      state: 'animated'
     }
   ): Promise<CheerEmote | undefined> {
     await fetchCheerEmotes(channelId)
 
     const channelCheerEmotes = channelId ? channelCheerEmotesCache.get(channelId) : undefined
     if (channelCheerEmotes && channelCheerEmotes.getPossibleNames().includes(name.toLowerCase())) {
-      const cheerEmote = channelCheerEmotes.getCheermoteDisplayInfo(name, bits, format)
-      if (cheerEmote) return new CheerEmote(cheerEmote, `${name}${bits}`, bits)
+      const cheerEmotes: Record<string, CheermoteDisplayInfo> = {}
+      for (const scale of TwitchCheerEmoteService.emoteScales)
+        cheerEmotes[scale] = channelCheerEmotes.getCheermoteDisplayInfo(name, bits, {
+          ...format,
+          scale
+        })
+      if (Object.keys(cheerEmotes).length > 0)
+        return new CheerEmote(cheerEmotes, `${name}${bits}`, bits)
     }
     const globalCheerEmotes = channelCheerEmotesCache.get(null)
     if (globalCheerEmotes && globalCheerEmotes.getPossibleNames().includes(name.toLowerCase())) {
-      const cheerEmote = globalCheerEmotes.getCheermoteDisplayInfo(name, bits, format)
-      if (cheerEmote) return new CheerEmote(cheerEmote, `${name}${bits}`, bits)
+      const cheerEmotes: Record<string, CheermoteDisplayInfo> = {}
+      for (const scale of TwitchCheerEmoteService.emoteScales)
+        cheerEmotes[scale] = globalCheerEmotes.getCheermoteDisplayInfo(name, bits, {
+          ...format,
+          scale
+        })
+      if (Object.keys(cheerEmotes).length > 0)
+        return new CheerEmote(cheerEmotes, `${name}${bits}`, bits)
     }
 
     return undefined

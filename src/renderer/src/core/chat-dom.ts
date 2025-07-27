@@ -3,6 +3,7 @@ import { regExpEscape, removePrefix, utf8IndexToUtf16IndexMap } from '@/utils/st
 import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import type { Collection, Emote } from '@mkody/twitch-emoticons'
+import type { CheermoteScale } from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
 
 /**
  * Escapes HTML special characters in a string.
@@ -173,12 +174,12 @@ export type EmoteSegment =
   | {
       type: 'emote'
       source: string
-      url: string
+      urls: Record<string, string>
       emote: TwitchEmote | NativeTwitchEmote
       name: string
       zeroWidth?: boolean
       attachedEmotes?: {
-        url: string
+        urls: Record<string, string>
         emote: TwitchEmote | NativeTwitchEmote
         name: string
         alt: string
@@ -186,7 +187,7 @@ export type EmoteSegment =
     }
   | {
       type: 'cheer'
-      url: string
+      urls: Record<CheermoteScale, string>
       emote: CheerEmote
       name: string
       bits: number
@@ -474,16 +475,18 @@ export function parseFullMessage(
         return false
       }
       if (type === 'emote' && 'toLink' in emote) {
-        const url = emote.toLink(emote.sizes?.length - 1 || 2)
+        const maxSize = emote.sizes?.length - 1 || 2
+        const urls: Record<string, string> = {}
+        for (let i = 0; i <= maxSize; i++) urls[(i + 1).toString()] = emote.toLink(i)
         const source = opts?.source || ''
         const name = emoteName || text.replace(PUA_UNICODE_REGEX, '')
-        acc.push({ type, source, fullText, text, url, emote, name, zeroWidth })
+        acc.push({ type, source, fullText, text, urls, emote, name, zeroWidth })
       } else if ('source' in emote && emote.source === 'cheer') {
         const type = 'cheer'
-        const url = emote.url
+        const urls = emote.urls
         const bits = emote.bits
         const name = emote.name
-        acc.push({ type, fullText, text, url, emote, bits, name })
+        acc.push({ type, fullText, text, urls, emote, bits, name })
       } else {
         console.warn(`Unknown emote type: ${type}`, segment)
         return false
@@ -622,7 +625,7 @@ export function parseFullMessage(
       segment.text += next1Segment.text + next2Segment.text
       segment.attachedEmotes = segment.attachedEmotes || []
       segment.attachedEmotes.push({
-        url: next2Segment.url,
+        urls: next2Segment.urls,
         emote: next2Segment.emote,
         name: next2Segment.name,
         alt:
