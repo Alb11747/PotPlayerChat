@@ -13,6 +13,8 @@ export interface TwitchEmote extends BaseTwitchEmote {
 export class NativeTwitchEmote {
   public static readonly sizes: EmoteSize[] = ['1.0', '2.0', '3.0']
 
+  public readonly type = 'twitch'
+
   constructor(
     public id: string,
     public name?: string,
