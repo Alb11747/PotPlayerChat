@@ -3,6 +3,7 @@ import {
   type TwitchEmote as BaseTwitchEmote
 } from '@mkody/twitch-emoticons'
 import type { CheermoteDisplayInfo } from '@twurple/api'
+import type { CheermoteScale } from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
 import { buildEmoteImageUrl, type EmoteSize } from '@twurple/chat'
 
 export interface TwitchEmote extends BaseTwitchEmote {
@@ -56,18 +57,23 @@ sevenTVEmotePrototype.toObject = function () {
   return object
 }
 
-export class CheerEmote implements CheermoteDisplayInfo {
+export class CheerEmote {
   public source = 'cheer' as const
 
-  public url: string
+  public urls: Record<CheermoteScale, string>
   public color: string
 
   constructor(
-    info: CheermoteDisplayInfo,
+    infos: Record<CheermoteScale, CheermoteDisplayInfo>,
     public name: string,
     public bits: number
   ) {
-    this.url = info.url
-    this.color = info.color
+    if (Object.keys(infos).length === 0) throw new Error('No infos provided')
+    this.color = ''
+    this.urls = {} as Record<CheermoteScale, string>
+    for (const [scale, info] of Object.entries(infos) as [CheermoteScale, CheermoteDisplayInfo][]) {
+      this.urls[scale] = info.url
+      this.color = info.color
+    }
   }
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { findChildByText } from '@/utils/dom'
+  import { findChildByText, urlsToSrcset } from '@/utils/dom'
   import { onMount } from 'svelte'
   import { previewState } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
@@ -179,7 +179,20 @@
       {/if}
     {:else if emoteSegment}
       <div class="p-3 flex flex-col items-center gap-2">
-        <img src={emoteSegment.url} alt={emoteSegment.name} class="emote-preview-image" />
+        <img
+          class="emote-preview-image"
+          srcset={urlsToSrcset(emoteSegment.urls, {
+            '1': '0.25x',
+            '2': '0.5x',
+            '3': '0.75x',
+            '4': '1x'
+          })}
+          alt={emoteSegment.name}
+          onload={() => {
+            updatePosition()
+            requestAnimationFrame(updatePosition)
+          }}
+        />
         <div class="emote-preview-name">{emoteSegment.name}</div>
         {#if source}
           <div class="emote-preview-source">
@@ -197,7 +210,7 @@
             {#each emoteSegment.attachedEmotes?.entries() || [] as [index, attachedEmote] (index)}
               <div class="zero-width-emote-item">
                 <img
-                  src={attachedEmote.url}
+                  srcset={urlsToSrcset(attachedEmote.urls)}
                   alt={attachedEmote.name}
                   class="zero-width-emote-image"
                 />

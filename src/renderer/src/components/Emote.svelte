@@ -8,6 +8,7 @@
     previewState
   } from '@/renderer/src/state/preview.svelte'
   import type { UrlTracker } from '@/renderer/src/state/url-tracker'
+  import { urlsToSrcset } from '@/utils/dom'
 
   let {
     message,
@@ -23,8 +24,21 @@
     enableEmotePreviews: boolean
   } = $props()
 
+  const emoteSizeMap: Record<string, string> = {
+    '1': '0.5x',
+    '2': '1x',
+    '3': '1.5x',
+    '4': '2x'
+  }
+
   function mouseUpdateEmote(segment: Segment & { type: 'emote' | 'cheer' }): void {
     if (enableEmotePreviews && !currentPreviewType()) previewState.emoteSegment = segment
+  }
+
+  function onError(event: Event, urls: Record<string, string>): void {
+    if (!(event.target instanceof HTMLImageElement)) return
+    if (event.target.src) urlTracker.markFailedUrl(event.target.src)
+    for (const url of Object.values(urls)) urlTracker.markFailedUrl(url)
   }
 </script>
 
@@ -34,16 +48,14 @@
 >
   <img
     class="chat-emote"
-    src={segment.url}
+    srcset={urlsToSrcset(segment.urls, emoteSizeMap)}
     alt={segment.name}
     loading="lazy"
     decoding="async"
     onload={() => {
       if (onEmoteLoad) onEmoteLoad(segment.emote)
     }}
-    onerror={() => {
-      urlTracker.markFailedUrl(segment.url)
-    }}
+    onerror={(event) => onError(event, segment.urls)}
     onmouseenter={() => mouseUpdateEmote(segment)}
     onmousemove={() => mouseUpdateEmote(segment)}
     onmouseleave={() => {
@@ -52,19 +64,17 @@
   />
   {#if segment.type === 'emote'}
     {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), attachedIndex))}
-      {#if !urlTracker.isFailedUrl(segment.url)}
+      {#if Object.values(attachedEmote.urls).some((url) => !urlTracker.isFailedUrl(url))}
         <img
           class="chat-emote zero-width-emote"
-          src={attachedEmote.url}
+          srcset={urlsToSrcset(attachedEmote.urls, emoteSizeMap)}
           alt={attachedEmote.alt}
           loading="lazy"
           decoding="async"
           onload={() => {
             if (onEmoteLoad) onEmoteLoad(attachedEmote.emote)
           }}
-          onerror={() => {
-            urlTracker.markFailedUrl(attachedEmote.url)
-          }}
+          onerror={(event) => onError(event, attachedEmote.urls)}
         />
       {/if}
     {/each}
