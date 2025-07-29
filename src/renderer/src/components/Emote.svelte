@@ -41,7 +41,11 @@
   })
 
   function mouseUpdateEmote(segment: Segment & { type: 'emote' | 'cheer' }): void {
-    if (enableEmotePreviews && !currentPreviewType()) previewState.emoteSegment = segment
+    if (enableEmotePreviews && !currentPreviewType()) {
+      previewState.emoteSegment = segment
+    }
+    if (previewState.emoteSegment?.name === segment.name)
+      previewState.lastUpdateTime = performance.now()
   }
 
   function onError(event: Event, urls: Record<string, string>): void {

@@ -213,6 +213,7 @@
       previewState.urlTrackerInstance = urlTracker
       handleUrlHover(segment.url)
     }
+    if (previewState.url === segment.url) previewState.lastUpdateTime = performance.now()
   }
 </script>
 
