@@ -1,3 +1,22 @@
+export class NumberObject extends Number {
+  constructor(private value: number) {
+    super(value)
+  }
+
+  override valueOf(): number {
+    return this.value
+  }
+
+  public setValue(value: number): void {
+    this.value = value
+  }
+
+  static ensureObject(value: number | NumberObject): NumberObject {
+    if (value instanceof NumberObject) return value
+    return new NumberObject(value)
+  }
+}
+
 export function isEqual<T>(a: T, b: T): boolean {
   if (a === b) return true
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
