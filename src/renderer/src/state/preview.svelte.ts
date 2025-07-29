@@ -6,6 +6,7 @@ export const previewState = $state({
   url: null as string | null,
   emoteSegment: null as EmoteSegment | null,
   mousePosition: { x: 0, y: 0 },
+  lastUpdateTime: 0,
   urlTrackerInstance: null as UrlTracker | null,
   clearOnMove: false
 })

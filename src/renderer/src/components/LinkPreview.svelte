@@ -11,8 +11,18 @@
 
   function handleMouseMove(e: MouseEvent): void {
     previewState.mousePosition = { x: e.clientX, y: e.clientY }
-    previewState.url = null
-    previewState.emoteSegment = null
+    if (previewState.clearOnMove) {
+      previewState.url = null
+      previewState.emoteSegment = null
+      previewState.clearOnMove = false
+    } else if (performance.now() - previewState.lastUpdateTime > 10) {
+      setTimeout(() => {
+        if (performance.now() - previewState.lastUpdateTime > 10) {
+          previewState.url = null
+          previewState.emoteSegment = null
+        }
+      }, 0)
+    }
   }
 
   onMount(() => {
