@@ -23,13 +23,11 @@ export class UrlTracker {
    * Fetch link preview data for a URL
    */
   async getPreview(url: string): Promise<LinkPreview | null> {
-    if (!this.isSeenUrl(url)) this.markSeenUrl(url)
-
-    if (this.cache.has(url)) return this.cache.get(url) ?? null
+    if (this.cache.has(url) && this.isSeenUrl(url)) return this.cache.get(url) ?? null
     return await this.lock.acquire(url, async () => {
-      if (this.cache.has(url)) return this.cache.get(url) ?? null
-
       try {
+        if (this.cache.has(url)) return this.cache.get(url) ?? null
+
         this.loadingUrls.add(url)
 
         // Use IPC to fetch from main process (avoids CORS)
@@ -43,6 +41,7 @@ export class UrlTracker {
 
         // Cache the result
         this.cache.set(url, data)
+
         return data
       } catch (error) {
         console.warn('Failed to fetch link preview:', error)
@@ -52,6 +51,7 @@ export class UrlTracker {
         return errorResult
       } finally {
         this.loadingUrls.delete(url)
+        if (!this.isSeenUrl(url)) this.markSeenUrl(url)
       }
     })
   }
