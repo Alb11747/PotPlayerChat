@@ -46,6 +46,7 @@
 
   let chatContainerRef: HTMLDivElement | null = $state(null)
   let vlistRef: VList<TwitchMessage> | null = $state(null)
+  let lastScrollWheelTime: number = 0
   let targetElement: TwitchMessage | null = $state(null)
   let targetViewportOffset: NumberObject | number = 0
   let scrollToBottom: boolean = $state(true)
@@ -63,6 +64,7 @@
     const onUserScroll = (event: WheelEvent): void => {
       if (!isAtBottom()) scrollToBottom = false
 
+      lastScrollWheelTime = performance.now()
       cancelScrollOnNextScroll = true
 
       if (typeof targetViewportOffset === 'object')
@@ -463,7 +465,7 @@
         data={messages}
         getKey={(_, i) => messages[i]?.getId() ?? i}
         onscroll={() => {
-          if (cancelScrollOnNextScroll) {
+          if (cancelScrollOnNextScroll && performance.now() - lastScrollWheelTime < 10) {
             vlistRef?.scrollBy(0) // Cancel any pending scroll
           } else cancelScrollOnNextScroll = true
 
