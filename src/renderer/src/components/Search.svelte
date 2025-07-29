@@ -8,7 +8,12 @@
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
   import type {} from '@/types/preload'
-  import { getClosestMessageIndex, isRangeInMessages } from '@/utils/chat'
+  import {
+    findIntersectingMessageIndex,
+    findMessageIndex,
+    getClosestMessageIndex,
+    isRangeInMessages
+  } from '@/utils/chat'
   import { regExpEscape } from '@/utils/strings'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
@@ -49,12 +54,21 @@
   let loadedMessages = $state(false)
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const seenMessages = new Set<string>()
-  let focusedMessage: TwitchMessage | null = $state(null)
-  let initialMessages: TwitchMessage[] = $state.raw([])
+  let focusedMessage = $state<TwitchMessage | null>(null)
+  let initialMessages = $state.raw<TwitchMessage[] | null>(null)
   let messages: TwitchMessageFormatted[] = $state.raw([])
   let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
 
-  const initialMessageIds = $derived.by(() => new Set(initialMessages.map((msg) => msg.getId())))
+  const initialMessageMinTimestamp = $derived(
+    initialMessages && initialMessages.length > 0
+      ? Math.min(...initialMessages.map((msg) => msg.timestamp))
+      : 0
+  )
+  const initialMessageMaxTimestamp = $derived(
+    initialMessages && initialMessages.length > 0
+      ? Math.max(...initialMessages.map((msg) => msg.timestamp))
+      : 0
+  )
 
   let searchInputRef: HTMLInputElement | null = $state(null)
   let vlistRef: VList<TwitchMessageFormatted> | null = $state(null)
@@ -136,7 +150,7 @@
       const { startTime = defaultStartTime, endTime = defaultEndTime } =
         searchInfo.searchRange || {}
 
-      if (!isRangeInMessages(initialMessages, startTime, endTime)) {
+      if (!initialMessages || !isRangeInMessages(initialMessages, startTime, endTime)) {
         await chatService.updateVideoInfo(searchInfo.potplayerInfo, 0)
         const loadedMsgs = await chatService.getMessagesBetweenTimes(startTime, endTime)
 
@@ -169,22 +183,36 @@
     setTimeout(() => {
       if (!vlistRef || !filteredMessages || filteredMessages.length === 0) return
 
-      let targetElementIndex = -1
+      let targetElementIndex = null
 
       if (focusedMessage) {
-        const focusedMsgId = focusedMessage.getId()
-        targetElementIndex = filteredMessages.findLastIndex((msg) => msg.getId() === focusedMsgId)
+        targetElementIndex = findMessageIndex(
+          filteredMessages,
+          focusedMessage.getId(),
+          focusedMessage.timestamp
+        )
 
-        if (targetElementIndex === -1) {
+        if (targetElementIndex === null) {
           targetElementIndex = getClosestMessageIndex(filteredMessages, focusedMessage.timestamp)
         }
-      } else if (initialMessageIds.size > 0) {
-        targetElementIndex = filteredMessages.findLastIndex((msg) =>
-          initialMessageIds.has(msg.getId())
+      } else if (initialMessages && initialMessages.length > 0) {
+        targetElementIndex = findIntersectingMessageIndex(
+          filteredMessages,
+          initialMessages,
+          initialMessageMinTimestamp,
+          initialMessageMaxTimestamp,
+          true
         )
+
+        if (targetElementIndex === null) {
+          targetElementIndex = getClosestMessageIndex(
+            filteredMessages,
+            initialMessages[initialMessages.length - 1]!.timestamp
+          )
+        }
       }
 
-      if (targetElementIndex === -1) return
+      if (targetElementIndex === null) return
       vlistRef.scrollToIndex(targetElementIndex, { align: 'center' })
     }, 0)
   }

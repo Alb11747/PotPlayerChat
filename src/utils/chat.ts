@@ -3,6 +3,33 @@ import bounds from 'binary-searching'
 // Assumes messages are sorted by timestamp ascending
 const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp - b.timestamp
 
+export function findMessageIndex<T extends { timestamp: number; getId: () => string }>(
+  messages: T[],
+  messageId: string,
+  timestamp?: number
+): number | null {
+  if (timestamp !== undefined) {
+    // Find all messages with the matching timestamp
+    const startIdx = bounds.ge(messages, { timestamp } as T, cmp)
+    const endIdx = bounds.le(messages, { timestamp } as T, cmp)
+    for (let i = startIdx; i <= endIdx; i++) {
+      if (messages[i]?.getId() === messageId) return i
+    }
+    return null
+  }
+  const idx = messages.findIndex((msg) => msg.getId() === messageId)
+  return idx !== -1 ? idx : null
+}
+
+export function findMessage<T extends { timestamp: number; getId: () => string }>(
+  messages: T[],
+  messageId: string,
+  timestamp?: number
+): T | null {
+  const idx = findMessageIndex(messages, messageId, timestamp)
+  return idx !== null ? messages[idx]! : null
+}
+
 /**
  * Get the index of the closest message to the given time
  * @param messages - Non-empty array of messages sorted by timestamp
@@ -98,4 +125,33 @@ export function isMessageInMessages<T extends { timestamp: number; getId: () => 
   const id = message.getId()
   for (let i = startIdx; i <= endIdx; i++) if (messages[i]?.getId() === id) return true
   return false
+}
+
+export function findIntersectingMessageIndex<T extends { timestamp: number; getId: () => string }>(
+  messages: T[],
+  targetMessages: T[],
+  minTimestamp: number = -Infinity,
+  maxTimestamp: number = Infinity,
+  findLast: boolean = false
+): number | null {
+  const low = bounds.ge(messages, { timestamp: minTimestamp } as T, cmp)
+  const high = bounds.le(messages, { timestamp: maxTimestamp } as T, cmp)
+  for (const target of findLast ? targetMessages.toReversed() : targetMessages) {
+    if (target.timestamp < minTimestamp || target.timestamp > maxTimestamp)
+      throw new Error('Target message out of bounds')
+
+    const startIdx = bounds.ge(messages, { timestamp: target.timestamp } as T, cmp, low, high)
+    if (startIdx === messages.length) continue
+    const targetId = target.getId()
+
+    // Linear search for matching id at this timestamp
+    for (
+      let i = startIdx;
+      i < messages.length && messages[i]!.timestamp === target.timestamp;
+      i++
+    ) {
+      if (messages[i]!.getId() === targetId) return i
+    }
+  }
+  return null
 }
