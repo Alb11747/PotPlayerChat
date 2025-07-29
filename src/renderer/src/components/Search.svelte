@@ -8,7 +8,7 @@
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
   import type {} from '@/types/preload'
-  import { isRangeInMessages } from '@/utils/chat'
+  import { getClosestMessageIndex, isRangeInMessages } from '@/utils/chat'
   import { regExpEscape } from '@/utils/strings'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
@@ -98,7 +98,7 @@
         console.debug('Initial messages:', initialMsgs.length)
         initialMessages = initialMsgs
         loadMessages(initialMsgs)
-        scrollToInitialMessages()
+        scrollToTargetMessages()
       }
 
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -110,7 +110,7 @@
         )
         console.debug('Preloaded messages:', messages.length)
         loadMessages(messages)
-        scrollToInitialMessages()
+        scrollToTargetMessages()
       }
 
       if (!searchInfo.potplayerInfo?.hwnd) {
@@ -142,7 +142,7 @@
 
         console.debug('Loaded messages:', loadedMsgs.length)
         loadMessages(loadedMsgs)
-        scrollToInitialMessages()
+        scrollToTargetMessages()
       }
     } catch (error) {
       console.error('Failed to load messages for search:', error)
@@ -165,18 +165,20 @@
     updateFilteredMessages()
   }
 
-  function scrollToInitialMessages(): void {
+  function scrollToTargetMessages(): void {
     setTimeout(() => {
       if (!vlistRef || !filteredMessages || filteredMessages.length === 0) return
 
       let targetElementIndex = -1
 
-      if (focusedMessage && targetElementIndex === -1) {
+      if (focusedMessage) {
         const focusedMsgId = focusedMessage.getId()
         targetElementIndex = filteredMessages.findLastIndex((msg) => msg.getId() === focusedMsgId)
-      }
 
-      if (initialMessageIds.size > 0 && targetElementIndex === -1) {
+        if (targetElementIndex === -1) {
+          targetElementIndex = getClosestMessageIndex(filteredMessages, focusedMessage.timestamp)
+        }
+      } else if (initialMessageIds.size > 0) {
         targetElementIndex = filteredMessages.findLastIndex((msg) =>
           initialMessageIds.has(msg.getId())
         )
@@ -220,7 +222,7 @@
       return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
     })
 
-    scrollToInitialMessages()
+    scrollToTargetMessages()
   }
 
   function handleKeydown(event: KeyboardEvent): void {

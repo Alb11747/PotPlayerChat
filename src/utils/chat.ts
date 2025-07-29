@@ -3,6 +3,46 @@ import bounds from 'binary-searching'
 // Assumes messages are sorted by timestamp ascending
 const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp - b.timestamp
 
+/**
+ * Get the index of the closest message to the given time
+ * @param messages - Non-empty array of messages sorted by timestamp
+ * @param currentTime - The time to find the closest message for
+ * @returns The index of the closest message
+ */
+export function getClosestMessageIndex<T extends { timestamp: number }>(
+  messages: T[],
+  currentTime: number
+): number {
+  if (messages.length === 0) throw new Error('No messages available to find closest message')
+
+  const idx = bounds.ge(messages, { timestamp: currentTime } as T, cmp)
+  if (idx === messages.length) return messages.length - 1
+  if (idx === 0) return 0
+
+  const prev = messages[idx - 1]
+  const curr = messages[idx]
+  if (!prev || !curr) throw new Error('Invalid message array')
+
+  return Math.abs(prev.timestamp - currentTime) <= Math.abs(curr.timestamp - currentTime)
+    ? idx - 1
+    : idx
+}
+
+/**
+ * Get the closest message to the given time
+ * @param messages - Non-empty array of messages sorted by timestamp
+ * @param currentTime - The time to find the closest message for
+ * @returns The closest message
+ */
+export function getClosestMessage<T extends { timestamp: number }>(
+  messages: T[],
+  currentTime: number
+): T {
+  const idx = getClosestMessageIndex(messages, currentTime)
+  if (idx < 0 || idx >= messages.length) throw new Error('Closest message index out of bounds')
+  return messages[idx]!
+}
+
 export function getMessagesBetween<T extends { timestamp: number }>(
   messages: T[],
   startTime: number,
