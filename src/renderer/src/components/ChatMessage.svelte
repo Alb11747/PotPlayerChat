@@ -72,13 +72,6 @@
     }
   }
 
-  // Handle URL hover to preload preview
-  async function handleUrlHover(url: string): Promise<void> {
-    if (!enableLinkPreviews || !urlTracker.isPreviewLoading(url)) {
-      await urlTracker.getPreview(url)
-    }
-  }
-
   let channelUserId: number | null = $state(null)
   let badges: [string, HelixChatBadgeVersion][] = $state([])
   const badgeInfo: Map<string, string> | undefined = $derived(
@@ -211,7 +204,6 @@
     if (enableLinkPreviews && !currentPreviewType()) {
       previewState.url = segment.url
       previewState.urlTrackerInstance = urlTracker
-      handleUrlHover(segment.url)
     }
     if (previewState.url === segment.url) previewState.lastUpdateTime = performance.now()
   }

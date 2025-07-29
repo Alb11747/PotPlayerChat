@@ -32,6 +32,14 @@
       document.removeEventListener('mousemove', handleMouseMove, { passive: true, capture: true })
   })
 
+  $effect(() => {
+    const urlTracker = previewState.urlTrackerInstance
+    if (!urlTracker || !previewState.url) return
+    if (!urlTracker.isPreviewLoading(previewState.url)) {
+      urlTracker.getPreview(previewState.url)
+    }
+  })
+
   function updatePosition(): void {
     if (!previewElement || (!previewState.url && !emoteSegment)) return
 
