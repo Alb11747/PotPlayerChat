@@ -9,7 +9,7 @@
   import { onMount, untrack } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
 
-  import { TwitchUserService, clearAll } from '@/core/chat/twitch-api'
+  import { clearAll, TwitchUserService } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import {
     calculateTargetElement,
@@ -17,7 +17,7 @@
   } from '@/renderer/src/utils/vlist'
   import type { PotPlayerInstance } from '@/types/potplayer'
   import type { SearchInfo } from '@/types/preload'
-  import { deleteNullishKeysInPlace, isEqual } from '@/utils/objects'
+  import { deleteNullishKeysInPlace, isEqual, NumberObject } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
 
   import type { HWND } from '@/types/globals'
@@ -39,6 +39,7 @@
   let potplayerInstances: PotPlayerInstance[] = $state([])
   let showSettings = $state(false)
   let changingPotPlayerPromise: Promise<SelectedPotplayerInfo | null> | null = $state(null)
+  let lastPotplayerChangeTime: number = performance.now()
 
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
@@ -46,8 +47,9 @@
   let chatContainerRef: HTMLDivElement | null = $state(null)
   let vlistRef: VList<TwitchMessage> | null = $state(null)
   let targetElement: TwitchMessage | null = $state(null)
-  let targetViewportOffset: number = 0
-  let scrollToBottom = $state(true)
+  let targetViewportOffset: NumberObject | number = 0
+  let scrollToBottom: boolean = $state(true)
+  let cancelScrollOnNextScroll: boolean = true
 
   function isAtBottom(): boolean {
     if (!vlistRef) return false
@@ -58,15 +60,20 @@
     const containerRef = chatContainerRef
     if (!containerRef) return
 
-    const onUserScroll = (): void => {
+    const onUserScroll = (event: WheelEvent): void => {
       if (!isAtBottom()) scrollToBottom = false
-      clearTargetElement()
+
+      cancelScrollOnNextScroll = true
+
+      if (typeof targetViewportOffset === 'object')
+        targetViewportOffset.setValue(targetViewportOffset.valueOf() + event.deltaY)
+      else targetViewportOffset += event.deltaY
     }
 
-    containerRef.addEventListener('wheel', onUserScroll, { passive: true, capture: true })
+    containerRef.addEventListener('wheel', onUserScroll, { passive: true })
     return () => {
       // @ts-ignore svelte-check ignore
-      containerRef.removeEventListener('wheel', onUserScroll, { passive: true, capture: true })
+      containerRef.removeEventListener('wheel', onUserScroll, { passive: true })
     }
   })
 
@@ -81,11 +88,15 @@
     const _vlistRef = untrack(() => vlistRef)
     const _messages = untrack(() => messages)
     const _targetElement = untrack(() => targetElement)
-    const _targetViewportOffset = untrack(() => targetViewportOffset)
     _scrollToBottom = _scrollToBottom ?? untrack(() => scrollToBottom)
+
+    // The function vlist.scrollToIndex internally schedules a scroll until a measurement is done,
+    // this is an issue since the target position of a scroll can change before the measurement is complete.
+    // To avoid this, we use a modifiable NumberObject to store the targetViewportOffset,
+    targetViewportOffset = NumberObject.ensureObject(targetViewportOffset)
     scrollToTargetBase(_vlistRef, _messages, {
       targetElement: _targetElement,
-      targetViewportOffset: _targetViewportOffset,
+      targetViewportOffset: targetViewportOffset as unknown as number,
       scrollToBottom: _scrollToBottom
     })
   }
@@ -146,6 +157,7 @@
     }
 
     await resetVideoTimeHistory(selectedPotplayerInfo?.hwnd ?? null)
+    lastPotplayerChangeTime = performance.now()
     await updateChatMessages()
   }
 
@@ -203,6 +215,7 @@
         const target = calculateTargetElement(_vlistRef, messages)
         targetElement = target.targetElement
         targetViewportOffset = target.targetViewportOffset
+        cancelScrollOnNextScroll = false
       } else targetElement = null
       messages = newMessages
       scrollToTarget()
@@ -267,7 +280,7 @@
     const messageIndex = messages.findIndex((m) => m.getId() === messageId)
     if (messageIndex === -1) return
     targetElement = message
-    targetViewportOffset = (vlistRef.getViewportSize() - vlistRef.getItemSize(messageIndex)) / 2
+    targetViewportOffset = (vlistRef.getItemSize(messageIndex) - vlistRef.getViewportSize()) / 2
     scrollToBottom = false
     scrollToTarget()
   }
@@ -431,10 +444,10 @@
 
         const currentScrollToBottom = scrollToBottom
         scrollToTarget()
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           scrollToBottom = currentScrollToBottom
           scrollToTarget()
-        }, 0)
+        })
       }}>⚙️</button
     >
   </div>
@@ -449,7 +462,14 @@
         bind:this={vlistRef}
         data={messages}
         getKey={(_, i) => messages[i]?.getId() ?? i}
-        onscroll={() => (scrollToBottom = isAtBottom())}
+        onscroll={() => {
+          if (cancelScrollOnNextScroll) {
+            vlistRef?.scrollBy(0) // Cancel any pending scroll
+          } else cancelScrollOnNextScroll = true
+
+          if (performance.now() - lastPotplayerChangeTime < 3000) return
+          scrollToBottom = isAtBottom()
+        }}
       >
         {#snippet children(msg, i)}
           <ChatMessage
@@ -467,7 +487,10 @@
             {urlTracker}
             usernameColorMap={chatService.usernameColorCache ?? undefined}
             onUsernameClick={handleUsernameClick}
-            onEmoteLoad={() => scrollToBottom && scrollToTargetDebounced(true)}
+            onEmoteLoad={() => {
+              if (scrollToBottom) scrollToTargetDebounced(true)
+              cancelScrollOnNextScroll = false
+            }}
             bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
           />
         {/snippet}

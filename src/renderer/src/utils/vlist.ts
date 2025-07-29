@@ -1,6 +1,10 @@
 import bounds from 'binary-searching'
 import type { VList } from 'virtua/svelte'
 
+function floatRound(num: number): number {
+  return Math.round(num * 2 ** -1) / 2 ** -1
+}
+
 // Assumes messages are sorted by timestamp ascending
 const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp - b.timestamp
 
@@ -34,7 +38,7 @@ export function calculateTargetElement<T extends { getId: () => string; timestam
   return resultIdx >= 0
     ? {
         targetElement: messages[resultIdx]!,
-        targetViewportOffset: vlist.getItemOffset!(resultIdx) - scrollOffset
+        targetViewportOffset: floatRound(scrollOffset - vlist.getItemOffset(resultIdx))
       }
     : { targetElement: null, targetViewportOffset: 0 }
 }
@@ -71,6 +75,6 @@ export function scrollToTarget<T extends { getId: () => string; timestamp: numbe
     }
     if (targetIndex === -1) return
 
-    vlist.scrollToIndex(targetIndex, { offset: -targetViewportOffset, smooth: false })
+    vlist.scrollToIndex(targetIndex, { offset: floatRound(targetViewportOffset), smooth: false })
   }
 }
