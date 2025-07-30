@@ -46,11 +46,14 @@
 
   let chatContainerRef: HTMLDivElement | null = $state(null)
   let vlistRef: VList<TwitchMessage> | null = $state(null)
-  let lastScrollWheelTime: number = 0
   let targetElement: TwitchMessage | null = $state(null)
   let targetViewportOffset: NumberObject | number = 0
   let scrollToBottom: boolean = $state(true)
-  let cancelScrollOnNextScroll: boolean = true
+  let nextScrollKeepTarget: boolean = false
+
+  const setNextScrollKeepTargetDebounced = debounce((value: boolean) => {
+    nextScrollKeepTarget = value
+  }, 5)
 
   function isAtBottom(): boolean {
     if (!vlistRef) return false
@@ -63,9 +66,6 @@
 
     const onUserScroll = (event: WheelEvent): void => {
       if (!isAtBottom()) scrollToBottom = false
-
-      lastScrollWheelTime = performance.now()
-      cancelScrollOnNextScroll = true
 
       if (typeof targetViewportOffset === 'object')
         targetViewportOffset.setValue(targetViewportOffset.valueOf() + event.deltaY)
@@ -213,13 +213,16 @@
     } else if (!isEqualSimple(messages, newMessages)) {
       const _vlistRef = untrack(() => vlistRef)
       if (!settings.interface.keepScrollPosition) clearTargetElement()
-      else if (_vlistRef) {
+      else if (_vlistRef && !targetElement) {
         const target = calculateTargetElement(_vlistRef, messages)
         targetElement = target.targetElement
         targetViewportOffset = target.targetViewportOffset
-        cancelScrollOnNextScroll = false
-      } else targetElement = null
+      }
+
       messages = newMessages
+
+      nextScrollKeepTarget = true
+      setNextScrollKeepTargetDebounced(true)
       scrollToTarget()
     }
 
@@ -465,12 +468,19 @@
         data={messages}
         getKey={(_, i) => messages[i]?.getId() ?? i}
         onscroll={() => {
-          if (cancelScrollOnNextScroll && performance.now() - lastScrollWheelTime < 10) {
+          if (!nextScrollKeepTarget) {
+            targetElement = null
             vlistRef?.scrollBy(0) // Cancel any pending scroll
-          } else cancelScrollOnNextScroll = true
+          } else {
+            setNextScrollKeepTargetDebounced(false)
+          }
 
           if (performance.now() - lastPotplayerChangeTime < 3000) return
-          scrollToBottom = isAtBottom()
+          const currentIsAtBottom = isAtBottom()
+          if (currentIsAtBottom !== scrollToBottom) {
+            scrollToBottom = currentIsAtBottom
+            targetElement = null
+          }
         }}
       >
         {#snippet children(msg, i)}
@@ -491,7 +501,6 @@
             onUsernameClick={handleUsernameClick}
             onEmoteLoad={() => {
               if (scrollToBottom) scrollToTargetDebounced(true)
-              cancelScrollOnNextScroll = false
             }}
             bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
           />
