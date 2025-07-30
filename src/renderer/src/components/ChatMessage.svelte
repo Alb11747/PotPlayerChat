@@ -83,6 +83,7 @@
   async function loadServices(): Promise<void> {
     setConfig(conf)
 
+    if (!message || !message.channel) return
     const id = await TwitchUserService.getUserIdByName(message.channel)
     if (id) channelUserId = parseInt(id, 10)
 
