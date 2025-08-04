@@ -235,52 +235,61 @@ export type Segment = SegmentNoEscape & { escaped: string }
 export function parseFullMessage(
   messageObj: TwitchMessage,
   {
+    messagePrefix,
+    messageStr,
     twitchEmotes: emotes,
     enableEmotes = true,
     enableZeroWidthEmotes = true,
+    enableUrls = true,
+    enableMentions = true,
     showName = 'displayFirst',
     searchQuery,
     requireHttpInUrl = true,
     debug = true
   }: {
+    messagePrefix?: string
+    messageStr?: string | null
+    processedMessage?: string | null
     twitchEmotes?: Collection<string, Emote | CheerEmote>
     enableEmotes?: boolean
     enableZeroWidthEmotes?: boolean
+    enableUrls?: boolean
+    enableMentions?: boolean
     showName?: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
     searchQuery?: string | RegExp
     requireHttpInUrl?: boolean
     debug?: boolean
   } = {}
-): {
-  escapedUsername: string
-  parsedMessageSegments: Segment[]
-} {
+): [string, Segment[] | undefined] {
   const { username = '', message = '' } = messageObj
-  let processedUsername: string
-  let processedMessage: string = message
+  let processedMessage: string | undefined =
+    messageStr === null ? messageStr || undefined : (messageStr ?? message)
 
-  if (messageObj.type === 'system' || showName === 'username' || !messageObj.displayName) {
-    processedUsername = username || ''
+  if (messagePrefix) {
+    /* empty */
+  } else if (messageObj.type === 'system' || showName === 'username' || !messageObj.displayName) {
+    messagePrefix = username || ''
   } else if (
     showName === 'displayName' ||
     username.toLowerCase() === messageObj.displayName.toLowerCase()
   ) {
-    processedUsername = messageObj.displayName
+    messagePrefix = messageObj.displayName
   } else if (showName === 'usernameFirst') {
-    processedUsername = `${username} (${messageObj.displayName})`
+    messagePrefix = `${username} (${messageObj.displayName})`
   } else {
-    processedUsername = `${messageObj.displayName} (${username})`
+    messagePrefix = `${messageObj.displayName} (${username})`
   }
 
   const isAction = isActionMessage(processedMessage)
-  if (isAction) processedMessage = stripActionMessage(processedMessage)
+  if (isAction && processedMessage) processedMessage = stripActionMessage(processedMessage)
 
   // Strip PUA unicode characters from username and message
-  processedUsername = processedUsername.replace(PUA_UNICODE_REGEX, '')
-  processedMessage = processedMessage.replace(PUA_UNICODE_REGEX, '')
+  messagePrefix = messagePrefix.replace(PUA_UNICODE_REGEX, '')
+  processedMessage = processedMessage && processedMessage.replace(PUA_UNICODE_REGEX, '')
 
-  const isAscii = /^\p{ASCII}+$/u.test(processedMessage)
-  const utf16IndexMap = !isAscii ? utf8IndexToUtf16IndexMap(processedMessage) : undefined
+  const isAscii = !processedMessage || /^\p{ASCII}+$/u.test(processedMessage)
+  const utf16IndexMap =
+    !isAscii && processedMessage ? utf8IndexToUtf16IndexMap(processedMessage) : undefined
 
   type CharIndex = {
     index: number
@@ -293,9 +302,10 @@ export function parseFullMessage(
   if (searchQuery) {
     const regex =
       typeof searchQuery === 'string' ? new RegExp(regExpEscape(searchQuery), 'gi') : searchQuery
-    const fullText = `${processedUsername}: ${processedMessage}`
+    const fullText = processedMessage ? `${messagePrefix}: ${processedMessage}` : messagePrefix
+    const extraPrefixLength = processedMessage ? 2 : 0 // Length of ": " after messagePrefix
     for (const match of fullText.matchAll(regex)) {
-      const startIndex = (match.index || 0) - processedUsername.length - 2 // Adjust for "username: "
+      const startIndex = (match.index || 0) - messagePrefix.length - extraPrefixLength // Adjust for "messagePrefix: "
       const endIndex = startIndex + match[0].length
       markIndices.push({ index: startIndex, char: MarkType.HighlightStart, otherIndex: endIndex })
       markIndices.push({ index: endIndex, char: MarkType.HighlightEnd, otherIndex: startIndex })
@@ -304,16 +314,18 @@ export function parseFullMessage(
 
   // Process URLs in the message
   const markedUrls: string[] = []
-  const urlRegex = requireHttpInUrl ? HTTP_URL_REGEX : NON_HTTP_URL_REGEX
-  for (const match of processedMessage.matchAll(urlRegex)) {
-    const url = match[0]
-    const startIndex = match.index || 0
-    const endIndex = startIndex + url.length
-    markIndices.push({ index: startIndex, char: MarkType.UrlStart, otherIndex: endIndex })
-    markIndices.push({ index: endIndex, char: MarkType.UrlEnd, otherIndex: startIndex })
-    markedUrls.push(url)
+  if (enableUrls && processedMessage) {
+    const urlRegex = requireHttpInUrl ? HTTP_URL_REGEX : NON_HTTP_URL_REGEX
+    for (const match of processedMessage.matchAll(urlRegex)) {
+      const url = match[0]
+      const startIndex = match.index || 0
+      const endIndex = startIndex + url.length
+      markIndices.push({ index: startIndex, char: MarkType.UrlStart, otherIndex: endIndex })
+      markIndices.push({ index: endIndex, char: MarkType.UrlEnd, otherIndex: startIndex })
+      markedUrls.push(url)
+    }
+    markedUrls.reverse()
   }
-  markedUrls.reverse()
 
   // Process Twitch emotes
   const markedTwitchEmotes: { index: number; name: string; id?: string }[] = []
@@ -357,7 +369,7 @@ export function parseFullMessage(
   markedTwitchEmotes.sort((a, b) => b.index - a.index)
 
   // Process external emotes
-  if (enableEmotes && emotes) {
+  if (enableEmotes && emotes && processedMessage) {
     processedMessage.matchAll(/\S+/g).forEach((word) => {
       const emoteName = word[0]
       const emote = emotes.get(emoteName)
@@ -370,16 +382,18 @@ export function parseFullMessage(
 
   // Process mentions in the message
   const markedMentions: string[] = []
-  for (const match of processedMessage.matchAll(/(?<=^|\s)(@[\p{L}\p{M}\p{N}_]+)(?=\s|$)/gu)) {
-    const usernameMatch = match[1]
-    if (!usernameMatch) continue
-    const startIndex = match.index || 0
-    const endIndex = startIndex + usernameMatch.length
-    markIndices.push({ index: startIndex, char: MarkType.MentionStart, otherIndex: endIndex })
-    markIndices.push({ index: endIndex, char: MarkType.MentionEnd, otherIndex: startIndex })
-    markedMentions.push(removePrefix(usernameMatch, '@'))
+  if (enableMentions && processedMessage) {
+    for (const match of processedMessage.matchAll(/(?<=^|\s)(@[\p{L}\p{M}\p{N}_]+)(?=\s|$)/gu)) {
+      const usernameMatch = match[1]
+      if (!usernameMatch) continue
+      const startIndex = match.index || 0
+      const endIndex = startIndex + usernameMatch.length
+      markIndices.push({ index: startIndex, char: MarkType.MentionStart, otherIndex: endIndex })
+      markIndices.push({ index: endIndex, char: MarkType.MentionEnd, otherIndex: startIndex })
+      markedMentions.push(removePrefix(usernameMatch, '@'))
+    }
+    markedMentions.reverse()
   }
-  markedMentions.reverse()
 
   // Insert marks descending by index to avoid index shifting issues
   function compare(a: CharIndex, b: CharIndex): number {
@@ -432,22 +446,27 @@ export function parseFullMessage(
   for (const mark of markIndices) {
     if (mark.index < 0) {
       // Negative index means the mark is in the username
-      const index = mark.index + processedUsername.length + 2 // Adjust for "username: "
-      processedUsername =
-        processedUsername.slice(0, index) + mark.char + processedUsername.slice(index)
-    } else {
+      const index: number = mark.index + messagePrefix.length + 2 // Adjust for "messagePrefix: "
+      messagePrefix = messagePrefix.slice(0, index) + mark.char + messagePrefix.slice(index)
+    } else if (processedMessage) {
       processedMessage =
         processedMessage.slice(0, mark.index) + mark.char + processedMessage.slice(mark.index)
     }
   }
 
-  const balancedMessage = correctMarks(processedMessage)
+  const balancedMessage = processedMessage && correctMarks(processedMessage)
   if (balancedMessage !== processedMessage) {
     console.warn(
       `Unbalanced marks corrected in message: "${processedMessage}" -> "${balancedMessage}"`
     )
     processedMessage = balancedMessage
   }
+
+  function parseSegment(str: string): string {
+    return markIndices.length > 0 ? replaceMark(correctMarks(escapeHtml(str))) : str
+  }
+
+  if (!processedMessage) return [parseSegment(messagePrefix), undefined]
 
   let preSegmentedMessage = processedMessage
   let segments: SegmentNoEscape[] = [
@@ -663,9 +682,9 @@ export function parseFullMessage(
     firstSegment &&
     firstSegment.type === 'highlight' &&
     firstSegment.fullText === MarkType.HighlightEnd &&
-    !processedUsername.endsWith(MarkType.HighlightStart)
+    !messagePrefix.endsWith(MarkType.HighlightStart)
   ) {
-    processedUsername += firstSegment.fullText
+    messagePrefix += firstSegment.fullText
     segments.shift()
     preSegmentedMessage = removePrefix(preSegmentedMessage, firstSegment.fullText)
   }
@@ -743,7 +762,7 @@ export function parseFullMessage(
   const populatedSegments: Segment[] = segments.map((segment: SegmentNoEscape): Segment => {
     let escaped =
       markIndices.length > 0
-        ? replaceMark(correctMarks(escapeHtml(segment.text))).replace(PUA_UNICODE_REGEX, '')
+        ? parseSegment(segment.text).replace(PUA_UNICODE_REGEX, '')
         : segment.text
 
     if (segment.type === 'highlight') escaped = `<mark>${escaped}</mark>`
@@ -764,11 +783,5 @@ export function parseFullMessage(
     return processedSegment
   })
 
-  return {
-    escapedUsername:
-      markIndices.length > 0
-        ? replaceMark(correctMarks(escapeHtml(processedUsername)))
-        : processedUsername,
-    parsedMessageSegments: populatedSegments
-  }
+  return [parseSegment(messagePrefix), populatedSegments]
 }
