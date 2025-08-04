@@ -152,8 +152,11 @@
 
   onMount(loadServices)
 
-  const [systemText, systemMsg] = $derived(
-    message.type === 'system' ? message?.getSystemTextAndMessage() || [] : []
+  const [systemText, systemMsg]: [string | undefined, string | undefined] = $derived(
+    (message.type === 'system' ? message?.getSystemTextAndMessage() : undefined) ?? [
+      undefined,
+      undefined
+    ]
   )
 
   let emotes: Collection<string, Emote | CheerEmote> | null = $state(null)
@@ -173,18 +176,19 @@
   }
 
   // Highlight search terms in the message and parse emotes and parse emotes
-  const { escapedUsername, parsedMessageSegments } = $derived.by(() => {
-    if (!message || (message.type === 'system' && !systemMsg))
-      return { escapedUsername: '', parsedMessageSegments: undefined }
-
-    return parseFullMessage(message, {
-      twitchEmotes: emotes ?? undefined,
-      enableEmotes,
-      showName: settings.interface.showName,
-      searchQuery,
-      requireHttpInUrl
+  const [escapedMessagePrefix, parsedMessageSegments]: [string, Segment[] | undefined] =
+    $derived.by(() => {
+      if (!message) return ['', undefined]
+      return parseFullMessage(message, {
+        messagePrefix: systemText,
+        messageStr: message.type === 'system' ? (systemMsg ?? null) : undefined,
+        twitchEmotes: emotes ?? undefined,
+        enableEmotes,
+        showName: settings.interface.showName,
+        searchQuery,
+        requireHttpInUrl
+      })
     })
-  })
 
   function isSeenUrl(url: string): boolean {
     if (urlTracker.isSeenUrl(url)) return true
@@ -254,14 +258,16 @@
       style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
     >
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      {@html escapedUsername + ': '}
+      {@html escapedMessagePrefix + ': '}
     </span>
   {:else if message.type === 'system'}
     <span class="chat-system whitespace-pre-wrap text-system"
       >{#if parsedMessageSegments}
-        {systemText + ': '}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        {@html escapedMessagePrefix + ': '}
       {:else}
-        {systemText}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        {@html escapedMessagePrefix}
       {/if}</span
     >
   {/if}
