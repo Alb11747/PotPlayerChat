@@ -139,6 +139,8 @@ const lock = new AsyncLock()
  * Service for fetching and parsing Twitch, BTTV, FFZ, and 7TV emotes, with per-channel caching.
  */
 export namespace TwitchEmoteService {
+  export const emoteType: 'webp' | 'avif' = 'webp'
+
   let fetcher: EmoteFetcher | null = null
   const fetcherPromise = (async () => {
     const api = await apiPromise
@@ -210,9 +212,11 @@ export namespace TwitchEmoteService {
                 fetcher.fetchBTTVEmotes(undefined).catch((error) => {
                   console.warn(`Failed to fetch BTTV emotes for global:`, error)
                 }),
-                fetcher.fetchSevenTVEmotes(undefined, 'avif').catch((error) => {
-                  console.warn(`Failed to fetch 7TV emotes for global:`, error)
-                }),
+                fetcher
+                  .fetchSevenTVEmotes(undefined, TwitchEmoteService.emoteType)
+                  .catch((error) => {
+                    console.warn(`Failed to fetch 7TV emotes for global:`, error)
+                  }),
                 fetcher.fetchFFZEmotes(undefined).catch((error) => {
                   console.warn(`Failed to fetch FFZ emotes for global:`, error)
                 })
@@ -242,9 +246,11 @@ export namespace TwitchEmoteService {
                 fetcher.fetchBTTVEmotes(channelId).catch((error) => {
                   console.warn(`Failed to fetch BTTV emotes for channel ${channelId}:`, error)
                 }),
-                fetcher.fetchSevenTVEmotes(channelId, 'avif').catch((error) => {
-                  console.warn(`Failed to fetch 7TV emotes for channel ${channelId}:`, error)
-                }),
+                fetcher
+                  .fetchSevenTVEmotes(channelId, TwitchEmoteService.emoteType)
+                  .catch((error) => {
+                    console.warn(`Failed to fetch 7TV emotes for channel ${channelId}:`, error)
+                  }),
                 fetcher.fetchFFZEmotes(channelId).catch((error) => {
                   console.warn(`Failed to fetch FFZ emotes for channel ${channelId}:`, error)
                 })
