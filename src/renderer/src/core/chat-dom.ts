@@ -1,5 +1,10 @@
 import type { CheerEmote } from '@/core/chat/twitch-emotes'
-import { regExpEscape, removePrefix, utf8IndexToUtf16IndexMap } from '@/utils/strings'
+import {
+  countOccurrences,
+  regExpEscape,
+  removePrefix,
+  utf8IndexToUtf16IndexMap
+} from '@/utils/strings'
 import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import type { Collection, Emote } from '@mkody/twitch-emoticons'
@@ -707,8 +712,8 @@ export function parseFullMessage(
   const markDepthMap = new Map<string, number>()
   segments = segments.map((segment) => {
     for (const { start: startMark, end: endMark } of markData) {
-      const openCount = (segment.fullText.match(startMark) || []).length
-      const closeCount = (segment.fullText.match(endMark) || []).length
+      const openCount = countOccurrences(segment.fullText, startMark)
+      const closeCount = countOccurrences(segment.fullText, endMark)
       const lastMarkDepth = markDepthMap.get(startMark) || 0
       const currentMarkDepth = openCount - closeCount
       const totalMarkDepth = lastMarkDepth + currentMarkDepth
