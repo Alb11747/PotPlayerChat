@@ -3,6 +3,7 @@ import type { WindowApi } from '@/types/preload'
 import { getMessagesBetween, getMessagesForTime, isMessageInMessages } from '@/utils/chat'
 import { logTime } from '@/utils/debug'
 import { isSorted } from '@/utils/objects'
+import TTLCache from '@isaacs/ttlcache'
 import AsyncLock from 'async-lock'
 import { JustLogAPI } from './justlog'
 import { TwitchUserService } from './twitch-api'
@@ -42,11 +43,17 @@ export class ChatService {
   public usernameColorCache: Map<string, { color: string; timestamp: number }> | null = null
   public currentPotPlayerInfo: PotPlayerInfo | null = null
 
+  private lastPrefetchRange: ChatDataRange | null = null
   public currentChatData: TwitchMessage[] = []
 
   // Caching chat data per day
-  private chatCache: Record<string, { messages: TwitchMessage[]; complete: boolean }> = {}
-  private lastPrefetchRange: ChatDataRange | null = null
+  private chatCache: TTLCache<string, { messages: TwitchMessage[]; complete: boolean }> =
+    new TTLCache({
+      max: 15,
+      ttl: 2 * 24 * 60 * 60 * 1000, // Cache for 2 days
+      updateAgeOnGet: true,
+      checkAgeOnGet: false
+    })
 
   // Lock to prevent concurrent fetches for the same cache key
   private fetchLock = new AsyncLock()
@@ -110,7 +117,7 @@ export class ChatService {
       const allCachedMessageData: TwitchMessage[][] = []
       for (const date of datesToFetch) {
         const cacheKey = this.getCacheKey(channel, date)
-        const cached = this.chatCache[cacheKey]
+        const cached = this.chatCache.get(cacheKey)
         if (cached && cached.messages) {
           allCachedMessageData.push(cached.messages)
         } else {
@@ -166,7 +173,7 @@ export class ChatService {
       const datesToFetchData = datesToFetch
         .map((date: Date) => {
           const cacheKey = this.getCacheKey(channel, date)
-          if (this.chatCache[cacheKey]) return null
+          if (this.chatCache.get(cacheKey)) return null
           const year = date.getUTCFullYear()
           const month = date.getUTCMonth() + 1
           const day = date.getUTCDate()
@@ -183,7 +190,7 @@ export class ChatService {
       const fetchPromises = datesToFetchData.map(
         async ({ date, cacheKey, year, month, day }): Promise<TwitchMessage[]> => {
           return await this.fetchLock.acquire(cacheKey, async () => {
-            const cached = this.chatCache[cacheKey]
+            const cached = this.chatCache.get(cacheKey)
             let cachedMessages: TwitchMessage[] | null = null
             let lastTimestamp: number | null = null
             if (cached && cached.messages) {
@@ -216,7 +223,7 @@ export class ChatService {
 
               if (data == null) {
                 console.warn(`Failed to fetch chat for ${year}/${month}/${day}`)
-                this.chatCache[cacheKey] = { messages: [], complete }
+                this.chatCache.set(cacheKey, { messages: [], complete })
                 return cachedMessages || []
               }
 
@@ -235,11 +242,11 @@ export class ChatService {
                 console.debug(`Fetched ${newMessages.length} lines from ${year}/${month}/${day}`)
               }
               messages.sort((a, b) => a.timestamp - b.timestamp)
-              this.chatCache[cacheKey] = { messages, complete }
+              this.chatCache.set(cacheKey, { messages, complete })
               return messages
             } catch (error) {
               console.warn(`Error fetching chat for ${year}/${month}/${day}:`, error)
-              this.chatCache[cacheKey] = { messages: [], complete }
+              this.chatCache.set(cacheKey, { messages: [], complete })
               return cachedMessages || []
             }
           })
@@ -393,7 +400,7 @@ export class ChatService {
     const isCached = (): boolean =>
       datesToFetch.every((d) => {
         const cacheKey = this.getCacheKey(channel, d)
-        return this.chatCache[cacheKey]
+        return !!this.chatCache.get(cacheKey)
       })
 
     if (isCached()) {
@@ -524,15 +531,15 @@ export class ChatService {
   }
 
   public clearCache(): void {
-    this.chatCache = {}
+    this.chatCache.clear()
     this.lastPrefetchRange = null
   }
 
   public clearInvalidCache(): void {
     // Remove cached data that is empty
-    for (const key in this.chatCache) {
-      const { messages } = this.chatCache[key] ?? {}
-      if (!messages || messages.length === 0) delete this.chatCache[key]
+    for (const key of this.chatCache.keys()) {
+      const { messages } = this.chatCache.get(key) ?? {}
+      if (!messages || messages.length === 0) this.chatCache.delete(key)
     }
     this.lastPrefetchRange = null
   }
