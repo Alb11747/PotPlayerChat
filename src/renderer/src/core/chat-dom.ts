@@ -90,6 +90,8 @@ const MarkType = Object.fromEntries(
     | `${(typeof markData)[number]['name']}End`]: string
 }
 
+const marksList: string[] = markData.map(({ start, end }) => [start, end]).flat()
+
 const markRanking = Object.fromEntries(
   markData.flatMap(({ start, end }, i) => [
     [start, i],
@@ -138,6 +140,23 @@ export function convertStringToLegibleMarks(s: string): string {
 }
 
 /**
+ * Finds the next index of any character from the given list in the string, starting from the current index.
+ * If no character is found, returns the length of the string.
+ * @param str The string to search in.
+ * @param currentIndex The index to start searching from.
+ * @param chars The list of characters to search for.
+ * @returns The index of the next character found, or the length of the string if none are found.
+ */
+function nextIndexOf(str: string, currentIndex: number, chars: string[]): number {
+  let nextIndex = str.length
+  for (const char of chars) {
+    const index = str.indexOf(char, currentIndex)
+    if (index !== -1 && index < nextIndex) nextIndex = index
+  }
+  return nextIndex
+}
+
+/**
  * Corrects unbalanced marks in a string by adding missing closing or opening marks for all mark types.
  * Ensures marks are properly nested and ordered.
  * @param str The string to correct.
@@ -146,7 +165,12 @@ export function correctMarks(str: string): string {
   const stack: string[] = []
   let prefix = ''
   let suffix = ''
-  for (const mark of str) {
+  for (
+    let i = nextIndexOf(str, 0, marksList);
+    i < str.length;
+    i = nextIndexOf(str, i + 1, marksList)
+  ) {
+    const mark = str[i]!
     if (mark in markStarts) {
       // If it's an opening mark, push it onto the stack
       stack.push(mark)
@@ -430,15 +454,6 @@ export function parseFullMessage(
     { type: isAction ? 'action' : 'text', fullText: preSegmentedMessage, text: preSegmentedMessage }
   ]
 
-  function nextIndexOf(str: string, currentIndex: number, chars: string[]): number {
-    let nextIndex = str.length
-    for (const char of chars) {
-      const index = str.indexOf(char, currentIndex)
-      if (index !== -1 && index < nextIndex) nextIndex = index
-    }
-    return nextIndex
-  }
-
   function processSegment(
     acc: SegmentNoEscape[],
     segment: SegmentNoEscape,
@@ -542,7 +557,7 @@ export function parseFullMessage(
       let lastIndex = 0
       const startStack: number[] = []
       for (
-        let i = 0;
+        let i = nextIndexOf(segment.text, 0, [startMark, endMark]);
         i < segment.text.length;
         i = nextIndexOf(segment.text, i + 1, [startMark, endMark])
       ) {
