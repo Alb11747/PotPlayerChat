@@ -25,6 +25,22 @@ export function removeSuffix(str: string, suffix: string): string {
 }
 
 /**
+ * Counts the number of occurrences of a substring in a string.
+ * @param str The string to search in.
+ * @param search The substring to count.
+ * @returns The number of occurrences of the substring.
+ */
+export function countOccurrences(str: string, search: string): number {
+  let count = 0
+  let pos = str.indexOf(search)
+  while (pos !== -1) {
+    count++
+    pos = str.indexOf(search, pos + search.length)
+  }
+  return count
+}
+
+/**
  * Removes any non-alphanumeric characters from a string.
  * @param title The string to strip symbols from.
  * @returns The string with only alphanumeric characters.
