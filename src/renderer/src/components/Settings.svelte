@@ -6,7 +6,7 @@
     settings,
     settingsConfigKey
   } from '../state/settings.svelte'
-  import type { UrlTracker } from '../state/url-tracker'
+  import type { UrlTracker } from '../core/url-tracker'
 
   let { urlTracker }: { urlTracker: UrlTracker } = $props()
 

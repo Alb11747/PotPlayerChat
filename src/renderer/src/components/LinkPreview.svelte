@@ -1,6 +1,8 @@
 <script lang="ts">
   import { findChildByText, urlsToSrcset } from '@/utils/dom'
+  import { debounce } from '@/utils/functions'
   import { onMount } from 'svelte'
+  import type { UrlTracker } from '../core/url-tracker'
   import { previewState } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
 
@@ -127,6 +129,20 @@
   async function sanitizeTooltip(tooltip: string): Promise<string> {
     return await window.api.sanitizeHtml(tooltip)
   }
+
+  const markSeenUrlDelayed = debounce(
+    (urlTrackerInstance: UrlTracker | null, url: string): void => {
+      if (previewState?.url !== url) return
+      urlTrackerInstance?.markSeenUrl(url)
+    },
+    300
+  )
+
+  $effect(() => {
+    if (!previewState.url || !preview?.link) return
+    if (!preview.thumbnail || previewState.urlTrackerInstance?.isFailedUrl(previewState.url))
+      markSeenUrlDelayed(previewState.urlTrackerInstance, previewState.url)
+  })
 </script>
 
 {#if (previewState.url && previewState.urlTrackerInstance) || emoteSegment}
@@ -143,15 +159,25 @@
         {#if preview && 200 <= preview.status && preview.status < 300}
           <div class="p-2 flex-1">
             {#if preview.thumbnail}
-              {#if previewState?.urlTrackerInstance?.isFailedUrl(preview.link) === false}
+              {#if previewState?.urlTrackerInstance?.isFailedUrl(previewState.url) === false}
                 <img
                   src={preview.thumbnail}
-                  onload={() => {
+                  data-url={previewState.url}
+                  onload={(event: Event) => {
+                    const target = event.currentTarget as HTMLImageElement
+                    const url = target.getAttribute('data-url')
+                    if (url) markSeenUrlDelayed(previewState.urlTrackerInstance, url)
+
                     updatePosition()
                     requestAnimationFrame(updatePosition)
                   }}
-                  onerror={() => {
-                    previewState?.urlTrackerInstance?.markFailedUrl(preview.link)
+                  onerror={(event: Event) => {
+                    const target = event.currentTarget as HTMLImageElement
+                    const url = target.getAttribute('data-url')
+                    if (url) {
+                      markSeenUrlDelayed(previewState.urlTrackerInstance, url)
+                      previewState?.urlTrackerInstance?.markFailedUrl(url)
+                    }
                   }}
                   alt="Link preview"
                   class="preview-thumbnail"

@@ -25,11 +25,10 @@ export class UrlTracker {
   async getPreview(url: string): Promise<LinkPreview | null> {
     if (this.cache.has(url) && this.isSeenUrl(url)) return this.cache.get(url) ?? null
     return await this.lock.acquire(url, async () => {
+      if (this.cache.has(url)) return this.cache.get(url) ?? null
+
+      this.loadingUrls.add(url)
       try {
-        if (this.cache.has(url)) return this.cache.get(url) ?? null
-
-        this.loadingUrls.add(url)
-
         // Use IPC to fetch from main process (avoids CORS)
         const data = await window.api.getLinkPreview(url, this.settings.chatterinoBaseUrl)
 
@@ -51,7 +50,6 @@ export class UrlTracker {
         return errorResult
       } finally {
         this.loadingUrls.delete(url)
-        if (!this.isSeenUrl(url)) this.markSeenUrl(url)
       }
     })
   }

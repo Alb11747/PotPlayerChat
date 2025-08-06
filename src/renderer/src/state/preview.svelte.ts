@@ -1,6 +1,6 @@
 import type { EmoteSegment } from '../core/chat-dom'
 import { settings } from './settings.svelte'
-import type { UrlTracker } from './url-tracker'
+import type { UrlTracker } from '../core/url-tracker'
 
 export const previewState = $state({
   url: null as string | null,

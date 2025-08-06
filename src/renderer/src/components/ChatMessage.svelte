@@ -21,7 +21,7 @@
     previewState
   } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
-  import { UrlTracker } from '../state/url-tracker'
+  import { UrlTracker } from '../core/url-tracker'
   import EmoteComponent from './Emote.svelte'
 
   interface Props {

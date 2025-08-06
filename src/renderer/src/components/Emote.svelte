@@ -7,7 +7,7 @@
     onMouseLeavePreviewElement,
     previewState
   } from '@/renderer/src/state/preview.svelte'
-  import type { UrlTracker } from '@/renderer/src/state/url-tracker'
+  import type { UrlTracker } from '@/renderer/src/core/url-tracker'
   import { urlsToSrcset } from '@/utils/dom'
 
   let {
