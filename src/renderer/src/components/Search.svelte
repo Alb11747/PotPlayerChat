@@ -20,7 +20,7 @@
   import { VList } from 'virtua/svelte'
   import LinkPreview from '../components/LinkPreview.svelte'
   import { settings } from '../state/settings.svelte'
-  import { UrlTracker } from '../state/url-tracker'
+  import { UrlTracker } from '../core/url-tracker'
   import ChatMessage from './ChatMessage.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
