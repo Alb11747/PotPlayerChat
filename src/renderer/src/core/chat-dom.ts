@@ -370,14 +370,14 @@ export function parseFullMessage(
 
   // Process external emotes
   if (enableEmotes && emotes && processedMessage) {
-    processedMessage.matchAll(/\S+/g).forEach((word) => {
+    for (const word of processedMessage.matchAll(/\S+/g)) {
       const emoteName = word[0]
       const emote = emotes.get(emoteName)
-      if (!emoteName || !emote) return
+      if (!emoteName || !emote) continue
       const endIndex = word.index + emoteName.length
       markIndices.push({ index: word.index, char: MarkType.EmoteStart, otherIndex: endIndex })
       markIndices.push({ index: endIndex, char: MarkType.EmoteEnd, otherIndex: word.index })
-    })
+    }
   }
 
   // Process mentions in the message
