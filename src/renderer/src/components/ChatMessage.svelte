@@ -222,11 +222,16 @@
 >
   {#if settings.interface.showTimestamps}
     <span class="chat-time color-muted mr-0.5">
-      {formatTime(message.timestamp, {
-        startTime: videoStartTime,
-        endTime: videoEndTime,
-        elapsedTime
-      })}
+      {#if settings.interface.absoluteTimestamps}
+        {formatTime(message.timestamp)}
+      {:else}
+        {formatTime(message.timestamp, {
+          offset: settings.chat.timestampOffset + settings.chat._sessionTimestampOffset,
+          startTime: videoStartTime,
+          endTime: videoEndTime,
+          elapsedTime
+        })}
+      {/if}
     </span>
   {/if}
   {#if message.type === 'chat'}
