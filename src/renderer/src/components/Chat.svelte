@@ -7,7 +7,6 @@
   import { VList } from 'virtua/svelte'
 
   import { onMount, untrack } from 'svelte'
-  import { SvelteMap } from 'svelte/reactivity'
 
   import { clearAll, TwitchUserService } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
@@ -24,8 +23,8 @@
   import { debounce } from '@/utils/functions'
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
-  import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../core/url-tracker'
+  import { settings } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
@@ -102,9 +101,6 @@
       scrollToBottom: _scrollToBottom
     })
   }
-
-  if (!chatService.usernameColorCache)
-    chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
   async function resetVideoTimeHistory(hwnd: HWND | null): Promise<void> {
     videoTimeHistory.clear()
@@ -497,7 +493,7 @@
                 )
               : undefined}
             {urlTracker}
-            usernameColorMap={chatService.usernameColorCache ?? undefined}
+            usernameColorTimelineMap={chatService.usernameColorTimelineMap}
             onUsernameClick={handleUsernameClick}
             onEmoteLoad={() => {
               if (scrollToBottom) scrollToTargetDebounced(true)

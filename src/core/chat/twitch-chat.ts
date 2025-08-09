@@ -1,6 +1,7 @@
 import type { PotPlayerInstance } from '@/types/potplayer'
 import type { WindowApi } from '@/types/preload'
 import { getMessagesBetween, getMessagesForTime, isMessageInMessages } from '@/utils/chat'
+import { TimelineMap } from '@/utils/datastructs'
 import { logTime } from '@/utils/debug'
 import { isSorted } from '@/utils/objects'
 import { normalizeStrings } from '@/utils/strings'
@@ -41,7 +42,7 @@ export class ChatService {
   private justLogApi: JustLogAPI
   private settings: { chat: ChatSettings }
 
-  public usernameColorCache: Map<string, { color: string; timestamp: number }> | null = null
+  public usernameColorTimelineMap: TimelineMap<string, string> = new TimelineMap()
   public currentPotPlayerInfo: PotPlayerInfo | null = null
 
   private lastPrefetchRange: ChatDataRange | null = null
@@ -229,7 +230,7 @@ export class ChatService {
               }
 
               const newMessages = data.messages
-              this.updateCaches(newMessages)
+              this.updateMessageData(newMessages)
 
               let messages: TwitchMessage[]
               if (cachedMessages && lastTimestamp !== null) {
@@ -341,19 +342,16 @@ export class ChatService {
     )
   }
 
-  private updateCaches(messages: TwitchMessage[]): void {
-    if (!this.usernameColorCache) return
+  public updateMessageData(messages: TwitchMessage[]): void {
+    // Update the username color cache
     for (const msg of messages) {
       if (msg.type !== 'chat' || !msg.username || !msg.color) continue
-      for (const name of normalizeStrings([msg.username, msg.displayName])) {
-        const last = this.usernameColorCache.get(name)
-        if (last && last.timestamp > msg.timestamp) continue
-        this.usernameColorCache.set(name, {
-          color: msg.color,
-          timestamp: msg.timestamp
-        })
-      }
+      for (const name of normalizeStrings([msg.username, msg.displayName]))
+        this.usernameColorTimelineMap.set(name, msg.color, msg.timestamp)
     }
+    this.usernameColorTimelineMap.condense()
+
+    // Update the user ID cache
     for (const msg of messages) {
       const channel = msg.channel
       const roomId = msg.roomId
@@ -439,7 +437,7 @@ export class ChatService {
         return false
       }
 
-      this.updateCaches(prefetchedMessages.messages)
+      this.updateMessageData(prefetchedMessages.messages)
 
       if (isCached()) {
         console.debug(`Messages for ${channel} from ${startDate} to ${endDate} are already cached`)

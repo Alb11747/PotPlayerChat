@@ -12,8 +12,10 @@
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { Collection, TwitchEmote, type Emote } from '@mkody/twitch-emoticons'
 
+  import type { TimelineMap } from '@/utils/datastructs'
   import type { HelixChatBadgeVersion } from '@twurple/api'
   import { onMount } from 'svelte'
+  import { UrlTracker } from '../core/url-tracker'
   import conf from '../state/config'
   import {
     currentPreviewType,
@@ -21,7 +23,6 @@
     previewState
   } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
-  import { UrlTracker } from '../core/url-tracker'
   import EmoteComponent from './Emote.svelte'
 
   interface Props {
@@ -30,7 +31,7 @@
     videoEndTime?: number
     elapsedTime?: number
     urlTracker: UrlTracker
-    usernameColorMap?: Map<string, { color: string; timestamp: number }>
+    usernameColorTimelineMap?: TimelineMap<string, string>
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
     onUsernameClick?: (info: { username: string; message: TwitchMessage }) => void
@@ -49,7 +50,7 @@
     videoEndTime,
     elapsedTime,
     urlTracker,
-    usernameColorMap,
+    usernameColorTimelineMap,
     searchQuery,
     onUrlClick,
     onUsernameClick,
@@ -312,8 +313,10 @@
             role="link"
             tabindex="-1"
             class="chat-username"
-            style="color: {usernameColorMap?.get(segment.username.toLowerCase())?.color ||
-              '#ffffff'}"
+            style="color: {usernameColorTimelineMap?.get(
+              segment.username.toLowerCase(),
+              message.timestamp
+            ) || '#ffffff'}"
             onclick={(e) => {
               if (onUsernameClick) {
                 onUsernameClick({ username: segment.username, message })
