@@ -252,7 +252,13 @@
       role="link"
       tabindex="-1"
       style="color: {message.color}"
-      onclick={() => onUsernameClick?.({ username: message.username, message })}
+      onclick={(e) => {
+        if (onUsernameClick) {
+          onUsernameClick({ username: message.username, message })
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }}
       onkeydown={(e) =>
         e.key === 'Enter' && onUsernameClick?.({ username: message.username, message })}
       style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
@@ -286,7 +292,11 @@
             class="chat-url"
             class:visited={isVisitedUrl(segment.url)}
             class:seen={isSeenUrl(segment.url)}
-            onclick={() => handleUrlClick(segment.url)}
+            onclick={(e) => {
+              handleUrlClick(segment.url)
+              e.preventDefault()
+              e.stopPropagation()
+            }}
             onmouseenter={() => mouseUpdateUrl(segment)}
             onmousemove={() => mouseUpdateUrl(segment)}
             onmouseleave={() => {
@@ -303,7 +313,13 @@
             tabindex="-1"
             class="chat-username"
             style="color: {usernameColorMap?.get(segment.username)?.color || '#ffffff'}"
-            onclick={() => onUsernameClick?.({ username: segment.username, message })}
+            onclick={(e) => {
+              if (onUsernameClick) {
+                onUsernameClick({ username: segment.username, message })
+                e.preventDefault()
+                e.stopPropagation()
+              }
+            }}
             onkeydown={(e) =>
               e.key === 'Enter' && onUsernameClick?.({ username: segment.username, message })}
             style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
