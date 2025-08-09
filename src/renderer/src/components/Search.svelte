@@ -16,18 +16,14 @@
   } from '@/utils/chat'
   import { regExpEscape } from '@/utils/strings'
   import { onMount } from 'svelte'
-  import { SvelteMap } from 'svelte/reactivity'
   import { VList } from 'virtua/svelte'
   import LinkPreview from '../components/LinkPreview.svelte'
-  import { settings } from '../state/settings.svelte'
   import { UrlTracker } from '../core/url-tracker'
+  import { settings } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
-
-  if (!chatService.usernameColorCache)
-    chatService.usernameColorCache = new SvelteMap<string, { color: string; timestamp: number }>()
 
   type TwitchMessageFormatted = TwitchMessage & { formattedMessage: string }
   function formattedTwitchMessageFactory(msg: TwitchMessage): TwitchMessageFormatted {
@@ -175,6 +171,9 @@
     // Sort messages by timestamp
     messages.sort((a, b) => a.timestamp - b.timestamp)
 
+    // Update message data
+    chatService.updateMessageData(messages)
+
     // Update filtered messages
     updateFilteredMessages()
   }
@@ -316,7 +315,7 @@
               videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
               videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
               {urlTracker}
-              usernameColorMap={chatService.usernameColorCache ?? undefined}
+              usernameColorTimelineMap={chatService.usernameColorTimelineMap ?? undefined}
               searchQuery={searchPattern}
               onUrlClick={handleUrlClick}
             />
