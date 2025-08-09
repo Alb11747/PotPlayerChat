@@ -60,6 +60,34 @@ export const regExpEscape: (str: string) => string =
   ((str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 
 /**
+ * Normalizes an array of strings to lowercase and removes duplicates.
+ *
+ * @param strs Array of strings or undefined values to normalize.
+ * @returns Array of unique, lowercased strings.
+ */
+export function normalizeStrings(strs: (string | undefined)[]): string[] {
+  const filtered = strs
+    .filter((str): str is string => str !== undefined)
+    .map((str) => str.toLowerCase())
+  if (filtered.length < 10) {
+    const result: string[] = []
+    for (const str of filtered) {
+      if (!result.includes(str)) {
+        result.push(str)
+      }
+    }
+    return result
+  } else {
+    const seen = new Set<string>()
+    return filtered.filter((str) => {
+      if (seen.has(str)) return false
+      seen.add(str)
+      return true
+    })
+  }
+}
+
+/**
  * Creates a map that converts UTF-8 indices to UTF-16 indices.
  * @param str The string to convert.
  * @returns A map of UTF-16 indices for each UTF-8 index.
