@@ -3,6 +3,7 @@ import type { WindowApi } from '@/types/preload'
 import { getMessagesBetween, getMessagesForTime, isMessageInMessages } from '@/utils/chat'
 import { logTime } from '@/utils/debug'
 import { isSorted } from '@/utils/objects'
+import { normalizeStrings } from '@/utils/strings'
 import TTLCache from '@isaacs/ttlcache'
 import AsyncLock from 'async-lock'
 import { JustLogAPI } from './justlog'
@@ -344,12 +345,14 @@ export class ChatService {
     if (!this.usernameColorCache) return
     for (const msg of messages) {
       if (msg.type !== 'chat' || !msg.username || !msg.color) continue
-      const last = this.usernameColorCache.get(msg.username)
-      if (last && last.timestamp > msg.timestamp) continue
-      this.usernameColorCache.set(msg.username, {
-        color: msg.color,
-        timestamp: msg.timestamp
-      })
+      for (const name of normalizeStrings([msg.username, msg.displayName])) {
+        const last = this.usernameColorCache.get(name)
+        if (last && last.timestamp > msg.timestamp) continue
+        this.usernameColorCache.set(name, {
+          color: msg.color,
+          timestamp: msg.timestamp
+        })
+      }
     }
     for (const msg of messages) {
       const channel = msg.channel

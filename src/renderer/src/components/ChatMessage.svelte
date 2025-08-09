@@ -312,7 +312,8 @@
             role="link"
             tabindex="-1"
             class="chat-username"
-            style="color: {usernameColorMap?.get(segment.username)?.color || '#ffffff'}"
+            style="color: {usernameColorMap?.get(segment.username.toLowerCase())?.color ||
+              '#ffffff'}"
             onclick={(e) => {
               if (onUsernameClick) {
                 onUsernameClick({ username: segment.username, message })
