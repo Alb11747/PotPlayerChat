@@ -62,11 +62,11 @@ export const regExpEscape: (str: string) => string =
 /**
  * Normalizes an array of strings to lowercase and removes duplicates.
  *
- * @param strs Array of strings or undefined values to normalize.
+ * @param strings Array of strings or undefined values to normalize.
  * @returns Array of unique, lowercased strings.
  */
-export function normalizeStrings(strs: (string | undefined)[]): string[] {
-  const filtered = strs
+export function normalizeStrings(strings: (string | undefined)[]): string[] {
+  const filtered = strings
     .filter((str): str is string => str !== undefined)
     .map((str) => str.toLowerCase())
   if (filtered.length < 10) {
@@ -114,14 +114,15 @@ export function utf8IndexToUtf16IndexMap(str: string): Record<number, number> {
 export function formatTime(
   timeMs: number,
   {
+    offset = 0,
     startTime,
     endTime,
     elapsedTime
-  }: { startTime?: number; endTime?: number; elapsedTime?: number } = {}
+  }: { offset?: number; startTime?: number; endTime?: number; elapsedTime?: number } = {}
 ): string {
   const totalDuration =
     endTime !== undefined && startTime !== undefined ? endTime - startTime : undefined
-  elapsedTime ??= startTime ? timeMs - startTime : undefined
+  elapsedTime ??= startTime ? timeMs + offset - startTime : undefined
   if (
     elapsedTime === undefined ||
     elapsedTime < 0 ||

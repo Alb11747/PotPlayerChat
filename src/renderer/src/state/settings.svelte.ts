@@ -10,6 +10,7 @@ export interface InterfaceSettings {
   stickyPreviews: boolean
   keepScrollPosition: boolean
   showTimestamps: boolean
+  absoluteTimestamps: boolean
   enableBadges: boolean
   showName: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
   requireHttpInUrl: boolean
@@ -51,6 +52,7 @@ export const defaultSettings: Settings = {
     stickyPreviews: true,
     keepScrollPosition: true,
     showTimestamps: true,
+    absoluteTimestamps: false,
     enableBadges: true,
     showName: 'displayFirst',
     requireHttpInUrl: true
