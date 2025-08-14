@@ -1,12 +1,6 @@
 {
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    },
-    {
-      "path": "./tsconfig.web.json"
-    }
-  ],
+  "files": [],
+  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }],
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -35,6 +29,4 @@
       "@core/*": ["src/core/*"]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "build", "out"]
 }

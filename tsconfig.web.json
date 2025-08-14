@@ -1,6 +1,6 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": ["src/renderer/src/**/*", "src/core/**/*", "src/utils/**/*", "src/types/**/*"],
+  "include": ["src/preload/**/*", "src/renderer/src/**/*", "src/core/**/*", "src/utils/**/*", "src/types/**/*"],
   "exclude": ["node_modules", "dist", "out"],
   "compilerOptions": {
     "composite": true,
@@ -25,6 +25,7 @@
     "useUnknownInCatchVariables": true,
     "strict": true,
 
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
