@@ -12,7 +12,8 @@
           "scrollbar-width: thin"
         ]
       }
-    ]
+    ],
+    "typescript-config/strict": "off"
   },
   "browserslist": [
     "defaults",

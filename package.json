@@ -8,9 +8,9 @@
   "scripts": {
     "format": "prettier --plugin prettier-plugin-svelte --write .",
     "lint": "eslint --fix --cache --max-warnings=0 .",
-    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
-    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "svelte-check": "svelte-check --fail-on-warnings --tsconfig ./tsconfig.web.json",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json ",
+    "svelte-check": "svelte-check --fail-on-warnings",
     "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run svelte-check",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
