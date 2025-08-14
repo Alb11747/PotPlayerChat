@@ -418,133 +418,140 @@
 
 <LinkPreview />
 
-<div class="header" role="presentation" onkeydown={handleKeydown}>
-  <div class="header-button">
-    <button
-      class:selected={autoSelectPotPlayer}
-      onclick={() => setPotPlayerInstance(null)}
-      aria-pressed={autoSelectPotPlayer}
-    >
-      Main
-    </button>
-
-    {#each potplayerInstances as inst (inst.hwnd)}
+<div class="container" role="region" aria-label="Chat">
+  <div class="header" role="presentation" onkeydown={handleKeydown}>
+    <div class="header-button">
       <button
-        class:selected={inst.hwnd === selectedPotplayerInfo?.hwnd}
-        onclick={() => setPotPlayerInstance(inst)}
-        aria-pressed={inst.hwnd === selectedPotplayerInfo?.hwnd}
+        class:selected={autoSelectPotPlayer}
+        onclick={() => setPotPlayerInstance(null)}
+        aria-pressed={autoSelectPotPlayer}
       >
-        {inst.title}
+        Main
       </button>
-    {/each}
-    <button
-      class:selected={showSettings}
-      aria-pressed={showSettings}
-      onclick={() => {
-        showSettings = !showSettings
 
-        const currentScrollToBottom = scrollToBottom
-        scrollToTarget()
-        requestAnimationFrame(() => {
-          scrollToBottom = currentScrollToBottom
+      {#each potplayerInstances as inst (inst.hwnd)}
+        <button
+          class:selected={inst.hwnd === selectedPotplayerInfo?.hwnd}
+          onclick={() => setPotPlayerInstance(inst)}
+          aria-pressed={inst.hwnd === selectedPotplayerInfo?.hwnd}
+        >
+          {inst.title}
+        </button>
+      {/each}
+      <button
+        class:selected={showSettings}
+        aria-pressed={showSettings}
+        onclick={() => {
+          showSettings = !showSettings
+
+          const currentScrollToBottom = scrollToBottom
           scrollToTarget()
-        })
-      }}>⚙️</button
-    >
+          requestAnimationFrame(() => {
+            scrollToBottom = currentScrollToBottom
+            scrollToTarget()
+          })
+        }}>⚙️</button
+      >
+    </div>
   </div>
-</div>
 
-{#if showSettings}
-  <Settings {urlTracker} />
-{:else}
-  <div class="chat-container" bind:this={chatContainerRef}>
-    {#if messages && messages.length > 0}
-      <VList
-        bind:this={vlistRef}
-        data={messages}
-        getKey={(_, i) => messages[i]?.getId() ?? i}
-        onscroll={() => {
-          if (!nextScrollKeepTarget) {
-            targetElement = null
-            vlistRef?.scrollBy(0) // Cancel any pending scroll
-          } else {
-            setNextScrollKeepTargetDebounced(false)
-          }
+  {#if showSettings}
+    <Settings {urlTracker} />
+  {:else}
+    <div class="chat-container" bind:this={chatContainerRef}>
+      {#if messages && messages.length > 0}
+        <VList
+          bind:this={vlistRef}
+          data={messages}
+          getKey={(_, i) => messages[i]?.getId() ?? i}
+          onscroll={() => {
+            if (!nextScrollKeepTarget) {
+              targetElement = null
+              vlistRef?.scrollBy(0) // Cancel any pending scroll
+            } else {
+              setNextScrollKeepTargetDebounced(false)
+            }
 
-          if (performance.now() - lastPotplayerChangeTime < 3000) return
-          const currentIsAtBottom = isAtBottom()
-          if (currentIsAtBottom !== scrollToBottom) {
-            scrollToBottom = currentIsAtBottom
-            targetElement = null
-          }
+            if (performance.now() - lastPotplayerChangeTime < 3000) return
+            const currentIsAtBottom = isAtBottom()
+            if (currentIsAtBottom !== scrollToBottom) {
+              scrollToBottom = currentIsAtBottom
+              targetElement = null
+            }
+          }}
+        >
+          {#snippet children(msg, i)}
+            <ChatMessage
+              message={msg}
+              videoStartTime={selectedPotplayerInfo?.startTime}
+              videoEndTime={selectedPotplayerInfo?.endTime}
+              elapsedTime={selectedPotplayerInfo?.startTime
+                ? Math.floor(
+                    msg.timestamp -
+                      selectedPotplayerInfo?.startTime -
+                      settings.chat.timestampOffset -
+                      settings.chat._sessionTimestampOffset
+                  )
+                : undefined}
+              {urlTracker}
+              usernameColorTimelineMap={chatService.usernameColorTimelineMap}
+              onUsernameClick={handleUsernameClick}
+              onEmoteLoad={() => {
+                if (scrollToBottom) scrollToTargetDebounced(true)
+              }}
+              bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
+            />
+          {/snippet}
+        </VList>
+      {:else if loadingState?.state === 'loading'}
+        <div class="chat-message system center">Loading chat...</div>
+      {:else if loadingState?.state === 'error'}
+        <div class="chat-message error center">{loadingState.errorMessage}</div>
+      {:else if loadingState?.state === 'no-potplayer-info'}
+        <div class="chat-message system center">
+          No PotPlayer info available.<br />
+          Try to pause and unpause the video or reopen the video.
+        </div>
+      {:else if loadingState?.state === 'chat-not-found'}
+        <div class="chat-message system center">Chat data not found.</div>
+      {:else if !selectedPotplayerInfo?.hwnd}
+        <div class="chat-message system center">No PotPlayer instance selected.</div>
+      {:else if !selectedPotplayerInfo?.startTime}
+        <div class="chat-message system center">
+          No start time set for the selected PotPlayer instance.
+        </div>
+      {:else}
+        <div class="chat-message system">
+          Unknown error occurred.<br />
+          <span>Loading state: {JSON.stringify(loadingState)}</span><br />
+          <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
+        </div>
+      {/if}
+    </div>
+
+    {#if !scrollToBottom}
+      <button
+        class="scroll-to-bottom"
+        onclick={() => {
+          scrollToBottom = true
+          scrollToTarget()
         }}
       >
-        {#snippet children(msg, i)}
-          <ChatMessage
-            message={msg}
-            videoStartTime={selectedPotplayerInfo?.startTime}
-            videoEndTime={selectedPotplayerInfo?.endTime}
-            elapsedTime={selectedPotplayerInfo?.startTime
-              ? Math.floor(
-                  msg.timestamp -
-                    selectedPotplayerInfo?.startTime -
-                    settings.chat.timestampOffset -
-                    settings.chat._sessionTimestampOffset
-                )
-              : undefined}
-            {urlTracker}
-            usernameColorTimelineMap={chatService.usernameColorTimelineMap}
-            onUsernameClick={handleUsernameClick}
-            onEmoteLoad={() => {
-              if (scrollToBottom) scrollToTargetDebounced(true)
-            }}
-            bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
-          />
-        {/snippet}
-      </VList>
-    {:else if loadingState?.state === 'loading'}
-      <div class="chat-message system center">Loading chat...</div>
-    {:else if loadingState?.state === 'error'}
-      <div class="chat-message error center">{loadingState.errorMessage}</div>
-    {:else if loadingState?.state === 'no-potplayer-info'}
-      <div class="chat-message system center">
-        No PotPlayer info available.<br />
-        Try to pause and unpause the video or reopen the video.
-      </div>
-    {:else if loadingState?.state === 'chat-not-found'}
-      <div class="chat-message system center">Chat data not found.</div>
-    {:else if !selectedPotplayerInfo?.hwnd}
-      <div class="chat-message system center">No PotPlayer instance selected.</div>
-    {:else if !selectedPotplayerInfo?.startTime}
-      <div class="chat-message system center">
-        No start time set for the selected PotPlayer instance.
-      </div>
-    {:else}
-      <div class="chat-message system">
-        Unknown error occurred.<br />
-        <span>Loading state: {JSON.stringify(loadingState)}</span><br />
-        <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
-      </div>
+        Scroll to bottom
+      </button>
     {/if}
-  </div>
-
-  {#if !scrollToBottom}
-    <button
-      class="scroll-to-bottom"
-      onclick={() => {
-        scrollToBottom = true
-        scrollToTarget()
-      }}
-    >
-      Scroll to bottom
-    </button>
   {/if}
-{/if}
+</div>
 
 <style>
+  .container {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    height: 100%;
+  }
+
   .header {
     flex: 0 1 auto;
-    width: 100%;
     contain: content;
     align-items: center;
     background: var(--color-black-soft);
@@ -557,7 +564,6 @@
   .header-button {
     display: flex;
     gap: 1rem;
-    max-height: 4.5rem;
     scrollbar-width: thin;
     user-select: text;
     cursor: default;
@@ -592,8 +598,6 @@
 
   .chat-container {
     flex: 1 1 auto;
-    width: 100%;
-    height: fit-content;
     background-color: var(--color-black-dark);
     color: var(--color-text-light);
     padding-bottom: 0.5rem;
