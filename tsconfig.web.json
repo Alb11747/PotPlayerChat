@@ -1,6 +1,13 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": ["src/preload/**/*", "src/renderer/src/**/*", "src/core/**/*", "src/utils/**/*", "src/types/**/*"],
+  "include": [
+    "src/preload/**/*",
+    "src/renderer/src/**/*",
+    "src/core/**/*",
+    "src/utils/**/*",
+    "src/types/**/*",
+    "resources/**/*"
+  ],
   "exclude": ["node_modules", "dist", "out"],
   "compilerOptions": {
     "composite": true,
@@ -29,7 +36,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@core/*": ["src/core/*"]
+      "@core/*": ["src/core/*"],
+      "@resources/*": ["resources/*"]
     }
   }
 }
