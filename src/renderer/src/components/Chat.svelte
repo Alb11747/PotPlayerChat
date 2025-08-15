@@ -563,20 +563,23 @@
   .container {
     display: grid;
     grid-template-rows: auto 1fr;
-    height: 100%;
+    min-width: 100%;
+    min-height: 100%;
   }
 
   .header {
+    max-width: 100%;
     display: flex;
-    flex: 0 1 auto;
     gap: 1rem;
     contain: content;
     align-items: center;
     background: var(--color-black-soft);
     color: var(--color-white);
-    padding: 0.5rem 0.5rem;
+    padding: 0.5rem;
     border-bottom: 1px solid var(--color-gray-4);
     font-size: 1rem;
+    overflow: auto;
+    scrollbar-color: var(--color-gray-4) var(--color-black-soft);
     scrollbar-width: thin;
     user-select: text;
     cursor: default;
@@ -585,28 +588,22 @@
     height: 100%;
     min-width: 4.5rem;
     max-height: 4rem;
-    flex: 1 1 max-content;
-    padding: 0 0.5rem;
-    border: 1px solid var(--color-gray-5);
-    border-radius: 4px;
-    background: none;
-    color: inherit;
-    font: inherit;
-    display: inline-flex;
+    padding: 0.5rem;
+    flex: 1 1 auto;
     align-items: center;
     justify-content: center;
     text-align: center;
-    cursor: pointer;
-    transition: none;
-    outline: none;
+    border: 1px solid var(--color-gray-5);
+    border-radius: 4px;
     overflow: auto;
-    scrollbar-color: var(--color-gray-4) var(--color-black-soft);
-    scrollbar-width: thin;
+    scrollbar-width: inherit;
+    cursor: pointer;
   }
   .header button.settings {
     width: 3.7rem;
     height: 3.7rem;
     min-width: 4rem;
+    display: flex;
   }
   .header button:hover {
     background: none;
