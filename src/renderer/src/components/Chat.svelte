@@ -195,7 +195,11 @@
     const effectiveTime =
       predictedTime + settings.chat.timestampOffset + settings.chat._sessionTimestampOffset
     const newMessages = await chatService.getMessagesForTime(effectiveTime, true)
-    if (!newMessages || newMessages.length === 0) return
+    if (!newMessages || newMessages.length === 0) {
+      messages = []
+      return
+    }
+
     const lastMessage = messages[messages.length - 1] || null
     const nextMessage =
       lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
