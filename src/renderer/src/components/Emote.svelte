@@ -2,12 +2,12 @@
   import type { CheerEmote, NativeTwitchEmote, TwitchEmote } from '@/core/chat/twitch-emotes'
   import type { TwitchMessage } from '@/core/chat/twitch-msg'
   import type { Segment } from '@/renderer/src/core/chat-dom'
+  import type { UrlTracker } from '@/renderer/src/core/url-tracker'
   import {
     currentPreviewType,
     onMouseLeavePreviewElement,
     previewState
   } from '@/renderer/src/state/preview.svelte'
-  import type { UrlTracker } from '@/renderer/src/core/url-tracker'
   import { urlsToSrcset } from '@/utils/dom'
 
   let {
@@ -56,8 +56,14 @@
 </script>
 
 <span
-  class={segment.type === 'cheer' ? 'emote-cheer' : 'emote-group'}
-  style:color={segment.type === 'cheer' ? segment.emote.color : ''}
+  class="emote-container"
+  class:cheer-emote-container={segment.type === 'cheer'}
+  role="group"
+  onmouseenter={() => mouseUpdateEmote(segment)}
+  onmousemove={() => mouseUpdateEmote(segment)}
+  onmouseleave={() => {
+    if (enableEmotePreviews) onMouseLeavePreviewElement()
+  }}
 >
   <img
     bind:this={emoteElement}
@@ -71,11 +77,6 @@
       if (onEmoteLoad) onEmoteLoad(segment.emote)
     }}
     onerror={(event) => onError(event, segment.urls)}
-    onmouseenter={() => mouseUpdateEmote(segment)}
-    onmousemove={() => mouseUpdateEmote(segment)}
-    onmouseleave={() => {
-      if (enableEmotePreviews) onMouseLeavePreviewElement()
-    }}
   />
   {#if segment.type === 'emote'}
     {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), attachedIndex))}
@@ -94,58 +95,46 @@
       {/if}
     {/each}
   {:else if segment.type === 'cheer'}
-    <span class="bits">
+    <span class="bits" style:color={segment.type === 'cheer' ? segment.emote.color : ''}>
       {segment.bits}
     </span>
   {/if}
 </span>
 
 <style>
+  .emote-container {
+    display: inline-grid;
+    grid-auto-flow: column;
+    vertical-align: text-bottom;
+
+    img {
+      height: 2.6rem;
+      max-width: 9rem;
+      object-fit: contain;
+    }
+  }
+
   .chat-emote {
-    display: inline-block;
+    grid-area: 1 / 1;
     justify-self: center;
     align-self: center;
-    vertical-align: middle;
-    max-height: 2.6rem;
-    max-width: 9rem;
     margin-right: 0.25rem;
-    object-fit: contain;
     font-weight: 900;
-    grid-column: 1;
-    grid-row: 1;
   }
+
+  .zero-width-emote {
+    z-index: 1;
+  }
+
   .tall-twitch-emote {
     max-height: 1.6rem;
   }
 
-  .emote-group {
-    display: inline-grid;
-    position: relative;
-    vertical-align: text-bottom;
+  .cheer-emote-container {
+    vertical-align: bottom;
   }
-  .emote-group > .chat-emote,
-  .emote-group > .zero-width-emote {
-    grid-area: 1 / 1;
-  }
-  .zero-width-emote {
-    grid-area: 1 / 1;
-    width: auto;
-    height: 100%;
-    margin: 0;
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .emote-cheer {
-    display: inline-block;
-    width: fit-content;
-  }
-  .emote-cheer > .chat-emote {
-    margin: 0;
-  }
-  .emote-cheer > .bits {
-    vertical-align: center;
-    margin-left: -0.25rem;
-    margin-right: 0.25rem;
+  .cheer-emote-container > .bits {
+    align-self: end;
+    margin-right: 0.2rem;
   }
 </style>
