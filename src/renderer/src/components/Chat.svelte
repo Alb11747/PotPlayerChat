@@ -54,9 +54,13 @@
     nextScrollKeepTarget = value
   }, 5)
 
-  function isAtBottom(): boolean {
-    if (!vlistRef) return false
-    return vlistRef.getScrollOffset() + vlistRef.getViewportSize() >= vlistRef.getScrollSize() - 1
+  function isAtBottom(): boolean | null {
+    if (!vlistRef) return null
+    let bottomY = vlistRef.getScrollOffset() + vlistRef.getViewportSize()
+    let scrollSize = vlistRef.getScrollSize()
+    if (bottomY >= scrollSize - 1) return true
+    else if (bottomY >= scrollSize - 500) return null
+    else return false
   }
 
   $effect(() => {
@@ -64,7 +68,7 @@
     if (!containerRef) return
 
     const onUserScroll = (event: WheelEvent): void => {
-      if (!isAtBottom()) scrollToBottom = false
+      if (event.deltaY < 0) scrollToBottom = false
 
       if (typeof targetViewportOffset === 'object')
         targetViewportOffset.setValue(targetViewportOffset.valueOf() + event.deltaY)
@@ -213,7 +217,7 @@
     } else if (!isEqualSimple(messages, newMessages)) {
       const _vlistRef = untrack(() => vlistRef)
       if (!settings.interface.keepScrollPosition) clearTargetElement()
-      else if (_vlistRef && !targetElement) {
+      else if (_vlistRef && !targetElement && !scrollToBottom) {
         const target = calculateTargetElement(_vlistRef, messages)
         targetElement = target.targetElement
         targetViewportOffset = target.targetViewportOffset
@@ -494,7 +498,7 @@
 
             if (performance.now() - lastPotplayerChangeTime < 3000) return
             const currentIsAtBottom = isAtBottom()
-            if (currentIsAtBottom !== scrollToBottom) {
+            if (currentIsAtBottom !== null && currentIsAtBottom !== scrollToBottom) {
               scrollToBottom = currentIsAtBottom
               targetElement = null
             }
@@ -554,7 +558,7 @@
         class="scroll-to-bottom"
         onclick={() => {
           scrollToBottom = true
-          scrollToTarget()
+          scrollToTarget(true)
         }}
       >
         Scroll to bottom
