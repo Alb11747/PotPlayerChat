@@ -8,6 +8,7 @@
     "src/types/**/*"
   ],
   "compilerOptions": {
+    "target": "ESNext",
     "composite": true,
     "sourceMap": true,
 

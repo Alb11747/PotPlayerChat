@@ -10,6 +10,7 @@
   ],
   "exclude": ["node_modules", "dist", "out"],
   "compilerOptions": {
+    "target": "ESNext",
     "composite": true,
     "allowJs": true,
     "checkJs": true,
