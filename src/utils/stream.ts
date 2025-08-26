@@ -2,13 +2,13 @@ export function getStreamerFromUrl(url: string): string | null {
   if (!url || typeof url !== 'string') return null
 
   // The URL format: https?://username:password@hostname:port/streams/streamerName/title (YYYY-MM-DD HH-MM-SS).ext
-  const match = url.match(/\/streams?\/([^/]+)/)
+  const match = url.match(/\/streams?\/([^/]+)/i)
   return match ? (match[1] ?? null) : null
 }
 
 export function getTitleFromUrl(url: string): string | null {
   if (!url || typeof url !== 'string') return null
-  const match = url.match(/\/streams?\/[^/]+\/([^/]+)/)
+  const match = url.match(/\/streams?\/[^/]+\/([^/]+)/i)
   if (!match) return null
   const titlePath = match[1]
   if (!titlePath) return null
