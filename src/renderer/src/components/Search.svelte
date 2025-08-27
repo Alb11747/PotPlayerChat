@@ -238,7 +238,7 @@
   })
   async function updateFilteredMessages(): Promise<void> {
     if (!searchQuery) {
-      filteredMessages = []
+      filteredMessages = messages
       return
     }
 
