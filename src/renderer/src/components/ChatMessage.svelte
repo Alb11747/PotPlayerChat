@@ -297,7 +297,8 @@
         {#if (segment.type === 'emote' || segment.type === 'cheer') && Object.values(segment.urls).some((url) => !urlTracker.isFailedUrl(url))}
           <EmoteComponent {message} {segment} {urlTracker} {onEmoteLoad} {enableEmotePreviews} />
         {:else if segment.type === 'url'}
-          <button
+          <a
+            href={segment.url}
             class="chat-url"
             class:visited={isVisitedUrl(segment.url)}
             class:seen={isSeenUrl(segment.url)}
@@ -311,11 +312,10 @@
             onmouseleave={() => {
               if (enableLinkPreviews) onMouseLeavePreviewElement()
             }}
-            type="button"
           >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             {@html segment.escaped}
-          </button>
+          </a>
         {:else if segment.type === 'mention'}
           <span
             role="link"
