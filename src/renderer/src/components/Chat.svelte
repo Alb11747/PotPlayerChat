@@ -20,6 +20,7 @@
   import { CurrentVideoTimeHistory } from '@/utils/time'
 
   import type { HWND } from '@/types/globals'
+  import { BoundedSet } from '@/utils/datastructs'
   import { debounce } from '@/utils/functions'
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
@@ -31,6 +32,7 @@
   const chatService = new ChatService(window.api, loadingState, settings)
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker(settings.chat)
+  const loadedEmotes = new BoundedSet<string>(200)
 
   type SelectedPotplayerInfo = PotPlayerInfo | (PotPlayerInstance & Partial<PotPlayerInfo>)
   let selectedPotplayerInfo: SelectedPotplayerInfo | null = $state(null)
@@ -87,7 +89,7 @@
     targetViewportOffset = 0
   }
 
-  const scrollToTargetDebounced = debounce(scrollToTarget, 35)
+  const scrollToTargetDebounced = debounce(() => scrollToTarget(), 35)
 
   function scrollToTarget(_scrollToBottom?: boolean): void {
     const _vlistRef = untrack(() => vlistRef)
@@ -216,8 +218,10 @@
       scrollToTarget()
     } else if (!isEqualSimple(messages, newMessages)) {
       const _vlistRef = untrack(() => vlistRef)
+      const _targetElement = untrack(() => targetElement)
+      const _scrollToBottom = untrack(() => scrollToBottom)
       if (!settings.interface.keepScrollPosition) clearTargetElement()
-      else if (_vlistRef && !targetElement && !scrollToBottom) {
+      else if (_vlistRef && !_targetElement && !_scrollToBottom) {
         const target = calculateTargetElement(_vlistRef, messages)
         targetElement = target.targetElement
         targetViewportOffset = target.targetViewportOffset
@@ -520,8 +524,10 @@
               {urlTracker}
               usernameColorTimelineMap={chatService.usernameColorTimelineMap}
               onUsernameClick={handleUsernameClick}
-              onEmoteLoad={() => {
-                if (scrollToBottom) scrollToTargetDebounced(true)
+              onEmoteLoad={({ hash }) => {
+                if (loadedEmotes.has(hash)) return
+                loadedEmotes.add(hash)
+                if (scrollToBottom) scrollToTargetDebounced()
               }}
               bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
             />

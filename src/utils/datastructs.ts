@@ -184,3 +184,48 @@ export class TimelineMap<Key, Value> {
     return answer
   }
 }
+
+/**
+ * BoundedSet is a Set-like collection with a maximum capacity.
+ * When the capacity is exceeded the oldest entry (in insertion order)
+ * is evicted. Adding an existing item refreshes its recency (moves it
+ * to the newest position).
+ */
+export class BoundedSet<T> extends Set<T> {
+  /** Maximum number of items to keep. */
+  public readonly capacity: number
+
+  constructor(capacity: number, iterable?: Iterable<T>) {
+    super()
+    // Normalize capacity: negative -> 0, non-integer -> floor, Infinity supported
+    this.capacity = Number.isFinite(capacity)
+      ? Math.max(0, Math.floor(capacity))
+      : Number.POSITIVE_INFINITY
+
+    if (iterable) for (const item of iterable) this.add(item)
+  }
+
+  /**
+   * Adds `value`, refreshing recency if it already existed. If adding a new
+   * value would exceed capacity, evicts the oldest entry first.
+   */
+  public override add(value: T): this {
+    if (this.capacity === 0) return this
+
+    if (this.has(value)) {
+      // Refresh recency: move to newest position
+      super.delete(value)
+      super.add(value)
+      return this
+    }
+
+    if (this.size >= this.capacity) {
+      // Evict oldest (first in insertion order)
+      const oldest = this.values().next()
+      if (!oldest.done) super.delete(oldest.value as T)
+    }
+
+    super.add(value)
+    return this
+  }
+}

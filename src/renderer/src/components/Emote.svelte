@@ -20,7 +20,10 @@
     message: TwitchMessage
     segment: Segment & { type: 'emote' | 'cheer' }
     urlTracker: UrlTracker
-    onEmoteLoad?: (emote: TwitchEmote | NativeTwitchEmote | CheerEmote) => void
+    onEmoteLoad?: (data: {
+      emote: TwitchEmote | NativeTwitchEmote | CheerEmote
+      hash: string
+    }) => void
     enableEmotePreviews: boolean
   } = $props()
 
@@ -63,7 +66,8 @@
     loading="lazy"
     decoding="async"
     onload={() => {
-      if (onEmoteLoad) onEmoteLoad(segment.emote)
+      if (onEmoteLoad)
+        onEmoteLoad({ emote: segment.emote, hash: `${message.getId()}-${segment.index}` })
     }}
     onerror={(event) => onError(event, segment.urls)}
   />
@@ -77,7 +81,11 @@
           loading="lazy"
           decoding="async"
           onload={() => {
-            if (onEmoteLoad) onEmoteLoad(attachedEmote.emote)
+            if (onEmoteLoad)
+              onEmoteLoad({
+                emote: attachedEmote.emote,
+                hash: `${message.getId()}-${segment.index}-${attachedIndex}`
+              })
           }}
           onerror={(event) => onError(event, attachedEmote.urls)}
         />
