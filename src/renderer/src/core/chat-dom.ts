@@ -230,7 +230,7 @@ type SegmentNoEscape = { fullText: string; text: string } & (
   | { type: 'url'; url: string }
   | EmoteSegment
 )
-export type Segment = SegmentNoEscape & { escaped: string }
+export type Segment = SegmentNoEscape & { escaped: string; index: number }
 
 export function parseFullMessage(
   messageObj: TwitchMessage,
@@ -759,29 +759,32 @@ export function parseFullMessage(
     return segment
   })
 
-  const populatedSegments: Segment[] = segments.map((segment: SegmentNoEscape): Segment => {
-    let escaped =
-      markIndices.length > 0
-        ? parseSegment(segment.text).replace(PUA_UNICODE_REGEX, '')
-        : segment.text
+  const populatedSegments: Segment[] = segments.map(
+    (segment: SegmentNoEscape, index: number): Segment => {
+      let escaped =
+        markIndices.length > 0
+          ? parseSegment(segment.text).replace(PUA_UNICODE_REGEX, '')
+          : segment.text
 
-    if (segment.type === 'highlight') escaped = `<mark>${escaped}</mark>`
+      if (segment.type === 'highlight') escaped = `<mark>${escaped}</mark>`
 
-    const processedSegment = {
-      ...segment,
-      escaped
+      const processedSegment = {
+        ...segment,
+        escaped,
+        index
+      }
+
+      if (debug && PUA_UNICODE_REGEX.test(processedSegment.escaped)) {
+        console.warn(
+          `PUA unicode characters found in segment: "${processedSegment.escaped}" - ${JSON.stringify(
+            processedSegment
+          )}`
+        )
+      }
+
+      return processedSegment
     }
-
-    if (debug && PUA_UNICODE_REGEX.test(processedSegment.escaped)) {
-      console.warn(
-        `PUA unicode characters found in segment: "${processedSegment.escaped}" - ${JSON.stringify(
-          processedSegment
-        )}`
-      )
-    }
-
-    return processedSegment
-  })
+  )
 
   return [parseSegment(messagePrefix), populatedSegments]
 }

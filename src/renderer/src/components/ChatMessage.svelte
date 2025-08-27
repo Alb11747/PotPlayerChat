@@ -35,7 +35,10 @@
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
     onUsernameClick?: (info: { username: string; message: TwitchMessage }) => void
-    onEmoteLoad?: (emote: CheerEmote | TwitchEmote | NativeTwitchEmote) => void
+    onEmoteLoad?: (data: {
+      emote: CheerEmote | TwitchEmote | NativeTwitchEmote
+      hash: string
+    }) => void
     enableLinkPreviews?: boolean
     enableEmotePreviews?: boolean
     enableEmotes?: boolean
@@ -290,7 +293,7 @@
         ? `color: ${message.color}`
         : ''}
     >
-      {#each parsedMessageSegments.entries() || [] as [index, segment] ((message.getId(), index))}
+      {#each parsedMessageSegments || [] as segment ((message.getId(), segment.index))}
         {#if (segment.type === 'emote' || segment.type === 'cheer') && Object.values(segment.urls).some((url) => !urlTracker.isFailedUrl(url))}
           <EmoteComponent {message} {segment} {urlTracker} {onEmoteLoad} {enableEmotePreviews} />
         {:else if segment.type === 'url'}
