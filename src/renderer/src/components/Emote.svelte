@@ -103,7 +103,6 @@
     display: inline-grid;
     grid-auto-flow: column;
     vertical-align: text-bottom;
-    margin-top: 4px;
 
     img {
       height: 2.6rem;

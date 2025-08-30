@@ -239,7 +239,7 @@
   {/if}
   {#if message.type === 'chat'}
     {#if enableBadges && badges.length > 0}
-      <span class="chat-badges inline-flex items-center justify-center gap-0.5 align-middle">
+      <span class="chat-badges inline-flex items-center justify-center align-middle">
         {#each badges as [badgeId, badge] (badgeId)}
           <img
             class="chat-badge h-5.8 object-contain inline-flex items-center align-text-bottom"
@@ -416,6 +416,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin: 0.05rem 0;
     gap: 0.2rem;
     vertical-align: middle;
   }
@@ -423,8 +424,6 @@
   .chat-badge {
     height: 1.45rem;
     object-fit: contain;
-    display: inline-flex;
-    align-items: center;
     vertical-align: text-bottom;
   }
 </style>
