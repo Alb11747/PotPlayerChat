@@ -1,3 +1,12 @@
+export function normalizeUrl(url: string): string {
+  if (!url || typeof url !== 'string') return url
+
+  url = url.replaceAll('\\', '/') // Normalize slashes
+  url = url.trim()
+
+  return url
+}
+
 export function getStreamerFromUrl(url: string): string | null {
   if (!url || typeof url !== 'string') return null
 
