@@ -2,7 +2,8 @@ import type { HWND } from '@/types/globals'
 import {
   getStreamerFromUrl as getChannelFromUrl,
   getStartTimeFromTitle,
-  getTitleFromUrl
+  getTitleFromUrl,
+  normalizeUrl
 } from '@/utils/stream'
 import type { Conf } from 'electron-conf/main'
 import { getPlaylists, getStreamHistory, getTotalVideoTime } from '../os/potplayer'
@@ -47,8 +48,8 @@ export async function getPotplayerExtraInfo<
 
   async function processData(data: { url: string; title?: string } | null): Promise<void> {
     if (!data?.url) return
-    const url = data.url
-    const title = data.title ?? getTitleFromUrl(data.url)
+    const url = normalizeUrl(data.url)
+    const title = data.title ?? getTitleFromUrl(url)
     if (!title) return
 
     const isCurrentStream = title === currentTitle
