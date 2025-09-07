@@ -106,6 +106,7 @@
 
     img {
       height: 2.6rem;
+      max-height: max-content;
       max-width: 9rem;
       object-fit: contain;
     }
