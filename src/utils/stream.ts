@@ -23,7 +23,13 @@ export function getTitleFromUrl(url: string): string | null {
   if (!titlePath) return null
   const [title] = titlePath.split('?', 2)
   if (!title) return null
-  return decodeURIComponent(title)
+  if (!title.includes('%')) return title
+  try {
+    return decodeURIComponent(title)
+  } catch (error) {
+    console.error('Error decoding title:', error)
+    return title
+  }
 }
 
 export function getStartTimeFromTitle(title: string): Date | null {
