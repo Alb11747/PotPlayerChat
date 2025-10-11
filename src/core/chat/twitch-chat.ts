@@ -101,9 +101,7 @@ export class ChatService {
     const { channel, startTime, endTime } = this.currentPotPlayerInfo
     if (!endTime) return false
 
-    const loadStartMark = window.performance.mark(
-      `loadChatCachedStart - ${window.performance.now()}`
-    )
+    const loadStartTime = window.performance.now()
 
     const datePadding = ChatService.loadChatTimePadding
     const startDate = new Date(startTime - datePadding)
@@ -138,18 +136,15 @@ export class ChatService {
       this.currentChatData = allMessages
       return allCached
     } finally {
-      const loadEndMark = window.performance.mark(`loadChatCachedEnd - ${window.performance.now()}`)
-      const loadMeasure = window.performance.measure(
-        'loadChatCached',
-        loadStartMark.name,
-        loadEndMark.name
-      )
-      if (loadMeasure.duration > 20)
+      const loadEndTime = window.performance.now()
+      const loadDuration = loadEndTime - loadStartTime
+      if (loadDuration > 20)
         console.warn(
           `loadChatCached for ${channel} on`,
           datesToFetch,
           `took too long:`,
-          loadMeasure
+          loadDuration.toFixed(2),
+          `ms`
         )
     }
   }
