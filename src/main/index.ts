@@ -1,5 +1,5 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, app, ipcMain } from 'electron'
 import { Conf } from 'electron-conf/main'
 import { join } from 'path'
 
@@ -81,8 +81,15 @@ function createWindow(): void {
 
   ipcMain.handle('openSearchWindow', async (_event, args: SearchInfo) => {
     const searchWindow = createSearchWindow()
+    const waitForLoaded = searchWindow.webContents.isLoading()
+      ? new Promise<void>((resolve) => {
+          searchWindow.webContents.once('did-finish-load', () => resolve())
+        })
+      : Promise.resolve()
+    const messagesRaw = await messagesRawIpcPromise.get()
+    await waitForLoaded
     searchWindow.webContents.send('searchInfo', args)
-    searchWindow.webContents.send(messagesRawIpcPromise.channel, await messagesRawIpcPromise.get())
+    searchWindow.webContents.send(messagesRawIpcPromise.channel, messagesRaw)
   })
 
   ipcMain.handle('focusMessage', async (_event, messageRaw: string) => {

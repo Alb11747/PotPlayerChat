@@ -25,7 +25,7 @@ export class UrlTracker {
   async getPreview(url: string): Promise<LinkPreview | null> {
     if (this.cache.has(url) && this.isSeenUrl(url)) return this.cache.get(url) ?? null
     return await this.lock.acquire(url, async () => {
-      if (this.cache.has(url)) return this.cache.get(url) ?? null
+      if (this.cache.has(url) && this.isSeenUrl(url)) return this.cache.get(url) ?? null
 
       this.loadingUrls.add(url)
       try {

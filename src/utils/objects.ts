@@ -47,5 +47,12 @@ export function deleteNullishKeysInPlace<
 }
 
 export function isObjectClass(obj: unknown, className: string): boolean {
-  return obj !== null && typeof obj === 'object' && obj.constructor.name === className
+  if (obj === null || typeof obj !== 'object') return false
+  const proto = Object.getPrototypeOf(obj)
+  const ctor =
+    (proto && typeof proto.constructor === 'function' ? proto.constructor : null) ||
+    ('constructor' in obj && typeof (obj as { constructor?: unknown }).constructor === 'function'
+      ? (obj as { constructor: { name?: unknown } }).constructor
+      : null)
+  return !!ctor && typeof ctor.name === 'string' && ctor.name === className
 }

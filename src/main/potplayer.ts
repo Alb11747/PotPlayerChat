@@ -24,7 +24,15 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
     delayMs: number
   ): NodeJS.Timeout => {
     if (timeoutId) clearTimeout(timeoutId)
-    return setTimeout(callback, delayMs)
+    return setTimeout(() => {
+      try {
+        Promise.resolve(callback()).catch((error) => {
+          console.error('Scheduled PotPlayer callback failed:', error)
+        })
+      } catch (error) {
+        console.error('Scheduled PotPlayer callback failed:', error)
+      }
+    }, delayMs)
   }
 
   let selectedPotplayerHwnd: HWND | null = null

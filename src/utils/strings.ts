@@ -31,6 +31,7 @@ export function removeSuffix(str: string, suffix: string): string {
  * @returns The number of occurrences of the substring.
  */
 export function countOccurrences(str: string, search: string): number {
+  if (search.length === 0) return 0
   let count = 0
   let pos = str.indexOf(search)
   while (pos !== -1) {

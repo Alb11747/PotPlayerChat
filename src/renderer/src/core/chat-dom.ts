@@ -128,7 +128,6 @@ export function parseFullMessage(
   }: {
     messagePrefix?: string
     messageStr?: string | null
-    processedMessage?: string | null
     twitchEmotes?: Collection<string, Emote | CheerEmote>
     enableEmotes?: boolean
     enableZeroWidthEmotes?: boolean
@@ -340,7 +339,8 @@ export function parseFullMessage(
   }
 
   function parseSegment(str: string): string {
-    return markIndices.length > 0 ? replaceMark(correctMarks(escapeHtml(str))) : str
+    const escaped = escapeHtml(str)
+    return markIndices.length > 0 ? replaceMark(correctMarks(escaped)) : escaped
   }
 
   if (!processedMessage) return [parseSegment(messagePrefix), undefined]
@@ -391,7 +391,7 @@ export function parseFullMessage(
         return false
       }
       if (type === 'emote' && 'toLink' in emote) {
-        const maxSize = emote.sizes?.length - 1 || 2
+        const maxSize = (emote.sizes?.length ?? 0) > 0 ? emote.sizes.length - 1 : 2
         const urls: Record<string, string> = {}
         for (let i = 0; i <= maxSize; i++) urls[(i + 1).toString()] = emote.toLink(i)
         const source = opts?.source || ''
@@ -638,10 +638,7 @@ export function parseFullMessage(
 
   const populatedSegments: Segment[] = segments.map(
     (segment: SegmentNoEscape, index: number): Segment => {
-      let escaped =
-        markIndices.length > 0
-          ? parseSegment(segment.text).replace(PUA_UNICODE_REGEX, '')
-          : segment.text
+      let escaped = parseSegment(segment.text).replace(PUA_UNICODE_REGEX, '')
 
       if (segment.type === 'highlight') escaped = `<mark>${escaped}</mark>`
 

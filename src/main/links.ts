@@ -27,9 +27,9 @@ class LinkPreviewError extends Error {
 const defaultLinkPreviewUrl = 'https://chatterino.alb11747.com/link_resolver/'
 const linkPreviewCacheTTL = 5 * 60 * 1000 // 5 minutes
 const linkPreviewCache = new TTLCache<string, LinkPreview | null>({ ttl: linkPreviewCacheTTL })
-const linkPreviewSeenParams = { capacity: 4096, errorRate: 2 ** -256, key: 'data:urlSeenSet' }
+const linkPreviewSeenParams = { capacity: 4096, errorRate: 0.0001, key: 'data:urlSeenSet' }
 let urlSeenSet: ScalableBloomFilter | null = null
-const linkPreviewOpenedParams = { capacity: 1024, errorRate: 2 ** -256, key: 'data:urlClickedSet' }
+const linkPreviewOpenedParams = { capacity: 1024, errorRate: 0.0001, key: 'data:urlClickedSet' }
 let urlOpenedSet: ScalableBloomFilter | null = null
 let config: Conf | null = null
 const lock = new AsyncLock()

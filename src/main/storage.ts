@@ -19,7 +19,12 @@ export class StorageError extends Error {
 }
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-  return typeof error === 'object' && error !== null && 'code' in error
+  if (!(error instanceof Error) || error instanceof StorageError) return false
+  const errnoError = error as NodeJS.ErrnoException
+  return (
+    typeof errnoError.code === 'string' &&
+    ('errno' in errnoError || typeof errnoError.syscall === 'string')
+  )
 }
 
 /**
@@ -36,6 +41,7 @@ export async function loadDataFile<T = unknown>(subpath: string): Promise<T | nu
       throw new StorageError('invalid_json', `Invalid JSON in data file: ${subpath}`, error)
     }
   } catch (error) {
+    if (error instanceof StorageError) throw error
     if (isErrnoException(error) && error.code === 'ENOENT') return null
     throw new StorageError('read_failed', `Failed to read data file: ${subpath}`, error)
   }

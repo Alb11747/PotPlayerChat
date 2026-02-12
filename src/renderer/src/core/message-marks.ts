@@ -87,7 +87,7 @@ export function correctMarks(str: string): string {
       stack.push(mark)
       continue
     }
-    const openMark = markStarts[mark]
+    const openMark = markEnds[mark]
     if (openMark) {
       if (stack.length === 0) {
         prefix = openMark + prefix
