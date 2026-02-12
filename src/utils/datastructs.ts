@@ -26,7 +26,8 @@ export class TimelineMap<Key, Value> {
    * it is treated as -Infinity.
    */
   public set(key: Key, value: Value, timestamp?: number): void {
-    const effectiveTimestamp: number = timestamp ?? Number.NEGATIVE_INFINITY
+    const effectiveTimestamp: number =
+      timestamp === undefined || Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp
     const timeline: Array<{ timestamp: number; value: Value }> = this.ensureTimeline(key)
 
     if (timeline.length === 0) {

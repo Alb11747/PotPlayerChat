@@ -23,9 +23,11 @@ export class UrlTracker {
    * Fetch link preview data for a URL
    */
   async getPreview(url: string): Promise<LinkPreview | null> {
-    if (this.cache.has(url) && this.isSeenUrl(url)) return this.cache.get(url) ?? null
+    if (this.cache.has(url)) return this.cache.get(url) ?? null
+    if (this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
     return await this.lock.acquire(url, async () => {
-      if (this.cache.has(url) && this.isSeenUrl(url)) return this.cache.get(url) ?? null
+      if (this.cache.has(url)) return this.cache.get(url) ?? null
+      if (this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
 
       this.loadingUrls.add(url)
       try {
@@ -34,6 +36,7 @@ export class UrlTracker {
 
         if (!data) {
           const errorResult: LinkPreview = { status: 0, link: url }
+          this.markFailedUrl(url)
           this.cache.set(url, errorResult)
           return errorResult
         }
@@ -46,6 +49,7 @@ export class UrlTracker {
         console.warn('Failed to fetch link preview:', error)
         // Cache null result to avoid repeated failed requests
         const errorResult: LinkPreview = { status: 0, link: url }
+        this.markFailedUrl(url)
         this.cache.set(url, errorResult)
         return errorResult
       } finally {
@@ -116,8 +120,12 @@ export class UrlTracker {
    * Mark a URL as seen
    */
   async markSeenUrl(url: string): Promise<void> {
-    this.seenUrls.add(url)
-    await window.api.addUrlSeen(url)
+    try {
+      await window.api.addUrlSeen(url)
+      this.seenUrls.add(url)
+    } catch (error) {
+      console.error('Failed to persist seen URL:', error)
+    }
   }
 
   /**
@@ -140,7 +148,11 @@ export class UrlTracker {
    */
   async markVisitedUrl(url: string): Promise<void> {
     this.visitedUrls.add(url)
-    await window.api.addUrlClicked(url)
+    try {
+      await window.api.addUrlClicked(url)
+    } catch (error) {
+      console.error('Failed to persist clicked URL:', error)
+    }
   }
 
   /**
@@ -154,12 +166,9 @@ export class UrlTracker {
    * Safely parse HTML tooltip content to plain text
    */
   static parseTooltipToText(tooltip: string): string {
-    // Create a temporary div to parse HTML
-    const tempDiv = document.createElement('div')
-    tempDiv.innerHTML = tooltip
-
-    // Extract text content and preserve line breaks
-    let text = tempDiv.textContent || tempDiv.innerText || ''
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(tooltip, 'text/html')
+    let text = doc.body.innerText || doc.body.textContent || ''
 
     // Clean up extra whitespace but preserve intentional line breaks
     text = text.replace(/\n\s*\n/g, '\n').trim()

@@ -141,13 +141,13 @@ export function findIntersectingMessageIndex<T extends { timestamp: number; getI
       throw new Error('Target message out of bounds')
 
     const startIdx = bounds.ge(messages, { timestamp: target.timestamp } as T, cmp, low, high)
-    if (startIdx === messages.length) continue
+    if (startIdx === messages.length || startIdx > high) continue
     const targetId = target.getId()
 
     // Linear search for matching id at this timestamp
     for (
       let i = startIdx;
-      i < messages.length && messages[i]!.timestamp === target.timestamp;
+      i <= high && i < messages.length && messages[i]!.timestamp === target.timestamp;
       i++
     ) {
       if (messages[i]!.getId() === targetId) return i

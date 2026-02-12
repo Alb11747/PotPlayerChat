@@ -29,7 +29,8 @@ function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
 
 /**
  * Loads a JSON file from the data directory by subpath.
- * Returns the parsed object or null if not found or invalid.
+ * Returns the parsed object or null if not found.
+ * Throws `StorageError` with code `'invalid_json'` when the file contains invalid JSON.
  */
 export async function loadDataFile<T = unknown>(subpath: string): Promise<T | null> {
   const filePath = join(DATA_DIR, subpath)

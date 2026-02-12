@@ -38,7 +38,7 @@ export const PUA_UNICODE_REGEX = /[\u{E000}-\u{F8FF}]+/gu
 export const HTTP_URL_REGEX =
   /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b(?:[-a-zA-Z0-9()@:%_+.,~#?&/=]*)/gi
 export const NON_HTTP_URL_REGEX =
-  /(?:\s|^)[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b(?:[-a-zA-Z0-9()@:%_+.,~#?&/=]*)(?:\s|$)/gi
+  /(?<=^|\s)[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b(?:[-a-zA-Z0-9()@:%_+.,~#?&/=]*)(?=\s|$)/gi
 
 export const highlightStartRegex = new RegExp(MarkType.HighlightStart, 'gu')
 export const highlightEndRegex = new RegExp(MarkType.HighlightEnd, 'gu')
@@ -100,7 +100,7 @@ export function correctMarks(str: string): string {
   }
   if (stack.length > 0)
     suffix = stack
-      .map((mark) => markEnds[mark])
+      .map((mark) => markStarts[mark])
       .reverse()
       .join('')
   return prefix + str + suffix

@@ -9,6 +9,10 @@ export class NumberObject extends Number {
     return this.value
   }
 
+  override toString(): string {
+    return String(this.value)
+  }
+
   public setValue(value: number): void {
     this.value = value
   }
@@ -46,13 +50,17 @@ export function deleteNullishKeysInPlace<
   return obj
 }
 
-export function isObjectClass(obj: unknown, className: string): boolean {
+export function isObjectClass<T extends abstract new (...args: unknown[]) => object>(
+  obj: unknown,
+  ClassRef: T
+): obj is InstanceType<T> {
   if (obj === null || typeof obj !== 'object') return false
+  if (obj instanceof ClassRef) return true
   const proto = Object.getPrototypeOf(obj)
   const ctor =
     (proto && typeof proto.constructor === 'function' ? proto.constructor : null) ||
     ('constructor' in obj && typeof (obj as { constructor?: unknown }).constructor === 'function'
       ? (obj as { constructor: { name?: unknown } }).constructor
       : null)
-  return !!ctor && typeof ctor.name === 'string' && ctor.name === className
+  return !!ctor && ctor === ClassRef
 }

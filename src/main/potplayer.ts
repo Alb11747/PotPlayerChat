@@ -169,28 +169,31 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
 
   let activePotplayerTimeoutId: NodeJS.Timeout | null = null
   async function updateActivePotplayerInstance(): Promise<void> {
-    const focusedWindow = await getForegroundWindow()
-    if (!focusedWindow) return
-    // Check if the focused window is a PotPlayer instance
-    for (const instance of potplayerInstances) {
-      if (focusedWindow === instance.hwnd) {
-        if (lastActivePotplayerHwnd.getRecent() !== instance.hwnd) {
-          lastActivePotplayerHwnd.add(instance.hwnd)
+    try {
+      const focusedWindow = await getForegroundWindow()
+      if (!focusedWindow) return
+      // Check if the focused window is a PotPlayer instance
+      for (const instance of potplayerInstances) {
+        if (focusedWindow === instance.hwnd) {
+          if (lastActivePotplayerHwnd.getRecent() !== instance.hwnd) {
+            lastActivePotplayerHwnd.add(instance.hwnd)
 
-          // If the selected PotPlayer instance is not set, that means we are using the last active one
-          if (selectedPotplayerHwnd === null)
-            await sendPotplayerInstancesChanged(
-              potplayerInstances,
-              lastActivePotplayerHwnd.getRecent()
-            )
+            // If the selected PotPlayer instance is not set, that means we are using the last active one
+            if (selectedPotplayerHwnd === null)
+              await sendPotplayerInstancesChanged(
+                potplayerInstances,
+                lastActivePotplayerHwnd.getRecent()
+              )
+          }
         }
       }
+    } finally {
+      activePotplayerTimeoutId = scheduleTimeout(
+        activePotplayerTimeoutId,
+        updateActivePotplayerInstance,
+        pollingIntervals.activeWindow
+      )
     }
-    activePotplayerTimeoutId = scheduleTimeout(
-      activePotplayerTimeoutId,
-      updateActivePotplayerInstance,
-      pollingIntervals.activeWindow
-    )
   }
 
   function startInterval(): void {

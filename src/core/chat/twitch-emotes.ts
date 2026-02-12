@@ -3,8 +3,9 @@ import {
   type TwitchEmote as BaseTwitchEmote
 } from '@mkody/twitch-emoticons'
 import type { CheermoteDisplayInfo } from '@twurple/api'
-import type { CheermoteScale } from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
 import { buildEmoteImageUrl, type EmoteSize } from '@twurple/chat'
+
+type CheermoteScale = '1' | '1.5' | '2' | '3' | '4'
 
 export interface TwitchEmote extends BaseTwitchEmote {
   sizes: string[]

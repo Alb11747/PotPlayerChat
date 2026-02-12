@@ -137,7 +137,7 @@
       Require HTTP in URL
     </label>
     <button class="reset-button" onclick={clearUrlData} disabled={!urlTracker}>
-      Clear Url Seen and Clicked Data
+      Clear URL Seen and Clicked Data
     </button>
     {#if clearUrlDataStatus}
       <p class="clear-status">{clearUrlDataStatus}</p>
