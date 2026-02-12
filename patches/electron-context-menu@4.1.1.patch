@@ -1,7 +1,7 @@
-diff --git a/node_modules/electron-context-menu/index.d.ts b/node_modules/electron-context-menu/index.d.ts
+diff --git a/index.d.ts b/index.d.ts
 index 657d377..3f29b9e 100644
---- a/node_modules/electron-context-menu/index.d.ts
-+++ b/node_modules/electron-context-menu/index.d.ts
+--- a/index.d.ts
++++ b/index.d.ts
 @@ -148,7 +148,7 @@ export type Options = {
  		parameters: ContextMenuParams,
  		browserWindow: BrowserWindow | BrowserView | Electron.WebviewTag | WebContents,
@@ -29,10 +29,10 @@ index 657d377..3f29b9e 100644
  
  	/**
  	Called when the context menu is shown.
-diff --git a/node_modules/electron-context-menu/index.js b/node_modules/electron-context-menu/index.js
+diff --git a/index.js b/index.js
 index 8ec2624..7a4b198 100644
---- a/node_modules/electron-context-menu/index.js
-+++ b/node_modules/electron-context-menu/index.js
+--- a/index.js
++++ b/index.js
 @@ -27,7 +27,7 @@ const removeUnusedMenuItems = menuTemplate => {
  };
  

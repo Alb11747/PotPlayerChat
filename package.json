@@ -5,19 +5,20 @@
   "main": "./out/main/index.js",
   "author": "Alb11747",
   "homepage": "https://github.com/Alb11747/PotPlayerChat",
+  "packageManager": "pnpm@10.29.3",
   "scripts": {
     "format": "prettier --plugin prettier-plugin-svelte --write .",
     "lint": "eslint --fix --cache --max-warnings=0 .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json ",
     "svelte-check": "svelte-check --fail-on-warnings",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run svelte-check",
+    "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web && pnpm run svelte-check",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
-    "build": "npm run typecheck && electron-vite build",
-    "postinstall": "electron-builder install-app-deps && patch-package",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
+    "build": "pnpm run typecheck && electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:unpack": "pnpm run build && electron-builder --dir",
+    "build:win": "pnpm run build && electron-builder --win",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -32,8 +33,10 @@
     "@isaacs/ttlcache": "^1.4.1",
     "@mkody/twitch-emoticons": "^2.9.2",
     "@twurple/api": "^7.3.0",
+    "@twurple/api-call": "^7.4.0",
     "@twurple/auth": "^7.3.0",
     "@twurple/chat": "^7.3.0",
+    "@twurple/common": "^7.4.0",
     "async-lock": "^1.4.1",
     "binary-searching": "^2.0.5",
     "bloom-filters": "^3.0.4",
@@ -42,7 +45,6 @@
     "electron-updater": "^6.6.2",
     "koffi": "^2.12.2",
     "node-cache": "^5.1.2",
-    "patch-package": "^8.0.0",
     "regedit": "^5.1.4",
     "sanitize-html": "^2.17.0",
     "tasklist": "^5.0.0",
@@ -75,5 +77,20 @@
     "typescript": "^5.8.3",
     "vite": "^7.0.5",
     "vite-tsconfig-paths": "^5.1.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "koffi",
+      "svelte-preprocess"
+    ],
+    "patchedDependencies": {
+      "@tailwindcss/vite@4.1.18": "patches/@tailwindcss__vite@4.1.18.patch",
+      "electron-context-menu@4.1.1": "patches/electron-context-menu@4.1.1.patch",
+      "virtua@0.41.5": "patches/virtua@0.41.5.patch"
+    }
   }
 }

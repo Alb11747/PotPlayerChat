@@ -1,7 +1,7 @@
-diff --git a/node_modules/virtua/lib/index.d.ts b/node_modules/virtua/lib/index.d.ts
+diff --git a/lib/index.d.ts b/lib/index.d.ts
 index 20ba2d8..2571a71 100644
---- a/node_modules/virtua/lib/index.d.ts
-+++ b/node_modules/virtua/lib/index.d.ts
+--- a/lib/index.d.ts
++++ b/lib/index.d.ts
 @@ -1,5 +1,5 @@
  /**
 - * @module react

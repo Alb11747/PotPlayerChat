@@ -56,18 +56,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
 
-      - run: npm ci
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
 
-      - run: npm version "${{inputs.app-version}}" --allow-same-version --no-git-tag-version
-      - run: npm run build:win
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm version "${{inputs.app-version}}" --allow-same-version --no-git-tag-version
+      - run: pnpm run build:win
         env:
           VITE_DISTRIBUTION_CHANNEL: ${{inputs.distribution-channel}}
           VITE_GIT_HASH: ${{ github.sha }}
           APP_VERSION: ${{inputs.app-version}}
 
-      - run: npm run test --if-present
+      - run: pnpm run test --if-present
 
       - uses: actions/attest-build-provenance@v2
         with:
