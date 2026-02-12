@@ -432,7 +432,7 @@ export class JustLogAPI {
         params: requestParams,
         baseUrl
       })
-      if (!rawData || typeof rawData !== 'string') return null
+      if (rawData == null || typeof rawData !== 'string') return null
       return { messages: convertRawIrcMessagesToTwitchMessages(rawData) }
     }
 

@@ -202,13 +202,12 @@
   async function ensureUrlStatus(url: string): Promise<void> {
     if (primedUrlStatus.has(url)) return
     primedUrlStatus.add(url)
-
-    const [isSeen, isVisited] = await Promise.all([
+    const [seenResult, visitedResult] = await Promise.allSettled([
       window.api.isUrlSeen(url),
       window.api.isUrlClicked(url)
     ])
-    if (isSeen) urlTracker.markSeenUrl(url)
-    if (isVisited) urlTracker.markVisitedUrl(url)
+    if (seenResult.status === 'fulfilled' && seenResult.value) urlTracker.markSeenUrl(url)
+    if (visitedResult.status === 'fulfilled' && visitedResult.value) urlTracker.markVisitedUrl(url)
   }
 
   $effect(() => {

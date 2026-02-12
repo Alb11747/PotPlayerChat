@@ -61,6 +61,7 @@ sevenTVEmotePrototype.toObject = function () {
 
 export class CheerEmote {
   public source = 'cheer' as const
+  private static readonly scales = ['1', '1.5', '2', '3', '4'] as CheermoteScale[]
 
   public urls: Record<CheermoteScale, string>
   public color: string
@@ -71,11 +72,16 @@ export class CheerEmote {
     public bits: number
   ) {
     if (Object.keys(infos).length === 0) throw new Error('No infos provided')
-    this.color = ''
+    const infosEntries = Object.entries(infos) as [CheermoteScale, CheermoteDisplayInfo][]
+    const [, firstInfo] = infosEntries[0]!
+    this.color = firstInfo.color
     this.urls = {} as Record<CheermoteScale, string>
-    for (const [scale, info] of Object.entries(infos) as [CheermoteScale, CheermoteDisplayInfo][]) {
+    for (const [scale, info] of infosEntries) {
       this.urls[scale] = info.url
-      this.color = info.color
+      if (info.color !== this.color) {
+        console.warn(`Cheer emote ${name} has inconsistent colors across scales`)
+      }
     }
+    for (const scale of CheerEmote.scales) this.urls[scale] ??= firstInfo.url
   }
 }

@@ -104,7 +104,7 @@
         linkElement.classList.add(linkClass)
         linkElement.appendChild(document.createElement('br'))
         if (link.previousSibling?.textContent?.trim() === 'URL:') link.previousSibling?.remove()
-        link.textContent = link.textContent?.trim() ?? null
+        link.textContent = link.textContent?.trim() ?? ''
         linkElement.appendChild(link.cloneNode(true))
         link.replaceWith(linkElement)
         sanitizedTooltipHtml = tooltipElement.innerHTML

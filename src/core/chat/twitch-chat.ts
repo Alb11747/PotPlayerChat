@@ -243,7 +243,7 @@ export class ChatService {
               return messages
             } catch (error) {
               console.warn(`Error fetching chat for ${year}/${month}/${day}:`, error)
-              this.chatCache.set(cacheKey, { messages: [], complete })
+              this.chatCache.set(cacheKey, { messages: cachedMessages || [], complete: false })
               return cachedMessages || []
             }
           })

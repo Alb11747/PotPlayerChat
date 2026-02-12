@@ -72,7 +72,7 @@
     onerror={(event) => onError(event, segment.urls)}
   />
   {#if segment.type === 'emote'}
-    {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] ((message.getId(), attachedIndex))}
+    {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] (`${message.getId()}-${attachedIndex}`)}
       {#if Object.values(attachedEmote.urls).some((url) => !urlTracker.isFailedUrl(url))}
         <img
           class="chat-emote zero-width-emote"

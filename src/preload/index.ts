@@ -26,6 +26,11 @@ const messagesRawIpcPromise = new IpcPromiseRenderer<ArrayBufferLike>(
   true
 )
 
+window.addEventListener('beforeunload', () => {
+  searchInfoIpcPromise.dispose()
+  messagesRawIpcPromise.dispose()
+})
+
 // Custom APIs for renderer
 const api: WindowApi = {
   loadDataFile: (...args) => ipcRenderer.invoke('loadDataFile', ...args),
@@ -37,7 +42,7 @@ const api: WindowApi = {
   setPollingIntervals: (...args) => ipcRenderer.invoke('setPollingIntervals', ...args),
   getSearchInfo: () => searchInfoIpcPromise.get(),
   getMessagesRaw: () => messagesRawIpcPromise.get(),
-  setMessagesRaw: (...args) => ipcRenderer.invoke(messagesRawIpcPromise.channel, ...args),
+  setMessagesRaw: async (...args) => ipcRenderer.send(messagesRawIpcPromise.channel, ...args),
   getPotPlayers: (...args) => ipcRenderer.invoke('getPotplayers', ...args),
   getSelectedPotPlayerHWND: (...args) => ipcRenderer.invoke('getPotplayerHwnd', ...args),
   setSelectedPotPlayerHWND: (...args) => ipcRenderer.invoke('setPotplayerHwnd', ...args),

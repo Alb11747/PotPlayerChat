@@ -299,10 +299,10 @@
     return () => window.api.offFocusMessage(onFocusMessageEvent)
   })
 
-  function setPotPlayerInstance(instanceProxy: PotPlayerInstance | PotPlayerInfo | null): void {
+  function setPotPlayerInstance(instanceInfo: PotPlayerInstance | PotPlayerInfo | null): void {
     const currentSelectionNonce = ++potPlayerSelectionNonce
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
-      const instance = $state.snapshot(instanceProxy)
+      const instance = $state.snapshot(instanceInfo)
       const hwnd = instance?.hwnd
 
       showSettings = false
@@ -313,7 +313,7 @@
         return null
       }
       autoSelectPotPlayer = false
-      if (!selectedPotplayerInfo) selectedPotplayerInfo = instanceProxy
+      if (!selectedPotplayerInfo) selectedPotplayerInfo = instanceInfo
       else selectedPotplayerInfo.hwnd = hwnd
       await window.api.setSelectedPotPlayerHWND(hwnd)
       await resetVideoTimeHistory(hwnd)
@@ -326,7 +326,7 @@
       } else {
         void (async () => {
           const info = await window.api.getPotplayerExtraInfo(instance)
-          if (info) instanceProxy = info
+          if (info) selectedPotplayerInfo = info
         })()
         currentSelectedPotPlayerInfo = instance
       }
@@ -435,7 +435,7 @@
 <LinkPreview />
 
 <div class="container" role="region" aria-label="Chat">
-  <div class="header" role="presentation" onkeydown={handleKeydown}>
+  <div class="header" onkeydown={handleKeydown}>
     <button
       class:selected={autoSelectPotPlayer}
       onclick={() => setPotPlayerInstance(null)}

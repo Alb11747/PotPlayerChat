@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { UrlTracker } from '../core/url-tracker'
   import conf from '../state/config'
   import {
     defaultSettings,
@@ -6,9 +7,9 @@
     settings,
     settingsConfigKey
   } from '../state/settings.svelte'
-  import type { UrlTracker } from '../core/url-tracker'
 
-  let { urlTracker }: { urlTracker: UrlTracker } = $props()
+  let { urlTracker }: { urlTracker?: UrlTracker } = $props()
+  let clearUrlDataStatus = $state<string | null>(null)
 
   $effect(() => {
     normalizeSettings()
@@ -26,6 +27,24 @@
   async function resetAllSettings(): Promise<void> {
     Object.assign(settings, defaultSettings)
     conf.set(settingsConfigKey, $state.snapshot(settings))
+  }
+
+  async function clearUrlData(): Promise<void> {
+    clearUrlDataStatus = null
+    if (!urlTracker) {
+      clearUrlDataStatus = 'URL tracker is unavailable.'
+      return
+    }
+    try {
+      await window.api.clearUrlSeen()
+      await window.api.clearUrlClicked()
+      urlTracker.clearSeenUrls()
+      urlTracker.clearVisitedUrls()
+      clearUrlDataStatus = 'URL seen/clicked data cleared.'
+    } catch (error) {
+      console.error('Failed to clear URL seen/clicked data:', error)
+      clearUrlDataStatus = 'Failed to clear URL data. Check logs and try again.'
+    }
   }
 </script>
 
@@ -117,17 +136,12 @@
       <input type="checkbox" bind:checked={settings.interface.requireHttpInUrl} />
       Require HTTP in URL
     </label>
-    <button
-      class="reset-button"
-      onclick={() => {
-        window.api.clearUrlSeen()
-        window.api.clearUrlClicked()
-        urlTracker.clearSeenUrls()
-        urlTracker.clearVisitedUrls()
-      }}
-    >
+    <button class="reset-button" onclick={clearUrlData} disabled={!urlTracker}>
       Clear Url Seen and Clicked Data
     </button>
+    {#if clearUrlDataStatus}
+      <p class="clear-status">{clearUrlDataStatus}</p>
+    {/if}
   </fieldset>
 
   <fieldset>
@@ -176,6 +190,12 @@
     overflow-y: auto;
     user-select: text;
     cursor: default;
+  }
+
+  .clear-status {
+    margin-top: 0.5rem;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
   }
 
   .header-section {

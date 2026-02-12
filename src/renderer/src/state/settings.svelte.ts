@@ -118,7 +118,7 @@ void (async () => {
   removeTemporarySettings()
   normalizeSettings()
 
-  if (Object.entries(settings.interface).some(([, value]) => !value)) {
+  if (Object.entries(settings.interface).some(([, value]) => value === undefined)) {
     settings.intervals = await window.api.getPollingIntervals()
   } else {
     await window.api.setPollingIntervals($state.snapshot(settings.intervals))

@@ -1,5 +1,5 @@
 export function normalizeUrl(url: string): string {
-  if (!url || typeof url !== 'string') return url
+  if (typeof url !== 'string' || !url) return ''
 
   url = url.replaceAll('\\', '/') // Normalize slashes
   url = url.trim()

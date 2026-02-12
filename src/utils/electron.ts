@@ -16,7 +16,7 @@ type HandlerFn<T> = (event: unknown, data: T) => void
 abstract class IpcPromiseBase<T = unknown, Ipc extends IpcLike = IpcLike> {
   protected static nullValue: symbol = Symbol('null')
   protected promise: Promise<T | null>
-  protected value: T | symbol = IpcPromiseBase.nullValue
+  protected value: T | null | symbol = IpcPromiseBase.nullValue
 
   constructor(
     protected ipc: Ipc,
@@ -27,9 +27,11 @@ abstract class IpcPromiseBase<T = unknown, Ipc extends IpcLike = IpcLike> {
   }
 
   async get(): Promise<T | null> {
-    if (this.value !== (this.constructor as typeof IpcPromiseBase).nullValue) return this.value as T
+    if (this.value !== (this.constructor as typeof IpcPromiseBase).nullValue)
+      return this.value as T | null
     const value = await this.promise
-    if (!this.updatable && this instanceof IpcPromiseMain) this.promise = this.getPromise()
+    this.value = value
+    if (this.updatable && this instanceof IpcPromiseMain) this.promise = this.getPromise()
     return value
   }
 
@@ -58,18 +60,28 @@ abstract class IpcPromiseBase<T = unknown, Ipc extends IpcLike = IpcLike> {
 
 export class IpcPromiseMain<T = unknown> extends IpcPromiseBase<T, IpcMain> {
   protected once(fn: HandlerFn<T>): void {
-    this.ipc.handleOnce(this.channel, fn)
+    this.ipc.once(this.channel, fn as never)
   }
   protected on(fn: HandlerFn<T>): void {
-    this.ipc.handle(this.channel, fn)
+    this.ipc.on(this.channel, fn as never)
   }
 }
 
 export class IpcPromiseRenderer<T = unknown> extends IpcPromiseBase<T, IpcRenderer> {
+  private onHandler: HandlerFn<T> | null = null
+
   protected once(fn: HandlerFn<T>): void {
     this.ipc.once(this.channel, fn)
   }
   protected on(fn: HandlerFn<T>): void {
+    if (this.onHandler) this.ipc.removeListener(this.channel, this.onHandler)
+    this.onHandler = fn
     this.ipc.on(this.channel, fn)
+  }
+
+  public dispose(): void {
+    if (!this.onHandler) return
+    this.ipc.removeListener(this.channel, this.onHandler)
+    this.onHandler = null
   }
 }

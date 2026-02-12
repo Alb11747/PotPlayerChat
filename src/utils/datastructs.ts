@@ -198,9 +198,13 @@ export class BoundedSet<T> extends Set<T> {
   constructor(capacity: number, iterable?: Iterable<T>) {
     super()
     // Normalize capacity: negative -> 0, non-integer -> floor, Infinity supported
-    this.capacity = Number.isFinite(capacity)
-      ? Math.max(0, Math.floor(capacity))
-      : Number.POSITIVE_INFINITY
+    if (typeof capacity !== 'number' || Number.isNaN(capacity)) {
+      this.capacity = 0
+    } else if (Number.isFinite(capacity)) {
+      this.capacity = Math.max(0, Math.floor(capacity))
+    } else {
+      this.capacity = Number.POSITIVE_INFINITY
+    }
 
     if (iterable) for (const item of iterable) this.add(item)
   }
