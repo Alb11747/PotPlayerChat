@@ -1,7 +1,7 @@
 import type { HWND } from '@/types/globals'
 import { logTime } from '@/utils/debug'
+import TTLCache from '@isaacs/ttlcache'
 import koffi from 'koffi'
-import NodeCache from 'node-cache'
 import { tasklist, type TasklistWindow, type TasklistWindowVerbose } from 'tasklist'
 import { promisify } from 'util'
 
@@ -126,13 +126,17 @@ export async function findHwndByPidAndTitle(
   return hwnds[0]!
 }
 
-const pidByHwndCache = new NodeCache({ stdTTL: 2 * 60 * 60, checkperiod: 24 * 60 * 60 })
+const pidByHwndCache = new TTLCache<number, { hwnd: HWND; title: string }>({
+  ttl: 2 * 60 * 60 * 1000,
+  max: 1024,
+  updateAgeOnGet: true
+})
 
 export async function getHwndByPidAndTitle(
   pid: number,
   title: string
 ): Promise<{ hwnd: HWND; title: string } | null> {
-  const cached = pidByHwndCache.get<{ hwnd: HWND; title: string }>(pid)
+  const cached = pidByHwndCache.get(pid)
   if (cached !== undefined) {
     return cached
   }

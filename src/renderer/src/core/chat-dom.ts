@@ -9,6 +9,20 @@ import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import type { Collection, Emote } from '@mkody/twitch-emoticons'
 import type { CheermoteScale } from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
+import {
+  HTTP_URL_REGEX,
+  MarkType,
+  NON_HTTP_URL_REGEX,
+  PUA_UNICODE_REGEX,
+  correctMarks,
+  highlightEndRegex,
+  highlightStartRegex,
+  markData,
+  markEnds,
+  markRanking,
+  markStarts,
+  nextIndexOf
+} from './message-marks'
 
 /**
  * Escapes HTML special characters in a string.
@@ -41,6 +55,8 @@ export function unescapeHtml(text: string): string {
 const actionStart = '\u{0001}ACTION '
 const actionEnd = '\u{0001}'
 
+export { convertStringToLegibleMarks } from './message-marks'
+
 /**
  * Checks if a message is an action message.
  * Action messages are prefixed with '\u{0001}ACTION ' and suffixed with '\u{0001}'.
@@ -60,143 +76,6 @@ export function isActionMessage(message?: string): boolean {
 export function stripActionMessage(message: string): string {
   if (isActionMessage(message)) return message.slice(actionStart.length, -actionEnd.length)
   return message
-}
-
-let nextPUAId = '\u{E000}'
-
-function genNextPUA(): string {
-  const id = nextPUAId
-  nextPUAId = String.fromCodePoint(nextPUAId.codePointAt(0)! + 1)
-  if (nextPUAId.codePointAt(0)! > 0xf8ff) throw new Error('PUA ID overflow')
-  return id
-}
-
-const markData = [
-  { name: 'TwitchEmote', start: genNextPUA(), end: genNextPUA() },
-  { name: 'Emote', start: genNextPUA(), end: genNextPUA() },
-  { name: 'Url', start: genNextPUA(), end: genNextPUA() },
-  { name: 'Mention', start: genNextPUA(), end: genNextPUA() },
-  { name: 'Highlight', start: genNextPUA(), end: genNextPUA() }
-] as const
-
-const MarkType = Object.fromEntries(
-  markData.flatMap(({ name, start, end }) => [
-    [`${name}Start`, start],
-    [`${name}End`, end]
-  ])
-) as {
-  [K in
-    | `${(typeof markData)[number]['name']}Start`
-    | `${(typeof markData)[number]['name']}End`]: string
-}
-
-const marksList: string[] = markData.map(({ start, end }) => [start, end]).flat()
-
-const markRanking = Object.fromEntries(
-  markData.flatMap(({ start, end }, i) => [
-    [start, i],
-    [end, i]
-  ])
-)
-
-const markStarts = Object.fromEntries(markData.map(({ start, end }) => [start, end])) as Record<
-  string,
-  string
->
-
-const markEnds = Object.fromEntries(markData.map(({ start, end }) => [end, start])) as Record<
-  string,
-  string
->
-
-const PUA_UNICODE_REGEX = new RegExp('[\u{E000}-\u{F8FF}]+', 'gu')
-const HTTP_URL_REGEX =
-  /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b(?:[-a-zA-Z0-9()@:%_+.,~#?&/=]*)/gi
-const NON_HTTP_URL_REGEX =
-  /(?:\s|^)[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,63}\b(?:[-a-zA-Z0-9()@:%_+.,~#?&/=]*)(?:\s|$)/gi
-
-const highlightStartRegex = new RegExp(MarkType.HighlightStart, 'gu')
-const highlightEndRegex = new RegExp(MarkType.HighlightEnd, 'gu')
-
-const legibleMarksData = [
-  { start: '(', end: ')', name: 'Parentheses' },
-  { start: '[', end: ']', name: 'Square Brackets' },
-  { start: '<', end: '>', name: 'Angle Brackets' },
-  { start: '{', end: '}', name: 'Curly Braces' },
-  { start: '«', end: '»', name: 'Guillemets' },
-  { start: '‹', end: '›', name: 'Single Guillemets' },
-  { start: '【', end: '】', name: 'Chinese Brackets' },
-  { start: '〔', end: '〕', name: 'Japanese Brackets' }
-] as const
-
-export function convertStringToLegibleMarks(s: string): string {
-  for (const [i, { start, end }] of markData.entries()) {
-    const legibleStart = legibleMarksData[i]?.start
-    const legibleEnd = legibleMarksData[i]?.end
-    s = s.replaceAll(start, legibleStart ?? start)
-    s = s.replaceAll(end, legibleEnd ?? end)
-  }
-  return s
-}
-
-/**
- * Finds the next index of any character from the given list in the string, starting from the current index.
- * If no character is found, returns the length of the string.
- * @param str The string to search in.
- * @param currentIndex The index to start searching from.
- * @param chars The list of characters to search for.
- * @returns The index of the next character found, or the length of the string if none are found.
- */
-function nextIndexOf(str: string, currentIndex: number, chars: string[]): number {
-  let nextIndex = str.length
-  for (const char of chars) {
-    const index = str.indexOf(char, currentIndex)
-    if (index !== -1 && index < nextIndex) nextIndex = index
-  }
-  return nextIndex
-}
-
-/**
- * Corrects unbalanced marks in a string by adding missing closing or opening marks for all mark types.
- * Ensures marks are properly nested and ordered.
- * @param str The string to correct.
- */
-export function correctMarks(str: string): string {
-  const stack: string[] = []
-  let prefix = ''
-  let suffix = ''
-  for (
-    let i = nextIndexOf(str, 0, marksList);
-    i < str.length;
-    i = nextIndexOf(str, i + 1, marksList)
-  ) {
-    const mark = str[i]!
-    if (mark in markStarts) {
-      // If it's an opening mark, push it onto the stack
-      stack.push(mark)
-      continue
-    }
-    const openMark = markStarts[mark]
-    if (openMark) {
-      // If it's a closing mark, check the stack
-      if (stack.length === 0) {
-        // If the stack is empty, we need to add the corresponding opening mark
-        prefix = openMark + prefix
-      } else {
-        // Remove the last one that matches openMark
-        const lastIndex = stack.lastIndexOf(openMark)
-        if (lastIndex !== -1) stack.splice(lastIndex, 1)
-        else prefix = openMark + prefix
-      }
-    }
-  }
-  // If there are still marks in the stack, we need to add their corresponding closing marks
-  if (stack.length > 0)
-    suffix = stack
-      .map((mark) => markEnds[mark])
-      .reverse()
-      .join('')
-  return prefix + str + suffix
 }
 
 export type EmoteSegment =
@@ -429,19 +308,17 @@ export function parseFullMessage(
   }
   markIndices.sort(compare)
 
-  // Remove duplicates
-  const uniqueMarks = new Map<string, { index: number; char: string }>()
-  for (let i = 0; i < markIndices.length; i++) {
-    const mark = markIndices[i]
-    if (!mark) continue
+  // Remove duplicates in linear time
+  const seenMarkKeys = new Set<string>()
+  const dedupedMarkIndices: CharIndex[] = []
+  for (const mark of markIndices) {
     const key = `${mark.index}:${mark.char}`
-    if (!uniqueMarks.has(key)) {
-      uniqueMarks.set(key, mark)
-    } else {
-      markIndices.splice(i, 1)
-      i-- // Adjust index after removal
-    }
+    if (seenMarkKeys.has(key)) continue
+    seenMarkKeys.add(key)
+    dedupedMarkIndices.push(mark)
   }
+  markIndices.length = 0
+  markIndices.push(...dedupedMarkIndices)
 
   for (const mark of markIndices) {
     if (mark.index < 0) {

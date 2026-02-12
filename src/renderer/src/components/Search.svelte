@@ -3,10 +3,12 @@
   import {
     convertRawIrcMessagesToTwitchMessages,
     convertRawIrcMessageToTwitchMessage,
-    TwitchChatMessage,
-    TwitchSystemMessage,
     type TwitchMessage
   } from '@/core/chat/twitch-msg'
+  import {
+    formattedTwitchMessageFactory,
+    type TwitchMessageFormatted
+  } from '@/renderer/src/core/search-messages'
   import type {} from '@/types/preload'
   import {
     findIntersectingMessageIndex,
@@ -25,22 +27,6 @@
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
 
-  type TwitchMessageFormatted = TwitchMessage & { formattedMessage: string }
-  function formattedTwitchMessageFactory(msg: TwitchMessage): TwitchMessageFormatted {
-    if (msg.type === 'chat') {
-      const newObj = Object.create(TwitchChatMessage.prototype)
-      Object.assign(newObj, msg)
-      newObj.formattedMessage = `${msg.username}: ${msg.message}`
-      return newObj
-    } else if (msg.type === 'system') {
-      const newObj = Object.create(TwitchSystemMessage.prototype)
-      Object.assign(newObj, msg)
-      newObj.formattedMessage = newObj.getSystemText()
-      return newObj
-    }
-    throw new Error('Invalid message type')
-  }
-
   const urlTracker = new UrlTracker(settings.chat)
 
   let searchQuery = $state('')
@@ -48,6 +34,7 @@
   let useRegex = $state(false)
 
   let loadedMessages = $state(false)
+  let loadAllMessagesPromise: Promise<void> | null = null
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const seenMessages = new Set<string>()
   let focusedMessage = $state<TwitchMessage | null>(null)
@@ -71,7 +58,10 @@
 
   // Load all messages when component mounts
   $effect(() => {
-    loadAllMessages()
+    if (loadedMessages || loadAllMessagesPromise) return
+    loadAllMessagesPromise = loadAllMessages().finally(() => {
+      loadAllMessagesPromise = null
+    })
   })
 
   // Focus search input when component mounts
@@ -80,7 +70,7 @@
   })
 
   async function loadAllMessages(): Promise<void> {
-    if (vlistRef && loadedMessages) return
+    if (loadedMessages) return
     loadedMessages = true
 
     try {
@@ -155,6 +145,7 @@
         scrollToTargetMessages()
       }
     } catch (error) {
+      loadedMessages = false
       console.error('Failed to load messages for search:', error)
     }
   }
@@ -242,9 +233,12 @@
       return
     }
 
+    const regex =
+      useRegex && searchPattern instanceof RegExp
+        ? new RegExp(searchPattern.source, searchPattern.flags)
+        : null
     filteredMessages = messages.filter((msg) => {
-      if (useRegex && typeof searchPattern === 'object')
-        return searchPattern.test(msg.formattedMessage)
+      if (regex) return regex.test(msg.formattedMessage)
       if (caseSensitive) return msg.formattedMessage?.includes(searchQuery)
       return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
     })

@@ -1,4 +1,3 @@
-import { validatePropertiesExist } from '@/utils/objects'
 import type {
   AllChannelsJSON,
   Channel,
@@ -11,11 +10,12 @@ import type {
   UserLogList,
   UsernameToIdFunc
 } from '@/types/justlog'
+import { validatePropertiesExist } from '@/utils/objects'
 import { parseIrcMessage } from './irc'
 import {
-  convertRawIrcMessagesToTwitchMessages,
   TwitchChatMessage,
   TwitchSystemMessage,
+  convertRawIrcMessagesToTwitchMessages,
   type TwitchMessage
 } from './twitch-msg'
 
@@ -168,39 +168,11 @@ export class JustLogAPI {
       '/channelid/{channel}'
     )
 
-    if (this.useRaw) {
-      params['raw'] = 'true'
-      const rawData = await this.sendRequestRaw(
-        'text',
-        'GET',
-        url.replace('{channel}', channelValue),
-        {
-          params,
-          baseUrl
-        }
-      )
-
-      if (!rawData || typeof rawData !== 'string') return null
-
-      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
-      return { messages }
-    } else {
-      const responseData = await this.sendRequestJson(
-        'GET',
-        url.replace('{channel}', channelValue),
-        {
-          params,
-          baseUrl
-        }
-      )
-
-      if (!responseData) return null
-      if (!this.isChatLog(responseData, this.isStrict))
-        throw new Error(`Invalid response format for channel logs: ${JSON.stringify(responseData)}`)
-
-      const messages = this.convertJustLogChatMessagesToTwitchMessages(responseData.messages)
-      return { messages }
-    }
+    return this.fetchChatLog(url.replace('{channel}', channelValue), {
+      params,
+      baseUrl,
+      responseLabel: 'channel logs'
+    })
   }
 
   public async getUserLogs(
@@ -243,30 +215,11 @@ export class JustLogAPI {
     const endpoint =
       channelUrl.replace('{channel}', channelValue) + userUrl.replace('{user}', userValue)
 
-    if (this.useRaw) {
-      params['raw'] = 'true'
-      const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
-        params,
-        baseUrl
-      })
-
-      if (!rawData || typeof rawData !== 'string') return null
-
-      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
-      return { messages }
-    } else {
-      const responseData = await this.sendRequestJson('GET', endpoint, {
-        params,
-        baseUrl
-      })
-
-      if (!responseData) return null
-      if (!this.isChatLog(responseData, this.isStrict))
-        throw new Error(`Invalid response format for user logs: ${JSON.stringify(responseData)}`)
-
-      const messages = this.convertJustLogChatMessagesToTwitchMessages(responseData.messages)
-      return { messages }
-    }
+    return this.fetchChatLog(endpoint, {
+      params,
+      baseUrl,
+      responseLabel: 'user logs'
+    })
   }
 
   public async getUserLogsByDate(
@@ -309,30 +262,10 @@ export class JustLogAPI {
       userUrl.replace('{user}', userValue) +
       `/${year}/${month}`
 
-    if (this.useRaw) {
-      const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
-        params: { raw: 'true' },
-        baseUrl
-      })
-
-      if (!rawData || typeof rawData !== 'string') return null
-
-      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
-      return { messages }
-    } else {
-      const responseData = await this.sendRequestJson('GET', endpoint, {
-        baseUrl
-      })
-
-      if (!responseData) return null
-      if (!this.isChatLog(responseData, this.isStrict))
-        throw new Error(
-          `Invalid response format for user logs by date: ${JSON.stringify(responseData)}`
-        )
-
-      const messages = this.convertJustLogChatMessagesToTwitchMessages(responseData.messages)
-      return { messages }
-    }
+    return this.fetchChatLog(endpoint, {
+      baseUrl,
+      responseLabel: 'user logs by date'
+    })
   }
 
   public async getChannelLogsByDate(
@@ -362,30 +295,10 @@ export class JustLogAPI {
     )
     const endpoint = url.replace('{channel}', channelValue) + `/${year}/${month}/${day}`
 
-    if (this.useRaw) {
-      const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
-        params: { raw: 'true' },
-        baseUrl
-      })
-
-      if (!rawData || typeof rawData !== 'string') return null
-
-      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
-      return { messages }
-    } else {
-      const responseData = await this.sendRequestJson('GET', endpoint, {
-        baseUrl
-      })
-
-      if (!responseData) return null
-      if (!this.isChatLog(responseData, this.isStrict))
-        throw new Error(
-          `Invalid response format for channel logs by date: ${JSON.stringify(responseData)}`
-        )
-
-      const messages = this.convertJustLogChatMessagesToTwitchMessages(responseData.messages)
-      return { messages }
-    }
+    return this.fetchChatLog(endpoint, {
+      baseUrl,
+      responseLabel: 'channel logs by date'
+    })
   }
 
   public async getRandomChannelLog(
@@ -407,37 +320,10 @@ export class JustLogAPI {
       '/channelid/{channel}/random'
     )
 
-    if (this.useRaw) {
-      const rawData = await this.sendRequestRaw(
-        'text',
-        'GET',
-        endpoint.replace('{channel}', channelValue),
-        {
-          params: { raw: 'true' },
-          baseUrl
-        }
-      )
-
-      if (!rawData || typeof rawData !== 'string') return null
-
-      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
-      return { messages }
-    } else {
-      const responseData = await this.sendRequestJson(
-        'GET',
-        endpoint.replace('{channel}', channelValue),
-        { baseUrl }
-      )
-
-      if (responseData === null) return null
-      if (!this.isChatLog(responseData, this.isStrict))
-        throw new Error(
-          `Invalid response format for random channel log: ${JSON.stringify(responseData)}`
-        )
-
-      const messages = this.convertJustLogChatMessagesToTwitchMessages(responseData.messages)
-      return { messages }
-    }
+    return this.fetchChatLog(endpoint.replace('{channel}', channelValue), {
+      baseUrl,
+      responseLabel: 'random channel log'
+    })
   }
 
   public async getRandomUserLog(
@@ -475,30 +361,10 @@ export class JustLogAPI {
       userUrl.replace('{user}', userValue) +
       '/random'
 
-    if (this.useRaw) {
-      const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
-        params: { raw: 'true' },
-        baseUrl
-      })
-
-      if (!rawData || typeof rawData !== 'string') return null
-
-      const messages = convertRawIrcMessagesToTwitchMessages(rawData)
-      return { messages }
-    } else {
-      const responseData = await this.sendRequestJson('GET', endpoint, {
-        baseUrl
-      })
-
-      if (responseData === null) return null
-      if (!this.isChatLog(responseData, this.isStrict))
-        throw new Error(
-          `Invalid response format for random user log: ${JSON.stringify(responseData)}`
-        )
-
-      const messages = this.convertJustLogChatMessagesToTwitchMessages(responseData.messages)
-      return { messages }
-    }
+    return this.fetchChatLog(endpoint, {
+      baseUrl,
+      responseLabel: 'random user log'
+    })
   }
 
   public async adminJoinChannels(
@@ -546,6 +412,41 @@ export class JustLogAPI {
   }
 
   // --- HTTP request helpers ---
+
+  private async fetchChatLog(
+    endpoint: string,
+    {
+      params,
+      baseUrl,
+      responseLabel
+    }: {
+      params?: Record<string, unknown>
+      baseUrl?: string | null
+      responseLabel: string
+    }
+  ): Promise<ChatLog | null> {
+    const requestParams = { ...(params || {}) }
+    if (this.useRaw) {
+      requestParams['raw'] = 'true'
+      const rawData = await this.sendRequestRaw('text', 'GET', endpoint, {
+        params: requestParams,
+        baseUrl
+      })
+      if (!rawData || typeof rawData !== 'string') return null
+      return { messages: convertRawIrcMessagesToTwitchMessages(rawData) }
+    }
+
+    const responseData = await this.sendRequestJson('GET', endpoint, {
+      params: requestParams,
+      baseUrl
+    })
+    if (responseData === null) return null
+    if (!this.isChatLog(responseData, this.isStrict))
+      throw new Error(
+        `Invalid response format for ${responseLabel}: ${JSON.stringify(responseData)}`
+      )
+    return { messages: this.convertJustLogChatMessagesToTwitchMessages(responseData.messages) }
+  }
 
   private buildHeaders(
     opts: { admin?: boolean; apiKey?: string | null } = {}

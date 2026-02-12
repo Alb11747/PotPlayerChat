@@ -12,6 +12,18 @@ type LinkPreview = {
   link: string
 }
 
+type LinkPreviewErrorCode = 'invalid_url' | 'http_error' | 'network_error'
+class LinkPreviewError extends Error {
+  constructor(
+    public readonly code: LinkPreviewErrorCode,
+    message: string,
+    public readonly context?: unknown
+  ) {
+    super(message)
+    this.name = 'LinkPreviewError'
+  }
+}
+
 const defaultLinkPreviewUrl = 'https://chatterino.alb11747.com/link_resolver/'
 const linkPreviewCacheTTL = 5 * 60 * 1000 // 5 minutes
 const linkPreviewCache = new TTLCache<string, LinkPreview | null>({ ttl: linkPreviewCacheTTL })
@@ -65,7 +77,9 @@ export async function getLinkPreview(
         typeof url !== 'string' ||
         (!url.startsWith('http://') && !url.startsWith('https://'))
       ) {
-        console.warn('Invalid URL provided to getLinkPreview:', url)
+        console.warn(
+          new LinkPreviewError('invalid_url', 'Invalid URL provided to getLinkPreview', url)
+        )
         return null
       }
 
@@ -77,7 +91,13 @@ export async function getLinkPreview(
       const response = await fetch(chatterinoBaseUrl + encodedUrl)
 
       if (!response.ok) {
-        console.warn(`Link preview failed for ${url}: HTTP ${response.status}`)
+        const error = new LinkPreviewError(
+          'http_error',
+          `Link preview failed for ${url}: HTTP ${response.status}`,
+          { status: response.status }
+        )
+        console.warn(error)
+        linkPreviewCache.set(url, null)
         return null
       }
 
@@ -95,7 +115,10 @@ export async function getLinkPreview(
       linkPreviewCache.set(url, linkPreview)
       return linkPreview
     } catch (error) {
-      console.warn('Failed to fetch link preview:', error)
+      console.warn(
+        new LinkPreviewError('network_error', 'Failed to fetch link preview', { url, error })
+      )
+      linkPreviewCache.set(url, null)
       return null
     }
   })

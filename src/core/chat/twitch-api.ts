@@ -150,6 +150,33 @@ export namespace TwitchEmoteService {
   })()
 
   type CacheValue = EmoteObject[]
+  type ChannelKey = string
+
+  const GLOBAL_CHANNEL_KEY = 'global'
+  const channelKey = (channelId?: number | null): ChannelKey =>
+    channelId === undefined || channelId === null ? GLOBAL_CHANNEL_KEY : String(channelId)
+  const channelMap = (currentFetcher: EmoteFetcher): Map<ChannelKey, Channel> =>
+    currentFetcher.channels as unknown as Map<ChannelKey, Channel>
+  const getChannel = (
+    currentFetcher: EmoteFetcher,
+    channelId?: number | null
+  ): Channel | undefined => channelMap(currentFetcher).get(channelKey(channelId))
+  const hasChannel = (currentFetcher: EmoteFetcher, channelId?: number | null): boolean =>
+    channelMap(currentFetcher).has(channelKey(channelId))
+  const setChannel = (
+    currentFetcher: EmoteFetcher,
+    channelId: number | null,
+    channel: Channel
+  ): void => {
+    channelMap(currentFetcher).set(channelKey(channelId), channel)
+  }
+  const deleteChannel = (currentFetcher: EmoteFetcher, channelId: number | null): void => {
+    channelMap(currentFetcher).delete(channelKey(channelId))
+  }
+  const createChannel = (currentFetcher: EmoteFetcher, channelId: number | null): Channel =>
+    new Channel(currentFetcher, (channelId ?? null) as unknown as number)
+  const emoteToObject = (emote: Emote): EmoteObject =>
+    (emote as unknown as { toObject: () => EmoteObject }).toObject()
 
   /**
    * Fetches all emotes (Twitch, BTTV, FFZ, 7TV) for a channel and caches them.
@@ -160,10 +187,10 @@ export namespace TwitchEmoteService {
     const fetcher = await fetcherPromise
     if (!fetcher) return
 
-    if (fetcher.channels.has(channelId as unknown as string)) return
+    if (hasChannel(fetcher, channelId)) return
 
     await lock.acquire(String(channelId ?? 'global'), async () => {
-      if (fetcher.channels.has(channelId as unknown as string)) return
+      if (hasChannel(fetcher, channelId)) return
 
       // Load cached emotes
       const cachedEmotesObjects = await loadTTLSetting<CacheValue>(
@@ -174,35 +201,35 @@ export namespace TwitchEmoteService {
       if (cachedEmotesObjects) {
         try {
           await lock.acquire(`emotes-${channelId}`, () => {
-            if (fetcher.channels.has(channelId as unknown as string)) return
+            if (hasChannel(fetcher, channelId)) return
             const cachedEmotes = fetcher.fromObject(cachedEmotesObjects)
             for (const [i, emote] of cachedEmotesObjects.entries())
               if ('zeroWidth' in emote && emote.zeroWidth)
                 (cachedEmotes[i] as unknown as Record<string, unknown>)['zeroWidth'] =
                   emote.zeroWidth
 
-            const channel = fetcher.channels.get(channelId as unknown as string)
+            const channel = getChannel(fetcher, channelId)
             if (channel) {
               for (const emote of cachedEmotes)
                 if (!channel.emotes.get(emote.code)) channel.emotes.set(emote.code, emote)
             } else {
-              const channel = new Channel(fetcher, channelId ?? (null as unknown as number))
+              const channel = createChannel(fetcher, channelId ?? null)
               for (const emote of cachedEmotes) channel.emotes.set(emote.code, emote)
-              fetcher.channels.set(channelId as unknown as string, channel)
+              setChannel(fetcher, channelId ?? null, channel)
             }
           })
         } catch (error) {
           console.error('Failed to load emote cache:', error, cachedEmotesObjects)
         }
-        if (fetcher.channels.has(channelId as unknown as string)) return
+        if (hasChannel(fetcher, channelId)) return
       }
 
       let loadGlobalEmotesPromise: Promise<unknown> | undefined = undefined
       let loadChannelEmotesPromise: Promise<unknown> | undefined = undefined
 
-      if (!fetcher.channels.has(null as unknown as string)) {
+      if (!hasChannel(fetcher, null)) {
         loadGlobalEmotesPromise = lock.acquire('global-emotes', async () => {
-          if (fetcher.channels.has(null as unknown as string)) return
+          if (hasChannel(fetcher, null)) return
           try {
             await logTime('Fetching global emotes', () =>
               Promise.all([
@@ -224,19 +251,16 @@ export namespace TwitchEmoteService {
             )
           } catch (error) {
             console.error('Failed to fetch global emotes:', error)
-            fetcher.channels.set(
-              null as unknown as string,
-              new Channel(fetcher, null as unknown as number)
-            )
+            setChannel(fetcher, null, createChannel(fetcher, null))
           }
           saveCache(null)
         })
       }
 
       if (channelId !== undefined) {
-        if (fetcher.channels.has(channelId as unknown as string)) return
+        if (hasChannel(fetcher, channelId)) return
         loadChannelEmotesPromise = lock.acquire(`emotes-${channelId}`, async () => {
-          if (fetcher.channels.has(channelId as unknown as string)) return
+          if (hasChannel(fetcher, channelId)) return
           try {
             await logTime(`Fetching channel emotes for channel ${channelId}`, () =>
               Promise.all([
@@ -258,14 +282,14 @@ export namespace TwitchEmoteService {
             )
           } catch (error) {
             console.error(`Failed to fetch emotes for channel ${channelId}:`, error)
-            fetcher.channels.set(channelId as unknown as string, new Channel(fetcher, channelId))
+            setChannel(fetcher, channelId, createChannel(fetcher, channelId))
           }
 
           if (loadGlobalEmotesPromise) await loadGlobalEmotesPromise
 
           if (channelId !== undefined) {
-            const globalEmotes = fetcher.channels.get(null as unknown as string)?.emotes
-            const emotes = fetcher.channels.get(channelId as unknown as string)?.emotes
+            const globalEmotes = getChannel(fetcher, null)?.emotes
+            const emotes = getChannel(fetcher, channelId)?.emotes
             if (globalEmotes && emotes) {
               // Merge global emotes into channel emotes
               for (const [name, emote] of globalEmotes) {
@@ -286,17 +310,17 @@ export namespace TwitchEmoteService {
   export async function getEmotes(channelId?: number): Promise<Collection<string, Emote> | null> {
     await fetchAllEmotes(channelId)
     if (!fetcher) return null
-    const channel: Channel | undefined = fetcher.channels.get(
-      (channelId ? channelId : null) as unknown as string
-    )
+    const channel = getChannel(fetcher, channelId ?? null)
     if (!channel) return null
     return channel.emotes
   }
 
   export function clear(channelId?: number): void {
     if (channelId) {
-      fetcher?.channels.delete(channelId as unknown as string)
-      fetcher?.channels.delete(null as unknown as string)
+      if (fetcher) {
+        deleteChannel(fetcher, channelId)
+        deleteChannel(fetcher, null)
+      }
     } else {
       fetcher?.channels.clear()
     }
@@ -309,13 +333,9 @@ export namespace TwitchEmoteService {
 
   async function saveCache(channelId: number | null): Promise<void> {
     if (!fetcher) return
-    const emotes = fetcher.channels.get(channelId as unknown as string)?.emotes
+    const emotes = getChannel(fetcher, channelId)?.emotes
     const emotesObjects = emotes
-      ? Array.from(
-          emotes
-            .values()
-            .map((emote) => (emote as unknown as { toObject: () => EmoteObject }).toObject())
-        )
+      ? Array.from(emotes.values().map((emote) => emoteToObject(emote)))
       : undefined
     saveTTLSetting<CacheValue | undefined>(configPromise, getCacheKey(channelId), emotesObjects)
   }
