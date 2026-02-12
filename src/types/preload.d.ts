@@ -47,7 +47,7 @@ export interface WindowApi {
   setPollingIntervals: (args: Partial<PollingIntervals>) => Promise<void>
   getSearchInfo: () => Promise<SearchInfo | null>
   getMessagesRaw: () => Promise<ArrayBufferLike | null>
-  setMessagesRaw: (messagesRaw: ArrayBufferLike) => Promise<void>
+  setMessagesRaw: (messagesRaw: ArrayBufferLike) => void
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>

@@ -108,19 +108,23 @@ export function removeTemporarySettings(): void {
 export const settings: Settings = $state(defaultSettings)
 export const settingsConfigKey = 'settings'
 void (async () => {
-  const defaultIntervals = await window.api.getDefaultPollingIntervals()
-  defaultSettings.intervals = defaultIntervals
-  const entries = Object.entries(settings.intervals) as [keyof PollingIntervals, number][]
-  for (const [key, value] of entries) if (!value) settings.intervals[key] = defaultIntervals[key]
+  try {
+    const defaultIntervals = await window.api.getDefaultPollingIntervals()
+    defaultSettings.intervals = defaultIntervals
+    const entries = Object.entries(settings.intervals) as [keyof PollingIntervals, number][]
+    for (const [key, value] of entries) if (!value) settings.intervals[key] = defaultIntervals[key]
 
-  const data = await conf.get(settingsConfigKey)
-  Object.assign(settings, data)
-  removeTemporarySettings()
-  normalizeSettings()
+    const data = await conf.get(settingsConfigKey)
+    Object.assign(settings, data)
+    removeTemporarySettings()
+    normalizeSettings()
 
-  if (Object.entries(settings.interface).some(([, value]) => value === undefined)) {
-    settings.intervals = await window.api.getPollingIntervals()
-  } else {
-    await window.api.setPollingIntervals($state.snapshot(settings.intervals))
+    if (Object.entries(settings.intervals).some(([, value]) => value === undefined)) {
+      settings.intervals = await window.api.getPollingIntervals()
+    } else {
+      await window.api.setPollingIntervals($state.snapshot(settings.intervals))
+    }
+  } catch (error) {
+    console.error('Failed to initialize settings:', error)
   }
 })()

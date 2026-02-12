@@ -85,8 +85,10 @@
 
       if (searchInfo.focusedMessageRaw) {
         const focusedMsg = convertRawIrcMessageToTwitchMessage(searchInfo.focusedMessageRaw)
-        console.debug('Focused message:', focusedMsg)
-        focusedMessage = focusedMsg
+        if (focusedMsg) {
+          console.debug('Focused message:', focusedMsg)
+          focusedMessage = focusedMsg
+        }
       }
 
       const dec = new TextDecoder()

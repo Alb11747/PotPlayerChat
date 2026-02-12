@@ -81,11 +81,14 @@ function createWindow(): void {
 
   ipcMain.handle('openSearchWindow', async (_event, args: SearchInfo) => {
     const searchWindow = createSearchWindow()
-    const waitForLoaded = searchWindow.webContents.isLoading()
-      ? new Promise<void>((resolve) => {
-          searchWindow.webContents.once('did-finish-load', () => resolve())
-        })
-      : Promise.resolve()
+    const waitForLoaded = new Promise<void>((resolve) => {
+      const onDidFinishLoad = (): void => {
+        searchWindow.webContents.off('did-finish-load', onDidFinishLoad)
+        resolve()
+      }
+      searchWindow.webContents.on('did-finish-load', onDidFinishLoad)
+      if (!searchWindow.webContents.isLoading()) onDidFinishLoad()
+    })
     const messagesRaw = await messagesRawIpcPromise.get()
     await waitForLoaded
     searchWindow.webContents.send('searchInfo', args)

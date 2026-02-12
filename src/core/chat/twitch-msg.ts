@@ -638,7 +638,12 @@ export function convertIrcMessageToTwitchMessage(msg: IrcMessage): TwitchMessage
   }
 }
 
-export function convertRawIrcMessageToTwitchMessage(rawData: string): TwitchMessage {
-  const msg = parseIrcMessage(rawData)
-  return convertIrcMessageToTwitchMessage(msg)
+export function convertRawIrcMessageToTwitchMessage(rawData: string): TwitchMessage | null {
+  try {
+    const msg = parseIrcMessage(rawData)
+    return convertIrcMessageToTwitchMessage(msg)
+  } catch (error) {
+    console.warn('Failed to convert raw IRC message:', error)
+    return null
+  }
 }

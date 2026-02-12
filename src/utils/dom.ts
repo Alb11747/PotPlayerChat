@@ -2,6 +2,7 @@ export function findChildByText(
   parentElement: Element | ChildNode,
   searchText: string
 ): ChildNode | null {
+  if (!searchText || searchText.trim() === '') return null
   for (const child of parentElement.childNodes) {
     const found = findChildByText(child, searchText)
     if (found) return found

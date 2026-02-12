@@ -98,8 +98,6 @@
 
     if (enableEmotes) {
       // Load emote service
-      await loadEmotes()
-      // Load cheer emote service
       await loadCheerEmotes()
       await loadEmotes()
     }
@@ -308,7 +306,7 @@
         ? `color: ${message.color}`
         : ''}
     >
-      {#each parsedMessageSegments || [] as segment ((message.getId(), segment.index))}
+      {#each parsedMessageSegments || [] as segment (`${message.getId()}-${segment.index}`)}
         {#if (segment.type === 'emote' || segment.type === 'cheer') && Object.values(segment.urls).some((url) => !urlTracker.isFailedUrl(url))}
           <EmoteComponent {message} {segment} {urlTracker} {onEmoteLoad} {enableEmotePreviews} />
         {:else if segment.type === 'url'}

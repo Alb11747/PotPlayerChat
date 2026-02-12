@@ -283,6 +283,7 @@
   function onFocusMessage(messageRaw: string): void {
     if (!vlistRef) return
     const message = convertRawIrcMessageToTwitchMessage(messageRaw)
+    if (!message) return
     const messageId = message.getId()
     const messageIndex = messages.findIndex((m) => m.getId() === messageId)
     if (messageIndex === -1) return
@@ -325,8 +326,12 @@
         if (!currentSelectedPotPlayerInfo) return null
       } else {
         void (async () => {
-          const info = await window.api.getPotplayerExtraInfo(instance)
-          if (info) selectedPotplayerInfo = info
+          try {
+            const info = await window.api.getPotplayerExtraInfo(instance)
+            if (info) selectedPotplayerInfo = info
+          } catch (error) {
+            console.error('Failed to refresh selected PotPlayer info:', error)
+          }
         })()
         currentSelectedPotPlayerInfo = instance
       }
@@ -435,7 +440,7 @@
 <LinkPreview />
 
 <div class="container" role="region" aria-label="Chat">
-  <div class="header" onkeydown={handleKeydown}>
+  <div class="header">
     <button
       class:selected={autoSelectPotPlayer}
       onclick={() => setPotPlayerInstance(null)}
@@ -557,8 +562,10 @@
       {:else}
         <div class="chat-message system">
           Unknown error occurred.<br />
-          <span>Loading state: {JSON.stringify(loadingState)}</span><br />
-          <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
+          {#if (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV}
+            <span>Loading state: {JSON.stringify(loadingState)}</span><br />
+            <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
+          {/if}
         </div>
       {/if}
     </div>

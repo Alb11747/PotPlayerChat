@@ -123,7 +123,7 @@ export function formatTime(
 ): string {
   const totalDuration =
     endTime !== undefined && startTime !== undefined ? endTime - startTime : undefined
-  elapsedTime ??= startTime ? timeMs + offset - startTime : undefined
+  elapsedTime ??= startTime != null ? timeMs + offset - startTime : undefined
   if (
     elapsedTime === undefined ||
     elapsedTime < 0 ||

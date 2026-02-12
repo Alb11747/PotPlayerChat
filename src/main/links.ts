@@ -129,7 +129,15 @@ function getSavedBloomFilter(
   params: { capacity: number; errorRate: number; key: string }
 ): ScalableBloomFilter {
   const data = conf.get(params.key, null) as JSON | null
-  const filter = data ? ScalableBloomFilter.fromJSON(data) : null
+  let filter: ScalableBloomFilter | null = null
+  if (data) {
+    try {
+      filter = ScalableBloomFilter.fromJSON(data)
+    } catch (error) {
+      console.error(`Failed to restore bloom filter from key "${params.key}":`, error)
+      conf.delete(params.key)
+    }
+  }
   if (filter && filter.capacity() >= params.capacity && filter.rate() <= params.errorRate)
     return filter
   return new ScalableBloomFilter(params.capacity, params.errorRate)

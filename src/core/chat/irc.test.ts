@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 describe('IRC parser', () => {
   it('unescapes IRC tag escape sequences', () => {
-    expect(escapeIrcText('hello\\sworld\\:ok\\\\done')).toBe('hello world:ok\\done')
+    expect(escapeIrcText('hello\\sworld\\:ok\\\\done')).toBe('hello world;ok\\done')
   })
 
   it('parses PRIVMSG with tags, username, channel, and text', () => {

@@ -22,7 +22,7 @@ export function escapeIrcText(text?: string): string {
       case '\\':
         return '\\'
       case ':':
-        return ':'
+        return ';'
       default:
         console.warn(`Unknown escape sequence: \\${c}`)
         return c
