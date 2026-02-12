@@ -15,6 +15,7 @@
   import type { TimelineMap } from '@/utils/datastructs'
   import type { HelixChatBadgeVersion } from '@twurple/api'
   import { onMount } from 'svelte'
+  import { SvelteSet } from 'svelte/reactivity'
   import { UrlTracker } from '../core/url-tracker'
   import conf from '../state/config'
   import {
@@ -71,7 +72,6 @@
     if (onUrlClick) {
       onUrlClick(url)
     } else {
-      urlTracker.markVisitedUrl(url)
       window.api.openUrl(url)
     }
   }
@@ -98,9 +98,10 @@
 
     if (enableEmotes) {
       // Load emote service
-      loadEmotes()
+      await loadEmotes()
       // Load cheer emote service
-      loadCheerEmotes().then(loadEmotes)
+      await loadCheerEmotes()
+      await loadEmotes()
     }
   }
 
@@ -154,7 +155,9 @@
     cheerEmotes = cheerEmotesMap
   }
 
-  onMount(loadServices)
+  onMount(() => {
+    void loadServices()
+  })
 
   const [systemText, systemMsg]: [string | undefined, string | undefined] = $derived(
     (message.type === 'system' ? message?.getSystemTextAndMessage() : undefined) ?? [
@@ -194,18 +197,31 @@
       })
     })
 
+  const primedUrlStatus = new SvelteSet<string>()
+
+  async function ensureUrlStatus(url: string): Promise<void> {
+    if (primedUrlStatus.has(url)) return
+    primedUrlStatus.add(url)
+
+    const [isSeen, isVisited] = await Promise.all([
+      window.api.isUrlSeen(url),
+      window.api.isUrlClicked(url)
+    ])
+    if (isSeen) urlTracker.markSeenUrl(url)
+    if (isVisited) urlTracker.markVisitedUrl(url)
+  }
+
+  $effect(() => {
+    for (const segment of parsedMessageSegments ?? []) {
+      if (segment.type !== 'url') continue
+      void ensureUrlStatus(segment.url)
+    }
+  })
+
   function isSeenUrl(url: string): boolean {
-    if (urlTracker.isSeenUrl(url)) return true
-    window.api.isUrlSeen(url).then((isSeen) => {
-      if (isSeen) urlTracker.markSeenUrl(url)
-    })
     return urlTracker.isSeenUrl(url)
   }
   function isVisitedUrl(url: string): boolean {
-    if (urlTracker.isVisitedUrl(url)) return true
-    window.api.isUrlClicked(url).then((isVisited) => {
-      if (isVisited) urlTracker.markVisitedUrl(url)
-    })
     return urlTracker.isVisitedUrl(url)
   }
 

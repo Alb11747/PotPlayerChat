@@ -10,6 +10,7 @@
 
   import { clearAll, TwitchUserService } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
+  import { isEqualMessageBoundary } from '@/renderer/src/core/chat-view'
   import {
     calculateTargetElement,
     scrollToTarget as scrollToTargetBase
@@ -40,6 +41,7 @@
   let potplayerInstances: PotPlayerInstance[] = $state([])
   let showSettings = $state(false)
   let changingPotPlayerPromise: Promise<SelectedPotplayerInfo | null> | null = $state(null)
+  let potPlayerSelectionNonce = 0
   let lastPotplayerChangeTime: number = performance.now()
 
   let messages: TwitchMessage[] = $state.raw([])
@@ -180,14 +182,6 @@
     scrollToTarget()
   }
 
-  function isEqualSimple(a: TwitchMessage[], b: TwitchMessage[]): boolean {
-    if (a.length !== b.length) return false
-    // Assume the messages are consecutive in time
-    if (a[0]?.getId() !== b[0]?.getId()) return false
-    if (a[a.length - 1]?.getId() !== b[b.length - 1]?.getId()) return false
-    return true
-  }
-
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(potplayerInfo?: SelectedPotplayerInfo | null): Promise<void> {
     if (chatIntervalId) clearTimeout(chatIntervalId)
@@ -216,7 +210,7 @@
       scrollToBottom = true
       clearTargetElement()
       scrollToTarget()
-    } else if (!isEqualSimple(messages, newMessages)) {
+    } else if (!isEqualMessageBoundary(messages, newMessages)) {
       const _vlistRef = untrack(() => vlistRef)
       const _targetElement = untrack(() => targetElement)
       const _scrollToBottom = untrack(() => scrollToBottom)
@@ -306,6 +300,7 @@
   })
 
   function setPotPlayerInstance(instanceProxy: PotPlayerInstance | PotPlayerInfo | null): void {
+    const currentSelectionNonce = ++potPlayerSelectionNonce
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
       const instance = $state.snapshot(instanceProxy)
       const hwnd = instance?.hwnd
@@ -314,13 +309,14 @@
       scrollToBottom = true
       if (!hwnd) {
         autoSelectPotPlayer = true
-        window.api.setSelectedPotPlayerHWND(null)
+        await window.api.setSelectedPotPlayerHWND(null)
         return null
       }
       autoSelectPotPlayer = false
       if (!selectedPotplayerInfo) selectedPotplayerInfo = instanceProxy
       else selectedPotplayerInfo.hwnd = hwnd
-      window.api.setSelectedPotPlayerHWND(hwnd).then(() => resetVideoTimeHistory(hwnd))
+      await window.api.setSelectedPotPlayerHWND(hwnd)
+      await resetVideoTimeHistory(hwnd)
 
       let currentSelectedPotPlayerInfo: PotPlayerInfo | null = null
 
@@ -328,24 +324,30 @@
         currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
         if (!currentSelectedPotPlayerInfo) return null
       } else {
-        window.api.getPotplayerExtraInfo(instance).then((info) => {
+        void (async () => {
+          const info = await window.api.getPotplayerExtraInfo(instance)
           if (info) instanceProxy = info
-        })
+        })()
         currentSelectedPotPlayerInfo = instance
       }
 
+      if (currentSelectionNonce !== potPlayerSelectionNonce) return null
       await resetVideoTimeHistory(hwnd)
       await chatService.updateVideoInfo(currentSelectedPotPlayerInfo)
       await updateChatMessages(currentSelectedPotPlayerInfo)
-
-      await resetVideoTimeHistory(hwnd)
       return currentSelectedPotPlayerInfo
     })()
 
-    changingPotPlayerPromise.then(async () => {
-      changingPotPlayerPromise = null
-      potplayerInstances = await window.api.getPotPlayers()
-    })
+    void (async () => {
+      try {
+        await changingPotPlayerPromise
+      } finally {
+        if (changingPotPlayerPromise) changingPotPlayerPromise = null
+      }
+      if (currentSelectionNonce === potPlayerSelectionNonce) {
+        potplayerInstances = await window.api.getPotPlayers()
+      }
+    })()
   }
 
   function openSearchWindow(
@@ -402,11 +404,13 @@
       chatService.clearInvalidCache()
       window.api.clearLinkPreviewCache()
       urlTracker.clearCache()
-      if (!selectedPotplayerInfo.channel) return
-      TwitchUserService.getUserIdByName(selectedPotplayerInfo.channel).then((userId) => {
+      const channel = selectedPotplayerInfo.channel
+      if (!channel) return
+      void (async () => {
+        const userId = await TwitchUserService.getUserIdByName(channel)
         clearAll(userId ?? undefined)
         reloadChatMessageServices()
-      })
+      })()
     }
   }
 

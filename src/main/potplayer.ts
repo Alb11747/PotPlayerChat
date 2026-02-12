@@ -18,6 +18,15 @@ import type { Conf } from 'electron-conf/main'
 export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): void {
   const ipcMain = electron.ipcMain
 
+  const scheduleTimeout = (
+    timeoutId: NodeJS.Timeout | null,
+    callback: () => void | Promise<void>,
+    delayMs: number
+  ): NodeJS.Timeout => {
+    if (timeoutId) clearTimeout(timeoutId)
+    return setTimeout(callback, delayMs)
+  }
+
   let selectedPotplayerHwnd: HWND | null = null
   const lastActivePotplayerHwnd = new RecentValue<HWND>()
 
@@ -124,14 +133,16 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
       await sendPotplayerInstancesChanged(potplayerInstances, selectedPotplayerHwnd)
     }
 
-    if (potplayerIntervalId) clearTimeout(potplayerIntervalId)
-    potplayerIntervalId = setTimeout(updatePotplayerInstances, pollingIntervals.potplayerInstances)
+    potplayerIntervalId = scheduleTimeout(
+      potplayerIntervalId,
+      updatePotplayerInstances,
+      pollingIntervals.potplayerInstances
+    )
   }
 
   let lastCurrentTimeSend: number = 0
   let currentTimeTimeoutId: NodeJS.Timeout | null = null
   async function updateCurrentVideoTime(): Promise<void> {
-    if (currentTimeTimeoutId) clearTimeout(currentTimeTimeoutId)
     const potplayerHwnd = getPotplayerHwnd()
     if (potplayerHwnd) {
       const currentTime = await getCurrentVideoTime(potplayerHwnd)
@@ -141,8 +152,11 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
         lastCurrentTimeSend = now
       }
     }
-    if (currentTimeTimeoutId) clearTimeout(currentTimeTimeoutId)
-    currentTimeTimeoutId = setTimeout(updateCurrentVideoTime, pollingIntervals.videoTime)
+    currentTimeTimeoutId = scheduleTimeout(
+      currentTimeTimeoutId,
+      updateCurrentVideoTime,
+      pollingIntervals.videoTime
+    )
   }
 
   let activePotplayerTimeoutId: NodeJS.Timeout | null = null
@@ -164,8 +178,8 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
         }
       }
     }
-    if (activePotplayerTimeoutId) clearTimeout(activePotplayerTimeoutId)
-    activePotplayerTimeoutId = setTimeout(
+    activePotplayerTimeoutId = scheduleTimeout(
+      activePotplayerTimeoutId,
       updateActivePotplayerInstance,
       pollingIntervals.activeWindow
     )
