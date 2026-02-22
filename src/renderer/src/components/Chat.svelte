@@ -576,6 +576,11 @@
         onclick={() => {
           scrollToBottom = true
           scrollToTarget(true)
+          // Ensure at bottom after any image loads
+          setTimeout(() => {
+            scrollToBottom = true
+            scrollToTarget(true)
+          }, 100)
         }}
       >
         Scroll to bottom
