@@ -26,7 +26,11 @@
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
   import { UrlTracker } from '../core/url-tracker'
-  import { settings } from '../state/settings.svelte'
+  import {
+    getSessionTimestampOffsetByTitle,
+    setSessionTimestampOffsetByTitle,
+    settings
+  } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
@@ -152,6 +156,9 @@
     }
 
     selectedPotplayerInfo = newSelectedPotplayerInstanceInfo
+    settings.chat._sessionTimestampOffset = getSessionTimestampOffsetByTitle(
+      selectedPotplayerInfo?.title
+    )
     if (selectedPotplayerInfo && selectedPotplayerInfo.channel && selectedPotplayerInfo.startTime) {
       await chatService.updateVideoInfo({
         ...selectedPotplayerInfo,
@@ -174,13 +181,19 @@
 
     const currentVideoTime = await window.api.getCurrentVideoTime(hwnd)
     const currentOffset = settings.chat.timestampOffset
-    settings.chat._sessionTimestampOffset =
-      targetTimestamp - (startTime + currentVideoTime) - currentOffset
+    const sessionTimestampOffset = targetTimestamp - (startTime + currentVideoTime) - currentOffset
+    setSessionTimestampOffsetByTitle(selectedPotplayerInfo.title, sessionTimestampOffset)
 
     updateChatMessages()
     scrollToBottom = true
     scrollToTarget()
   }
+
+  $effect(() => {
+    const title = selectedPotplayerInfo?.title
+    if (!title) return
+    settings.chat._sessionTimestampOffset = getSessionTimestampOffsetByTitle(title)
+  })
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(potplayerInfo?: SelectedPotplayerInfo | null): Promise<void> {
