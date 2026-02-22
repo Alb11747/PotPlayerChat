@@ -59,7 +59,7 @@ importers:
         specifier: ^1.3.0
         version: 1.3.0(electron@37.10.3)
       electron-context-menu:
-        specifier: ^4.1.0
+        specifier: 4.1.1
         version: 4.1.1(patch_hash=cb323a9dc17a7a896d716b016f214be4455bd794c61f62c9ecb532200bfcf4bf)
       electron-updater:
         specifier: ^6.6.2
