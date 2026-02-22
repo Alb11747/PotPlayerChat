@@ -9,7 +9,6 @@
     formattedTwitchMessageFactory,
     type TwitchMessageFormatted
   } from '@/renderer/src/core/search-messages'
-  import type {} from '@/types/preload'
   import {
     findIntersectingMessageIndex,
     findMessageIndex,
@@ -299,32 +298,34 @@
       <VList
         bind:this={vlistRef}
         data={filteredMessages}
-        getKey={(_, i) => filteredMessages[i]?.getId() ?? i}
+        getKey={(item, i) => item?.getId() ?? i}
         itemSize={80}
         onscroll={() => {
           scrolled = true
         }}
       >
         {#snippet children(msg)}
-          <button
-            type="button"
-            class="search-result-item"
-            onclick={() => window.api.focusMessage(msg.raw)}
-          >
-            <ChatMessage
-              message={msg}
-              videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
-              videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
-              {urlTracker}
-              usernameColorTimelineMap={chatService.usernameColorTimelineMap ?? undefined}
-              searchQuery={searchPattern}
-              onUrlClick={handleUrlClick}
-              onEmoteLoad={() => {
-                if (scrolled) return
-                scrollToTargetMessages()
-              }}
-            />
-          </button>
+          {#if msg}
+            <button
+              type="button"
+              class="search-result-item"
+              onclick={() => window.api.focusMessage(msg.raw)}
+            >
+              <ChatMessage
+                message={msg}
+                videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
+                videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
+                {urlTracker}
+                usernameColorTimelineMap={chatService.usernameColorTimelineMap ?? undefined}
+                searchQuery={searchPattern}
+                onUrlClick={handleUrlClick}
+                onEmoteLoad={() => {
+                  if (scrolled) return
+                  scrollToTargetMessages()
+                }}
+              />
+            </button>
+          {/if}
         {/snippet}
       </VList>
     {:else if searchQuery && filteredMessages.length === 0}
