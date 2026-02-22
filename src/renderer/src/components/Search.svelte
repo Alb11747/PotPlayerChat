@@ -33,6 +33,7 @@
   let caseSensitive = $state(false)
   let useRegex = $state(false)
 
+  let scrolled = $state(false)
   let loadedMessages = $state(false)
   let loadAllMessagesPromise: Promise<void> | null = null
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -245,6 +246,7 @@
       return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
     })
 
+    scrolled = false
     scrollToTargetMessages()
   }
 
@@ -299,6 +301,9 @@
         data={filteredMessages}
         getKey={(_, i) => filteredMessages[i]?.getId() ?? i}
         itemSize={80}
+        onscroll={() => {
+          scrolled = true
+        }}
       >
         {#snippet children(msg)}
           <button
@@ -314,6 +319,10 @@
               usernameColorTimelineMap={chatService.usernameColorTimelineMap ?? undefined}
               searchQuery={searchPattern}
               onUrlClick={handleUrlClick}
+              onEmoteLoad={() => {
+                if (scrolled) return
+                scrollToTargetMessages()
+              }}
             />
           </button>
         {/snippet}
