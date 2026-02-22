@@ -508,7 +508,17 @@
   {#if showSettings}
     <Settings {urlTracker} />
   {:else}
-    <div class="chat-container" bind:this={chatContainerRef}>
+    <div
+      class="chat-container"
+      bind:this={chatContainerRef}
+      onresize={() => {
+        const lastScrollToBottom = scrollToBottom
+        requestAnimationFrame(() => {
+          scrollToBottom = lastScrollToBottom
+          scrollToTarget()
+        })
+      }}
+    >
       {#if messages && messages.length > 0}
         <VList
           bind:this={vlistRef}
