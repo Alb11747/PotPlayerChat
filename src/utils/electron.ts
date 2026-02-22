@@ -38,7 +38,7 @@ abstract class IpcPromiseBase<T = unknown, Ipc extends IpcLike = IpcLike> {
   protected abstract off(fn: HandlerFn<T>): void
 
   protected getPromise(options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<T | null> {
-    const timeoutMs = options?.timeoutMs ?? 15000
+    const timeoutMs = options?.timeoutMs
     const signal = options?.signal
     return new Promise((resolve, reject) => {
       let settled = false
@@ -92,7 +92,7 @@ abstract class IpcPromiseBase<T = unknown, Ipc extends IpcLike = IpcLike> {
 
       this.on(onInitial)
 
-      if (timeoutMs > 0) {
+      if (timeoutMs && timeoutMs > 0) {
         timeoutId = setTimeout(() => {
           settleReject(
             new Error(`Timed out waiting for IPC "${this.channel}" after ${timeoutMs}ms`)
