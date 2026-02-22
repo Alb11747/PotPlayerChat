@@ -16,7 +16,7 @@
   import type { HelixChatBadgeVersion } from '@twurple/api'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { UrlTracker } from '../core/url-tracker'
+  import { UrlTracker, type LinkPreview } from '../core/url-tracker'
   import conf from '../state/config'
   import {
     currentPreviewType,
@@ -66,6 +66,8 @@
     requireHttpInUrl = settings.interface.requireHttpInUrl,
     reloadServicesFunction = $bindable()
   }: Props = $props()
+
+  let chatMessageElement: HTMLDivElement | null = $state(null)
 
   function handleUrlClick(url: string): void {
     urlTracker.markVisitedUrl(url)
@@ -229,9 +231,65 @@
     }
     if (previewState.url === segment.url) previewState.lastUpdateTime = performance.now()
   }
+
+  const orderedUrlSegments: Array<Segment & { type: 'url' }> = $derived.by(() =>
+    (parsedMessageSegments ?? []).filter(
+      (segment): segment is Segment & { type: 'url' } => segment.type === 'url'
+    )
+  )
+
+  function fetchInlineImagePreviews(): void {
+    for (const segment of orderedUrlSegments) {
+      if (urlTracker.hasPreview(segment.url) || urlTracker.isFailedUrl(segment.url)) continue
+      void urlTracker.getPreview(segment.url)
+    }
+  }
+
+  onMount(() => {
+    const element = chatMessageElement
+    if (!element || orderedUrlSegments.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!settings.interface.enableInlineImagePreviews) return
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          fetchInlineImagePreviews()
+        }
+      },
+      {
+        root: null,
+        threshold: 0
+      }
+    )
+
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+    }
+  })
+
+  function getInlineImagePreview(url: string): LinkPreview | null {
+    const preview = urlTracker.getCachedPreview(url)
+    if (!preview) return null
+    if (!preview.thumbnail || preview.status < 200 || preview.status >= 300) return null
+    if (urlTracker.isFailedUrl(url)) return null
+    return preview
+  }
+
+  function onInlineImageClick(event: MouseEvent, url: string): void {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!settings.interface.openInlineImagePreviewsOnClick) return
+
+    urlTracker.markVisitedUrl(url)
+    window.api.openUrl(url)
+  }
 </script>
 
 <div
+  bind:this={chatMessageElement}
   class="chat-message"
   class:first-message={message.type === 'chat' && message.firstMsg === '1'}
   data-timestamp={message.timestamp}
@@ -359,6 +417,32 @@
       {/each}
     </span>
   {/if}
+  {#if settings.interface.enableInlineImagePreviews && orderedUrlSegments.length > 0}
+    <div class="inline-image-previews">
+      {#each orderedUrlSegments as segment (`${message.getId()}-inline-${segment.index}`)}
+        {@const preview = getInlineImagePreview(segment.url)}
+        {#if preview?.thumbnail}
+          <a
+            href={segment.url}
+            class="inline-image-preview-link"
+            style:cursor={settings.interface.openInlineImagePreviewsOnClick ? 'pointer' : 'default'}
+            onclick={(event) => onInlineImageClick(event, segment.url)}
+          >
+            <img
+              src={preview.thumbnail}
+              alt="Preview"
+              class="inline-image-preview"
+              loading="lazy"
+              decoding="async"
+              onerror={() => {
+                urlTracker.markFailedUrl(segment.url)
+              }}
+            />
+          </a>
+        {/if}
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -438,5 +522,32 @@
     height: 1.45rem;
     object-fit: contain;
     vertical-align: text-bottom;
+  }
+
+  .inline-image-previews {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.45rem;
+    max-width: 100%;
+  }
+
+  .inline-image-preview-link {
+    display: inline-block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    cursor: pointer;
+  }
+
+  .inline-image-preview {
+    display: block;
+    max-width: min(30rem, 100%);
+    max-height: 20rem;
+    border-radius: 0.35rem;
+    object-fit: contain;
+    border: 1px solid var(--color-gray-5);
+    background: var(--color-black-deep);
   }
 </style>

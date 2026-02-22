@@ -6,6 +6,8 @@ import conf from './config'
 export interface InterfaceSettings {
   enableEmotes: boolean
   enableLinkPreviews: boolean
+  enableInlineImagePreviews: boolean
+  openInlineImagePreviewsOnClick: boolean
   enableEmotePreviews: boolean
   defaultPreviewPosition: 'top' | 'bottom'
   stickyPreviews: boolean
@@ -57,6 +59,8 @@ export const defaultSettings: Settings = {
   interface: {
     enableEmotes: true,
     enableLinkPreviews: true,
+    enableInlineImagePreviews: false,
+    openInlineImagePreviewsOnClick: true,
     enableEmotePreviews: true,
     defaultPreviewPosition: 'top',
     stickyPreviews: true,
