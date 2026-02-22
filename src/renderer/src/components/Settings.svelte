@@ -118,6 +118,18 @@
       Enable Link Previews
     </label>
     <label>
+      <input type="checkbox" bind:checked={settings.interface.enableInlineImagePreviews} />
+      Show Inline Image Previews
+    </label>
+    <label>
+      <input
+        type="checkbox"
+        bind:checked={settings.interface.openInlineImagePreviewsOnClick}
+        disabled={!settings.interface.enableInlineImagePreviews}
+      />
+      Open Inline Image on Click
+    </label>
+    <label>
       <input type="checkbox" bind:checked={settings.interface.enableEmotePreviews} />
       Enable Emote Previews
     </label>
