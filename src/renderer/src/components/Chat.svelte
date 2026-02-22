@@ -513,7 +513,7 @@
         <VList
           bind:this={vlistRef}
           data={messages}
-          getKey={(_, i) => messages[i]?.getId() ?? i}
+          getKey={(msg, i) => msg?.getId() ?? i}
           onscroll={() => {
             if (!nextScrollKeepTarget) {
               targetElement = null
