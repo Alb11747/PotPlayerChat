@@ -150,11 +150,11 @@ export namespace TwitchEmoteService {
   })()
 
   type CacheValue = EmoteObject[]
-  type ChannelKey = string
+  type ChannelKey = number | null
 
-  const GLOBAL_CHANNEL_KEY = 'global'
+  const GLOBAL_CHANNEL_KEY = null
   const channelKey = (channelId?: number | null): ChannelKey =>
-    channelId === undefined || channelId === null ? GLOBAL_CHANNEL_KEY : String(channelId)
+    channelId === undefined || channelId === null ? GLOBAL_CHANNEL_KEY : channelId
   const channelMap = (currentFetcher: EmoteFetcher): Map<ChannelKey, Channel> =>
     currentFetcher.channels as unknown as Map<ChannelKey, Channel>
   const getChannel = (
