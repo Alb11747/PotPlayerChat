@@ -1,14 +1,16 @@
 import lodashDebounce from 'lodash.debounce'
 
-export type DebouncedFunc<T extends (...args: unknown[]) => unknown> = ReturnType<
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DebouncedFunc<T extends (...args: any) => unknown> = ReturnType<
   typeof lodashDebounce<T>
 >
 
-export function debounce<T extends (...args: unknown[]) => unknown>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function debounce<T extends (...args: any) => unknown>(
   func: T,
   wait: number
 ): DebouncedFunc<T> {
   return lodashDebounce(function (this: ThisParameterType<T>, ...args: Parameters<T>) {
-    func.apply(this, args)
+    return func.apply(this, args)
   }, wait)
 }
