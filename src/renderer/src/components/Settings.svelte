@@ -4,8 +4,8 @@
   import {
     defaultSettings,
     normalizeSettings,
-    settings,
-    settingsConfigKey
+    saveSettings,
+    settings
   } from '../state/settings.svelte'
 
   let { urlTracker }: { urlTracker?: UrlTracker } = $props()
@@ -13,7 +13,7 @@
 
   $effect(() => {
     normalizeSettings()
-    conf.set(settingsConfigKey, $state.snapshot(settings))
+    saveSettings()
   })
 
   $effect(() => {
@@ -26,7 +26,7 @@
 
   async function resetAllSettings(): Promise<void> {
     Object.assign(settings, defaultSettings)
-    conf.set(settingsConfigKey, $state.snapshot(settings))
+    saveSettings()
   }
 
   async function clearUrlData(): Promise<void> {
@@ -65,7 +65,7 @@
       <input type="number" bind:value={settings.chat.timestampOffset} />
     </label>
     <label>
-      <span class="label-text">Session Timestamp Offset (Not Saved):</span>
+      <span class="label-text">Session Timestamp Offset (Saved Per Video Title):</span>
       <input type="number" bind:value={settings.chat._sessionTimestampOffset} />
     </label>
     <label>
