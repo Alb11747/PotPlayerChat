@@ -96,6 +96,8 @@
   }
 
   const scrollToTargetDebounced = debounce(() => scrollToTarget(), 35)
+  const doubleSpacebarThresholdMs = 350
+  let lastSpacebarPressTime = 0
 
   function scrollToTarget(_scrollToBottom?: boolean): void {
     const _vlistRef = untrack(() => vlistRef)
@@ -112,6 +114,22 @@
       targetViewportOffset: targetViewportOffset as unknown as number,
       scrollToBottom: _scrollToBottom
     })
+  }
+
+  function scrollChatToBottom(): void {
+    scrollToBottom = true
+    scrollToTarget(true)
+    setTimeout(() => {
+      scrollToBottom = true
+      scrollToTarget(true)
+    }, 100)
+  }
+
+  function isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof Element)) return false
+    return Boolean(
+      target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
+    )
   }
 
   async function resetVideoTimeHistory(hwnd: HWND | null): Promise<void> {
@@ -413,6 +431,25 @@
 
   // Handle keyboard shortcuts
   function handleKeydown(event: KeyboardEvent): void {
+    if (
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      !isEditableTarget(event.target) &&
+      (event.key === ' ' || event.code === 'Space')
+    ) {
+      const now = performance.now()
+      if (now - lastSpacebarPressTime <= doubleSpacebarThresholdMs) {
+        event.preventDefault()
+        scrollChatToBottom()
+        lastSpacebarPressTime = 0
+      } else {
+        lastSpacebarPressTime = now
+      }
+      return
+    }
+
     if (!selectedPotplayerInfo) return
     if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
       event.preventDefault()
@@ -594,20 +631,7 @@
     </div>
 
     {#if !scrollToBottom}
-      <button
-        class="scroll-to-bottom"
-        onclick={() => {
-          scrollToBottom = true
-          scrollToTarget(true)
-          // Ensure at bottom after any image loads
-          setTimeout(() => {
-            scrollToBottom = true
-            scrollToTarget(true)
-          }, 100)
-        }}
-      >
-        Scroll to bottom
-      </button>
+      <button class="scroll-to-bottom" onclick={scrollChatToBottom}> Scroll to bottom </button>
     {/if}
   {/if}
 </div>
