@@ -40,6 +40,7 @@
       emote: CheerEmote | TwitchEmote | NativeTwitchEmote
       hash: string
     }) => void
+    onImageLoad?: () => void
     enableLinkPreviews?: boolean
     enableEmotePreviews?: boolean
     enableEmotes?: boolean
@@ -59,6 +60,7 @@
     onUrlClick,
     onUsernameClick,
     onEmoteLoad,
+    onImageLoad,
     enableLinkPreviews = settings.interface.enableLinkPreviews,
     enableEmotePreviews = settings.interface.enableEmotePreviews,
     enableEmotes = settings.interface.enableEmotes,
@@ -434,6 +436,9 @@
               class="inline-image-preview"
               loading="lazy"
               decoding="async"
+              onload={() => {
+                if (onImageLoad) onImageLoad()
+              }}
               onerror={() => {
                 urlTracker.markFailedUrl(segment.url)
               }}

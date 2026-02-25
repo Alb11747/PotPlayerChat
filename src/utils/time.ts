@@ -147,4 +147,11 @@ export class CurrentVideoTimeHistory {
     if (rate === null || rate <= 0) return null
     return dt / rate
   }
+
+  wasLastSampleDiscontinuous(thresholdRate = 32): boolean {
+    const rate = this.getPredictedRate()
+    if (rate === null) return false
+    // Consider it discontinuous if the time jump is >32x real time or if the time jumps backward
+    return rate <= 0 || Math.abs(rate) > thresholdRate
+  }
 }

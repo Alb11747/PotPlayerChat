@@ -95,7 +95,7 @@
     targetViewportOffset = 0
   }
 
-  const scrollToTargetDebounced = debounce(() => scrollToTarget(), 35)
+  const scrollToTargetDebounced = debounce(scrollToTarget, 35)
   const doubleSpacebarThresholdMs = 350
   let lastSpacebarPressTime = 0
 
@@ -104,6 +104,8 @@
     const _messages = untrack(() => messages)
     const _targetElement = untrack(() => targetElement)
     _scrollToBottom = _scrollToBottom ?? untrack(() => scrollToBottom)
+
+    if (!_vlistRef || !_messages) return
 
     // The function vlist.scrollToIndex internally schedules a scroll until a measurement is done,
     // this is an issue since the target position of a scroll can change before the measurement is complete.
@@ -273,7 +275,14 @@
 
   function onCurrentTime(time: number): void {
     videoTimeHistory.addSample(time)
-    updateChatMessages()
+    if (videoTimeHistory.wasLastSampleDiscontinuous()) {
+      scrollToTargetDebounced(scrollToBottom)
+      const lastTargetElement = targetElement
+      updateChatMessages()
+      if (lastTargetElement) targetElement = lastTargetElement
+    } else {
+      updateChatMessages()
+    }
   }
 
   // Update potplayer instances if data is not available immediately
@@ -596,7 +605,10 @@
               onEmoteLoad={({ hash }) => {
                 if (loadedEmotes.has(hash)) return
                 loadedEmotes.add(hash)
-                if (scrollToBottom) scrollToTargetDebounced()
+                scrollToTargetDebounced(scrollToBottom)
+              }}
+              onImageLoad={() => {
+                scrollToTargetDebounced(scrollToBottom)
               }}
               bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
             />
