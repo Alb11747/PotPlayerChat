@@ -1,8 +1,5 @@
-import bounds from 'binary-searching'
+import { findMessageIndex } from '@/utils/chat'
 import type { VList } from 'virtua/svelte'
-
-// Assumes messages are sorted by timestamp ascending
-const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp - b.timestamp
 
 export function calculateTargetElement<T extends { getId: () => string; timestamp: number }>(
   vlist: VList<T> | null | undefined,
@@ -53,24 +50,8 @@ export function scrollToTarget<T extends { getId: () => string; timestamp: numbe
   if (scrollToBottom) {
     vlist.scrollToIndex(messages.length - 1, { smooth: false, align: 'end' })
   } else if (targetElement) {
-    const targetId = targetElement.getId()
-
-    // Binary search for timestamp, then linear search for id
-    const idx = bounds.ge(messages, { timestamp: targetElement.timestamp } as T, cmp)
-
-    let targetIndex = -1
-    for (
-      let i = idx;
-      i < messages.length && messages[i]!.timestamp === targetElement.timestamp;
-      i++
-    ) {
-      if (messages[i]!.getId() === targetId) {
-        targetIndex = i
-        break
-      }
-    }
-    if (targetIndex === -1) return
-
+    const targetIndex = findMessageIndex(messages, targetElement)
+    if (targetIndex === null) return
     vlist.scrollToIndex(targetIndex, { offset: targetViewportOffset, smooth: false })
   }
 }

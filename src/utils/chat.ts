@@ -5,9 +5,16 @@ const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp
 
 export function findMessageIndex<T extends { timestamp: number; getId: () => string }>(
   messages: T[],
-  messageId: string,
+  message: T | string,
   timestamp?: number
 ): number | null {
+  let messageId: string
+  if (typeof message === 'string') {
+    messageId = message
+  } else {
+    messageId = message.getId()
+    if (timestamp === undefined) timestamp = message.timestamp
+  }
   if (timestamp !== undefined) {
     // Find all messages with the matching timestamp
     const startIdx = bounds.ge(messages, { timestamp } as T, cmp)
@@ -23,9 +30,16 @@ export function findMessageIndex<T extends { timestamp: number; getId: () => str
 
 export function findMessage<T extends { timestamp: number; getId: () => string }>(
   messages: T[],
-  messageId: string,
+  message: T | string,
   timestamp?: number
 ): T | null {
+  let messageId: string
+  if (typeof message === 'string') {
+    messageId = message
+  } else {
+    messageId = message.getId()
+    if (timestamp === undefined) timestamp = message.timestamp
+  }
   const idx = findMessageIndex(messages, messageId, timestamp)
   return idx !== null ? messages[idx]! : null
 }
