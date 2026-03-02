@@ -652,6 +652,7 @@
   .container {
     display: grid;
     grid-template-rows: auto 1fr;
+    place-content: stretch;
     min-width: 100%;
     min-height: 100%;
   }
@@ -659,9 +660,11 @@
   .header {
     max-width: 100%;
     display: flex;
+    justify-content: space-evenly;
+    align-items: stretch;
+    align-content: center;
     gap: 1rem;
     contain: content;
-    align-items: center;
     background: var(--color-black-soft);
     color: var(--color-white);
     padding: 0.5rem;
@@ -674,24 +677,21 @@
     cursor: default;
   }
   .header button {
-    height: 100%;
     min-width: 4.5rem;
     max-height: 4rem;
-    padding: 0.5rem;
-    flex: 1 1 auto;
+    flex: 1 1 content;
     align-items: center;
     justify-content: center;
     text-align: center;
     border: 1px solid var(--color-gray-5);
     border-radius: 4px;
+    padding: 0.5rem;
     overflow: auto;
     scrollbar-width: inherit;
     cursor: pointer;
   }
   .header button.settings {
-    width: 3.7rem;
-    height: 3.7rem;
-    min-width: 4rem;
+    width: 4rem;
     display: flex;
   }
   .header button:hover {
