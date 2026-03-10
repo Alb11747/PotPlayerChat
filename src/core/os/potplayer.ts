@@ -20,6 +20,7 @@ export enum WinMsgs {
   REQUEST_TYPE = 1024
 }
 
+// https://github.com/ld3l/PotPlayerControl/blob/main/src/main/java/com/del/potplayercontrol/impl/JNAMessageConst.java
 export enum PotPlayerWParams {
   GET_VOLUME = 20480,
   SET_VOLUME = 20481,
