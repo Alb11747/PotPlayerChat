@@ -27,6 +27,8 @@
     enableEmotePreviews: boolean
   } = $props()
 
+  let imgLoaded = $state<boolean>(false)
+
   const emoteSizeMap: Record<string, string> = {
     '1': '0.5x',
     '2': '1x',
@@ -59,6 +61,12 @@
     if (enableEmotePreviews) onMouseLeavePreviewElement()
   }}
 >
+  {#if !imgLoaded}
+    <span class="chat-emote" aria-hidden="true">
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+      {@html segment.escaped}
+    </span>
+  {/if}
   <img
     class="chat-emote"
     srcset={urlsToSrcset(segment.urls, emoteSizeMap)}
@@ -66,6 +74,7 @@
     loading="lazy"
     decoding="async"
     onload={() => {
+      imgLoaded = true
       if (onEmoteLoad)
         onEmoteLoad({ emote: segment.emote, hash: `${message.getId()}-${segment.index}` })
     }}
