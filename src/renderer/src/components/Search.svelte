@@ -1,14 +1,11 @@
 <script lang="ts">
   import { ChatService, type LoadingState } from '@/core/chat/twitch-chat'
-  import {
-    convertRawIrcMessagesToTwitchMessages,
-    convertRawIrcMessageToTwitchMessage,
-    type TwitchMessage
-  } from '@/core/chat/twitch-msg'
+  import type { TwitchMessage } from '@/core/chat/twitch-msg'
   import {
     formattedTwitchMessageFactory,
     type TwitchMessageFormatted
   } from '@/renderer/src/core/search-messages'
+  import type { SearchContext } from '@/renderer/src/core/search-window'
   import {
     findIntersectingMessageIndex,
     findMessageIndex,
@@ -22,6 +19,8 @@
   import { UrlTracker } from '../core/url-tracker'
   import { settings } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
+
+  let { context }: { context: SearchContext } = $props()
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
@@ -74,48 +73,29 @@
     loadedMessages = true
 
     try {
-      const searchInfo = await window.api.getSearchInfo()
-      if (!searchInfo) {
-        console.error('No search info available')
-        return
-      }
+      let potplayerInfo = context.potplayerInfo
+      focusedMessage = context.focusedMessage ?? null
+      await chatService.updateVideoInfo(potplayerInfo, -1)
+      if (context.initialSearch) searchQuery = context.initialSearch
 
-      await chatService.updateVideoInfo(searchInfo.potplayerInfo, -1)
-      if (searchInfo.initialSearch) searchQuery = searchInfo.initialSearch
+      if (focusedMessage) console.debug('Focused message:', focusedMessage)
 
-      if (searchInfo.focusedMessageRaw) {
-        const focusedMsg = convertRawIrcMessageToTwitchMessage(searchInfo.focusedMessageRaw)
-        if (focusedMsg) {
-          console.debug('Focused message:', focusedMsg)
-          focusedMessage = focusedMsg
-        }
-      }
-
-      const dec = new TextDecoder()
-
-      if (searchInfo.initialMessagesRaw) {
-        const initialMsgs = convertRawIrcMessagesToTwitchMessages(
-          dec.decode(searchInfo.initialMessagesRaw as unknown as ArrayBuffer)
-        )
-        console.debug('Initial messages:', initialMsgs.length)
-        initialMessages = initialMsgs
-        loadMessages(initialMsgs)
+      if (context.initialMessages.length > 0) {
+        console.debug('Initial messages:', context.initialMessages.length)
+        initialMessages = context.initialMessages
+        loadMessages(context.initialMessages)
         scrollToTargetMessages()
       }
 
       await new Promise((resolve) => setTimeout(resolve, 0))
 
-      const messagesRaw = await window.api.getMessagesRaw()
-      if (messagesRaw) {
-        const messages = convertRawIrcMessagesToTwitchMessages(
-          dec.decode(messagesRaw as unknown as ArrayBuffer)
-        )
-        console.debug('Preloaded messages:', messages.length)
-        loadMessages(messages)
+      if (context.loadedMessages.length > 0) {
+        console.debug('Preloaded messages:', context.loadedMessages.length)
+        loadMessages(context.loadedMessages)
         scrollToTargetMessages()
       }
 
-      if (!searchInfo.potplayerInfo?.hwnd) {
+      if (!potplayerInfo?.hwnd) {
         const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
         const instances = await window.api.getPotPlayers()
         const potplayerInstance = instances.find((p) => p.hwnd === selectedHwnd)
@@ -123,23 +103,22 @@
           console.error('No PotPlayer instance found')
           return
         }
-        const potplayerInfo = await window.api.getPotplayerExtraInfo(potplayerInstance)
-        if (!potplayerInfo) {
+        const resolvedPotplayerInfo = await window.api.getPotplayerExtraInfo(potplayerInstance)
+        if (!resolvedPotplayerInfo) {
           console.error('No PotPlayer info available')
           return
         }
-        searchInfo.potplayerInfo = potplayerInfo
+        potplayerInfo = resolvedPotplayerInfo
       }
 
-      const videoStartTime = searchInfo.potplayerInfo.startTime
-      const currentTime = await window.api.getCurrentVideoTime(searchInfo.potplayerInfo.hwnd)
+      const videoStartTime = potplayerInfo.startTime
+      const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
       const defaultStartTime = videoStartTime + currentTime - 60 * 60 * 1000 // 1 hour before
       const defaultEndTime = videoStartTime + currentTime
-      const { startTime = defaultStartTime, endTime = defaultEndTime } =
-        searchInfo.searchRange || {}
+      const { startTime = defaultStartTime, endTime = defaultEndTime } = context.searchRange || {}
 
       if (!initialMessages || !isRangeInMessages(initialMessages, startTime, endTime)) {
-        await chatService.updateVideoInfo(searchInfo.potplayerInfo, 0)
+        await chatService.updateVideoInfo(potplayerInfo, 0)
         const loadedMsgs = await chatService.getMessagesBetweenTimes(startTime, endTime)
 
         console.debug('Loaded messages:', loadedMsgs.length)
@@ -309,7 +288,7 @@
             <button
               type="button"
               class="search-result-item"
-              onclick={() => window.api.focusMessage(msg.raw)}
+              onclick={() => context.focusMessage(msg)}
             >
               <ChatMessage
                 message={msg}

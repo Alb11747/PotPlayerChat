@@ -1,5 +1,4 @@
-import type { SearchInfo, WindowApi } from '@/types/preload'
-import { IpcPromiseRenderer } from '@/utils/electron'
+import type { WindowApi } from '@/types/preload'
 import { electronAPI } from '@electron-toolkit/preload'
 import { exposeConf } from 'electron-conf/preload'
 import { contextBridge, ipcRenderer } from 'electron/renderer'
@@ -18,19 +17,6 @@ ipcRenderer.on('log', (_, { messages, level }) => {
 
 exposeConf()
 
-const searchInfoIpcPromise = new IpcPromiseRenderer<SearchInfo>(ipcRenderer, 'searchInfo', false)
-
-const messagesRawIpcPromise = new IpcPromiseRenderer<ArrayBufferLike>(
-  ipcRenderer,
-  'messagesRaw',
-  true
-)
-
-window.addEventListener('beforeunload', () => {
-  searchInfoIpcPromise.dispose()
-  messagesRawIpcPromise.dispose()
-})
-
 // Custom APIs for renderer
 const api: WindowApi = {
   loadDataFile: (...args) => ipcRenderer.invoke('loadDataFile', ...args),
@@ -40,9 +26,6 @@ const api: WindowApi = {
     ipcRenderer.invoke('getDefaultPollingIntervals', ...args),
   getPollingIntervals: (...args) => ipcRenderer.invoke('getPollingIntervals', ...args),
   setPollingIntervals: (...args) => ipcRenderer.invoke('setPollingIntervals', ...args),
-  getSearchInfo: () => searchInfoIpcPromise.get(),
-  getMessagesRaw: () => messagesRawIpcPromise.get(),
-  setMessagesRaw: (...args) => ipcRenderer.send(messagesRawIpcPromise.channel, ...args),
   getPotPlayers: (...args) => ipcRenderer.invoke('getPotplayers', ...args),
   getSelectedPotPlayerHWND: (...args) => ipcRenderer.invoke('getPotplayerHwnd', ...args),
   setSelectedPotPlayerHWND: (...args) => ipcRenderer.invoke('setPotplayerHwnd', ...args),
@@ -58,8 +41,6 @@ const api: WindowApi = {
   addUrlClicked: (...args) => ipcRenderer.invoke('addUrlClicked', ...args),
   clearUrlClicked: (...args) => ipcRenderer.invoke('clearUrlClicked', ...args),
   openUrl: (...args) => ipcRenderer.invoke('openUrl', ...args),
-  openSearchWindow: (...args) => ipcRenderer.invoke('openSearchWindow', ...args),
-  focusMessage: (...args) => ipcRenderer.invoke('focusMessage', ...args),
   getLinkPreview: (...args) => ipcRenderer.invoke('getLinkPreview', ...args),
   clearLinkPreviewCache: (...args) => ipcRenderer.invoke('clearLinkPreviewCache', ...args),
   sanitizeHtml: (...args) => ipcRenderer.invoke('sanitizeHtml', ...args),
@@ -72,9 +53,7 @@ const api: WindowApi = {
   },
   offPotPlayerInstancesChanged: (callback) => {
     ipcRenderer.off('potplayerInstancesChanged', callback as never)
-  },
-  onFocusMessage: (callback) => ipcRenderer.on('focusMessage', callback as never),
-  offFocusMessage: (callback) => ipcRenderer.off('focusMessage', callback as never)
+  }
 }
 
 if (process.contextIsolated) {

@@ -1,10 +1,9 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { BrowserWindow, app, ipcMain } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import { Conf } from 'electron-conf/main'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 
-import type { SearchInfo } from '@/types/preload'
-import { IpcPromiseMain } from '@/utils/electron'
 import { initLinks } from './links'
 import { initLog } from './log'
 import { initContextMenus } from './menu'
@@ -12,6 +11,24 @@ import { initPotplayerHandlers } from './potplayer'
 import { initSecurity } from './security'
 import { initStorage } from './storage'
 import { initAutoUpdater } from './update'
+
+function getSearchWindowUrl(): string {
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+  if (is.dev && rendererUrl) {
+    return new URL('search.html', rendererUrl.endsWith('/') ? rendererUrl : `${rendererUrl}/`).href
+  }
+  return pathToFileURL(join(__dirname, '../renderer/search.html')).href
+}
+
+function isSearchWindowUrl(url: string, expectedUrl: string): boolean {
+  try {
+    const parsedUrl = new URL(url)
+    parsedUrl.hash = ''
+    return parsedUrl.href === expectedUrl
+  } catch {
+    return false
+  }
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -47,56 +64,35 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  const messagesRawIpcPromise = new IpcPromiseMain<ArrayBufferLike>(ipcMain, 'messagesRaw', true)
+  const searchWindowUrl = getSearchWindowUrl()
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (!isSearchWindowUrl(url, searchWindowUrl)) return { action: 'deny' }
 
-  // Create search window
-  function createSearchWindow(): BrowserWindow {
     const mainBounds = mainWindow.getBounds()
-    const searchWindow = new BrowserWindow({
-      width: mainBounds.width * 0.8,
-      height: mainBounds.height * 0.8,
-      show: false,
-      autoHideMenuBar: true,
-      parent: mainWindow,
-      modal: false,
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        sandbox: false
+    return {
+      action: 'allow',
+      outlivesOpener: false,
+      overrideBrowserWindowOptions: {
+        width: Math.round(mainBounds.width * 0.8),
+        height: Math.round(mainBounds.height * 0.8),
+        show: false,
+        autoHideMenuBar: true,
+        parent: mainWindow,
+        modal: false,
+        webPreferences: {
+          preload: join(__dirname, '../preload/index.js'),
+          sandbox: false
+        }
       }
-    })
-
-    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-      searchWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/search.html`)
-    } else {
-      searchWindow.loadFile(join(__dirname, '../renderer/search.html'))
     }
+  })
 
+  mainWindow.webContents.on('did-create-window', (searchWindow, { url }) => {
+    if (!isSearchWindowUrl(url, searchWindowUrl)) return
     searchWindow.once('ready-to-show', () => {
       searchWindow.show()
       searchWindow.focus()
     })
-
-    return searchWindow
-  }
-
-  ipcMain.handle('openSearchWindow', async (_event, args: SearchInfo) => {
-    const searchWindow = createSearchWindow()
-    const waitForLoaded = new Promise<void>((resolve) => {
-      const onDidFinishLoad = (): void => {
-        searchWindow.webContents.off('did-finish-load', onDidFinishLoad)
-        resolve()
-      }
-      searchWindow.webContents.on('did-finish-load', onDidFinishLoad)
-      if (!searchWindow.webContents.isLoading()) onDidFinishLoad()
-    })
-    const messagesRaw = await messagesRawIpcPromise.get()
-    await waitForLoaded
-    searchWindow.webContents.send('searchInfo', args)
-    searchWindow.webContents.send(messagesRawIpcPromise.channel, messagesRaw)
-  })
-
-  ipcMain.handle('focusMessage', async (_event, messageRaw: string) => {
-    mainWindow.webContents.send('focusMessage', messageRaw)
   })
 }
 

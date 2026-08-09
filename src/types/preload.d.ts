@@ -1,4 +1,3 @@
-import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type {
   getCurrentVideoTime,
   getPlaylists,
@@ -27,17 +26,6 @@ export type PollingIntervals = {
   activeWindow: number
 }
 
-export type SearchInfo = {
-  potplayerInfo: PotPlayerInfo
-  focusedMessageRaw?: string
-  initialMessagesRaw?: ArrayBufferLike
-  initialSearch?: string
-  searchRange?: {
-    startTime: number
-    endTime: number
-  }
-}
-
 export interface WindowApi {
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
@@ -45,9 +33,6 @@ export interface WindowApi {
   getDefaultPollingIntervals: () => Promise<PollingIntervals>
   getPollingIntervals: () => Promise<PollingIntervals>
   setPollingIntervals: (args: Partial<PollingIntervals>) => Promise<void>
-  getSearchInfo: () => Promise<SearchInfo | null>
-  getMessagesRaw: () => Promise<ArrayBufferLike | null>
-  setMessagesRaw: (messagesRaw: ArrayBufferLike) => void
   getPotPlayers: () => Promise<PotPlayerInstance[]>
   getSelectedPotPlayerHWND: () => Promise<HWND | null>
   setSelectedPotPlayerHWND: (hwnd: HWND | null) => Promise<void>
@@ -63,8 +48,6 @@ export interface WindowApi {
   addUrlClicked: (url: string) => Promise<void>
   clearUrlClicked: () => Promise<void>
   openUrl: (url: string) => Promise<void>
-  openSearchWindow: (args: SearchInfo) => Promise<void>
-  focusMessage: (messageRaw: string) => Promise<void>
   getLinkPreview: typeof getLinkPreview
   clearLinkPreviewCache: () => Promise<void>
   sanitizeHtml: (
@@ -80,8 +63,6 @@ export interface WindowApi {
   offPotPlayerInstancesChanged: (
     callback: (event: Event, instances: (PotPlayerInstance & { selected?: boolean })[]) => void
   ) => void
-  onFocusMessage: (callback: (event: Event, messageRaw: string) => void) => void
-  offFocusMessage: (callback: (event: Event, messageRaw: string) => void) => void
 }
 
 export {}

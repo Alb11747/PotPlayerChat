@@ -1,9 +1,5 @@
 <script lang="ts">
-  import {
-    convertRawIrcMessageToTwitchMessage,
-    convertTwitchMessagesToRawIrcMessages,
-    type TwitchMessage
-  } from '@core/chat/twitch-msg'
+  import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { VList } from 'virtua/svelte'
 
   import { onMount, untrack } from 'svelte'
@@ -11,12 +7,12 @@
   import { clearAll, TwitchUserService } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import { isEqualMessageBoundary } from '@/renderer/src/core/chat-view'
+  import { openSearchPopup, type SearchOptions } from '@/renderer/src/core/search-window'
   import {
     calculateTargetElement,
     scrollToTarget as scrollToTargetBase
   } from '@/renderer/src/utils/vlist'
   import type { PotPlayerInstance } from '@/types/potplayer'
-  import type { SearchInfo } from '@/types/preload'
   import { deleteNullishKeysInPlace, isEqual, NumberObject } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
 
@@ -320,10 +316,8 @@
     }
   })
 
-  function onFocusMessage(messageRaw: string): void {
+  function onFocusMessage(message: TwitchMessage): void {
     if (!vlistRef) return
-    const message = convertRawIrcMessageToTwitchMessage(messageRaw)
-    if (!message) return
     const messageId = message.getId()
     const messageIndex = messages.findIndex((m) => m.getId() === messageId)
     if (messageIndex === -1) return
@@ -332,13 +326,6 @@
     scrollToBottom = false
     scrollToTarget()
   }
-
-  onMount(() => {
-    const onFocusMessageEvent: Parameters<typeof window.api.onFocusMessage>[0] = (_, ...args) =>
-      onFocusMessage(...args)
-    window.api.onFocusMessage(onFocusMessageEvent)
-    return () => window.api.offFocusMessage(onFocusMessageEvent)
-  })
 
   function setPotPlayerInstance(instanceInfo: PotPlayerInstance | PotPlayerInfo | null): void {
     const currentSelectionNonce = ++potPlayerSelectionNonce
@@ -396,7 +383,7 @@
   }
 
   function openSearchWindow(
-    info?: Partial<SearchInfo>,
+    info?: Partial<SearchOptions>,
     extraData?: { message?: TwitchMessage }
   ): void {
     const searchRangeBuffer = 60 * 60 * 1000
@@ -404,14 +391,12 @@
     if (!selectedPotplayerInfo.startTime || !selectedPotplayerInfo.endTime)
       throw new Error('No start or end time set for the selected PotPlayer instance')
 
-    const enc = new TextEncoder()
-    const msgToData: (msg: TwitchMessage[]) => ArrayBufferLike = (msg) =>
-      enc.encode(convertTwitchMessagesToRawIrcMessages(msg)).buffer
-
-    window.api.openSearchWindow({
+    openSearchPopup({
       potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
-      focusedMessageRaw: extraData?.message?.raw,
-      initialMessagesRaw: msgToData(messages),
+      focusedMessage: extraData?.message,
+      initialMessages: messages,
+      loadedMessages: chatService.currentChatData,
+      focusMessage: onFocusMessage,
       searchRange: settings.search.showAllMessages
         ? {
             startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,
@@ -420,7 +405,6 @@
         : undefined,
       ...(info ?? {})
     })
-    window.api.setMessagesRaw(msgToData(chatService.currentChatData))
   }
 
   function handleUsernameClick(info: { username: string; message: TwitchMessage }): void {
