@@ -8,9 +8,9 @@ export function normalizeUrl(url: string): string {
 }
 
 const streamerNameRegex = /^[A-Za-z0-9_]{3,25}$/
-const dateTimePattern = String.raw`\d{4}-\d{2}-\d{2}[T ]\d{2}-\d{2}-\d{2}Z?`
+const dateTimePattern = String.raw`\d{4}-\d{2}-\d{2}[T ]\d{2}-\d{2}-\d{2}(?:\.\d+)?Z?`
 const dateTimeRegex = new RegExp(
-  String.raw`(?<!\d)(\d{4})-(\d{2})-(\d{2})[T ](\d{2})-(\d{2})-(\d{2})Z?(?![A-Za-z0-9])`
+  String.raw`(?<!\d)(\d{4})-(\d{2})-(\d{2})[T ](\d{2})-(\d{2})-(\d{2})(?:\.(\d+))?Z?(?![A-Za-z0-9.])`
 )
 
 export interface ParsedStreamTitle {
@@ -58,7 +58,7 @@ export function parseStreamTitle(title: string): ParsedStreamTitle | null {
   const dateTimeMatch = dateTimeRegex.exec(title)
   if (!dateTimeMatch) return null
 
-  const [, yearStr, monthStr, dayStr, hourStr, minuteStr, secondStr] = dateTimeMatch
+  const [, yearStr, monthStr, dayStr, hourStr, minuteStr, secondStr, millisecondStr] = dateTimeMatch
   if (!yearStr || !monthStr || !dayStr || !hourStr || !minuteStr || !secondStr) return null
 
   const year = Number(yearStr)
@@ -67,17 +67,19 @@ export function parseStreamTitle(title: string): ParsedStreamTitle | null {
   const hour = Number(hourStr)
   const minute = Number(minuteStr)
   const second = Number(secondStr)
+  const millisecond = millisecondStr ? Number(`${millisecondStr}000`.slice(0, 3)) : 0
 
   const startTime = new Date(0)
   startTime.setUTCFullYear(year, month - 1, day)
-  startTime.setUTCHours(hour, minute, second, 0)
+  startTime.setUTCHours(hour, minute, second, millisecond)
   if (
     startTime.getUTCFullYear() !== year ||
     startTime.getUTCMonth() !== month - 1 ||
     startTime.getUTCDate() !== day ||
     startTime.getUTCHours() !== hour ||
     startTime.getUTCMinutes() !== minute ||
-    startTime.getUTCSeconds() !== second
+    startTime.getUTCSeconds() !== second ||
+    startTime.getUTCMilliseconds() !== millisecond
   )
     return null
 

@@ -25,6 +25,36 @@ describe('parseStreamTitle', () => {
     expect(result?.streamer).toBe('fobm4ster')
   })
 
+  it('parses millisecond precision from the unbracketed streamer format', () => {
+    const result = parseStreamTitle('[2026-08-09T12-30-00.123Z] streamer - Stream title.ext')
+
+    expect(result?.startTime.toISOString()).toBe('2026-08-09T12:30:00.123Z')
+    expect(result?.streamer).toBe('streamer')
+  })
+
+  it('parses the reported PotPlayer title with millisecond precision', () => {
+    const result = parseStreamTitle(
+      '[2026-08-09T22-01-38.104Z] fobm4ster - 🔴DROPS🔴short and EARLY stream (kinda) VERY SHORT UNLIKE MY HEIGHT.ts'
+    )
+
+    expect(result?.startTime.toISOString()).toBe('2026-08-09T22:01:38.104Z')
+    expect(result?.streamer).toBe('fobm4ster')
+  })
+
+  it.each([
+    ['1', '100'],
+    ['12', '120'],
+    ['123', '123'],
+    ['123456789', '123']
+  ])('parses fractional-second precision .%s as %s milliseconds', (fraction, milliseconds) => {
+    const result = parseStreamTitle(
+      `[2026-08-09T12-30-00.${fraction}Z] streamer - Stream title.ext`
+    )
+
+    expect(result?.startTime.toISOString()).toBe(`2026-08-09T12:30:00.${milliseconds}Z`)
+    expect(result?.streamer).toBe('streamer')
+  })
+
   it('preserves a parenthesized legacy timestamp without a streamer', () => {
     const result = parseStreamTitle('Stream title (2023-04-17 22-30-07).mp4')
 
@@ -42,7 +72,8 @@ describe('parseStreamTitle', () => {
     '[2023-02-29T22-30-07Z] [streamer] Invalid day.mp4',
     '[2023-13-01T22-30-07Z] [streamer] Invalid month.mp4',
     '[2023-04-17T24-30-07Z] [streamer] Invalid hour.mp4',
-    '[2023-04-17T22-30-070] [streamer] Malformed seconds.mp4'
+    '[2023-04-17T22-30-070] [streamer] Malformed seconds.mp4',
+    '[2023-04-17T22-30-07.Z] [streamer] Empty fractional seconds.mp4'
   ])('rejects invalid or malformed timestamp in %s', (title) => {
     expect(parseStreamTitle(title)).toBeNull()
   })
