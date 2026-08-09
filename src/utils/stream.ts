@@ -35,9 +35,10 @@ export function getTitleFromUrl(url: string): string | null {
 export function getStartTimeFromTitle(title: string): Date | null {
   if (!title || typeof title !== 'string') return null
 
-  const match = title.match(/\((\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\)\./)
-  if (!match) return null
-  const dateTimeStr = match[1]
+  const match = title.match(
+    /(?:\((\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\)\.|\[(\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\])/
+  )
+  const dateTimeStr = match?.[1] ?? match?.[2]
   if (!dateTimeStr) return null
   const [date, time] = dateTimeStr.split(' ')
   if (!date || !time) return null
