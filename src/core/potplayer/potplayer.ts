@@ -15,6 +15,15 @@ const titleCache: Map<string, { channel: string; startTime: number; endTime?: nu
 const configKey = 'cache:title'
 let config: Conf | null = null
 
+async function getVideoEndTime(hwnd: HWND, startTime: number): Promise<number | null> {
+  const videoDuration = await getTotalVideoTime(hwnd)
+  if (!Number.isFinite(videoDuration) || videoDuration <= 0) {
+    console.warn('Invalid PotPlayer video duration:', videoDuration)
+    return null
+  }
+  return startTime + videoDuration
+}
+
 export function initCache(conf: Conf): void {
   config = conf
   const cache = conf.get(configKey)
@@ -36,8 +45,9 @@ export async function getPotplayerExtraInfo<
   }
   if (cachedInfo) {
     if (cachedInfo.endTime === undefined) {
-      const videoDuration = await getTotalVideoTime(instance.hwnd)
-      cachedInfo.endTime = cachedInfo.startTime + videoDuration
+      const endTime = await getVideoEndTime(instance.hwnd, cachedInfo.startTime)
+      if (endTime === null) return null
+      cachedInfo.endTime = endTime
       titleCache.set(currentTitle, cachedInfo)
       config?.set(configKey, Object.fromEntries(titleCache.entries()))
     }
@@ -75,8 +85,8 @@ export async function getPotplayerExtraInfo<
   const parsedCurrentTitle = parseStreamTitle(currentTitle)
   if (parsedCurrentTitle?.streamer) {
     const startTime = parsedCurrentTitle.startTime.getTime()
-    const videoDuration = await getTotalVideoTime(instance.hwnd)
-    const endTime = startTime + videoDuration
+    const endTime = await getVideoEndTime(instance.hwnd, startTime)
+    if (endTime === null) return null
     cacheTitleInfo(currentTitle, parsedCurrentTitle.streamer, startTime, endTime)
     config?.set(configKey, Object.fromEntries(titleCache.entries()))
     return { ...instance, channel: parsedCurrentTitle.streamer, startTime, endTime }
@@ -108,8 +118,9 @@ export async function getPotplayerExtraInfo<
 
     let endTime: number | undefined
     if (isCurrentStream) {
-      const videoDuration = await getTotalVideoTime(instance.hwnd)
-      endTime = startTime + videoDuration
+      const resolvedEndTime = await getVideoEndTime(instance.hwnd, startTime)
+      if (resolvedEndTime === null) return
+      endTime = resolvedEndTime
     }
 
     cacheTitleInfo(title, channel, startTime, endTime)

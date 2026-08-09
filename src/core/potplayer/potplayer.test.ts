@@ -38,6 +38,20 @@ describe('getPotplayerExtraInfo', () => {
     expect(osMocks.getStreamHistory).not.toHaveBeenCalled()
   })
 
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid video duration %s on the filename fast path',
+    async (videoDuration) => {
+      const title = `[2023-04-22T22-30-07Z] [duration_${String(videoDuration).replace('-', 'n')}] Stream title.mp4`
+      osMocks.getTotalVideoTime.mockResolvedValue(videoDuration)
+
+      const result = await getPotplayerExtraInfo({ hwnd, title })
+
+      expect(result).toBeNull()
+      expect(osMocks.getPlaylists).not.toHaveBeenCalled()
+      expect(osMocks.getStreamHistory).not.toHaveBeenCalled()
+    }
+  )
+
   it('uses a valid path streamer when the filename has only a timestamp', async () => {
     const title = '[2023-04-18T22-30-07Z] Stream title.mp4'
     osMocks.getPlaylists.mockResolvedValue([
