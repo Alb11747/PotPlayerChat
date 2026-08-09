@@ -1,8 +1,9 @@
 import type { HWND } from '@/types/globals'
 import {
   getStreamerFromUrl as getChannelFromUrl,
-  getStartTimeFromTitle,
   getTitleFromUrl,
+  isPossibleStreamerName,
+  parseStreamTitle,
   normalizeUrl
 } from '@/utils/stream'
 import type { Conf } from 'electron-conf/main'
@@ -27,13 +28,18 @@ export async function getPotplayerExtraInfo<
   }
 >(instance: T): Promise<(T & { channel: string; startTime: number; endTime: number }) | null> {
   const currentTitle = instance.title
-  const cachedInfo = titleCache.get(currentTitle) || null
+  let cachedInfo = titleCache.get(currentTitle) || null
+  if (cachedInfo && !isPossibleStreamerName(cachedInfo.channel)) {
+    console.warn('Ignoring title cache entry with invalid channel:', currentTitle)
+    titleCache.delete(currentTitle)
+    cachedInfo = null
+  }
   if (cachedInfo) {
     if (cachedInfo.endTime === undefined) {
       const videoDuration = await getTotalVideoTime(instance.hwnd)
       cachedInfo.endTime = cachedInfo.startTime + videoDuration
       titleCache.set(currentTitle, cachedInfo)
-      config?.set(configKey, titleCache)
+      config?.set(configKey, Object.fromEntries(titleCache.entries()))
     }
     return {
       ...instance,
@@ -44,34 +50,13 @@ export async function getPotplayerExtraInfo<
   }
 
   const now = Date.now()
-  let newPotPlayerInfo: (T & { channel: string; startTime: number; endTime: number }) | null = null
 
-  async function processData(data: { url: string; title?: string } | null): Promise<void> {
-    if (!data?.url) return
-    const url = normalizeUrl(data.url)
-    const title = data.title ?? getTitleFromUrl(url)
-    if (!title) return
-
-    const isCurrentStream = title === currentTitle
-
-    const channel = getChannelFromUrl(url)
-    if (!channel) {
-      if (isCurrentStream) console.warn('No channel found for URL:', url)
-      return
-    }
-
-    const startTime = getStartTimeFromTitle(title)?.getTime()
-    if (!startTime) {
-      if (isCurrentStream) console.warn('No start time found for title:', title)
-      return
-    }
-
-    let endTime: number | undefined
-    if (isCurrentStream) {
-      const videoDuration = await getTotalVideoTime(instance.hwnd)
-      endTime = startTime + videoDuration
-    }
-
+  function cacheTitleInfo(
+    title: string,
+    channel: string,
+    startTime: number,
+    endTime?: number
+  ): void {
     const isStreamPossiblyRunning = now - startTime < 2 * 24 * 60 * 60 * 1000
     const cacheData = {
       channel,
@@ -85,6 +70,49 @@ export async function getPotplayerExtraInfo<
     )
       console.warn('Title cache collision', title, existing, cacheData)
     titleCache.set(title, cacheData)
+  }
+
+  const parsedCurrentTitle = parseStreamTitle(currentTitle)
+  if (parsedCurrentTitle?.streamer) {
+    const startTime = parsedCurrentTitle.startTime.getTime()
+    const videoDuration = await getTotalVideoTime(instance.hwnd)
+    const endTime = startTime + videoDuration
+    cacheTitleInfo(currentTitle, parsedCurrentTitle.streamer, startTime, endTime)
+    config?.set(configKey, Object.fromEntries(titleCache.entries()))
+    return { ...instance, channel: parsedCurrentTitle.streamer, startTime, endTime }
+  }
+
+  let newPotPlayerInfo: (T & { channel: string; startTime: number; endTime: number }) | null = null
+
+  async function processData(data: { url: string; title?: string } | null): Promise<void> {
+    if (!data?.url) return
+    const url = normalizeUrl(data.url)
+    const title = data.title ?? getTitleFromUrl(url)
+    if (!title) return
+
+    const isCurrentStream = title === currentTitle
+
+    const parsedTitle = parseStreamTitle(title)
+    if (!parsedTitle) {
+      if (isCurrentStream) console.warn('No start time found for title:', title)
+      return
+    }
+
+    const channel = parsedTitle.streamer ?? getChannelFromUrl(url)
+    if (!channel) {
+      if (isCurrentStream) console.warn('No channel found for URL:', url)
+      return
+    }
+
+    const startTime = parsedTitle.startTime.getTime()
+
+    let endTime: number | undefined
+    if (isCurrentStream) {
+      const videoDuration = await getTotalVideoTime(instance.hwnd)
+      endTime = startTime + videoDuration
+    }
+
+    cacheTitleInfo(title, channel, startTime, endTime)
 
     if (isCurrentStream && !newPotPlayerInfo && endTime)
       newPotPlayerInfo = { ...instance, channel, startTime, endTime }
