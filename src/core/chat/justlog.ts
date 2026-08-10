@@ -607,10 +607,10 @@ export class JustLogAPI {
     fromTime?: Date | null,
     toTime?: Date | null,
     reverse?: boolean | null
-  ): { from?: number; to?: number; reverse?: string; raw?: string } {
-    const data: { from?: number; to?: number; reverse?: string } = {}
-    if (fromTime) data.from = this.fromDatetimeToTimestamp(fromTime)
-    if (toTime) data.to = this.fromDatetimeToTimestamp(toTime)
+  ): { from?: string; to?: string; reverse?: string; raw?: string } {
+    const data: { from?: string; to?: string; reverse?: string } = {}
+    if (fromTime) data.from = fromTime.toISOString()
+    if (toTime) data.to = toTime.toISOString()
     if (reverse !== undefined && reverse !== null) data.reverse = String(reverse)
     return data
   }
@@ -662,10 +662,6 @@ export class JustLogAPI {
       throw new Error(`Unsupported channel type: ${typeof user}`)
     }
     return channelId
-  }
-
-  private fromDatetimeToTimestamp(dt: Date): number {
-    return Math.floor(dt.getTime() / 1000)
   }
 
   // --- Type guards ---
