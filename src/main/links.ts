@@ -66,6 +66,10 @@ export function clearUrlClicked(): void {
   config?.set(linkPreviewOpenedParams.key, urlOpenedSet.saveAsJSON())
 }
 
+export function clearLinkPreviewCache(): void {
+  linkPreviewCache.clear()
+}
+
 export async function getLinkPreview(
   url: string,
   chatterinoBaseUrl: string = defaultLinkPreviewUrl
@@ -160,7 +164,7 @@ export function initLinks(conf: Conf): void {
   ipcMain.handle('getLinkPreview', (_event, ...args: Parameters<typeof getLinkPreview>) =>
     getLinkPreview(...args)
   )
-  ipcMain.handle('clearLinkPreviewCache', () => linkPreviewCache.clear())
+  ipcMain.handle('clearLinkPreviewCache', () => clearLinkPreviewCache())
 
   ipcMain.handle('openUrl', async (_event, url: string) => {
     if (

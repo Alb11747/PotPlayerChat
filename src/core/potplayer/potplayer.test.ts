@@ -9,13 +9,14 @@ const osMocks = vi.hoisted(() => ({
 
 vi.mock('@/core/os/potplayer', () => osMocks)
 
-import { getPotplayerExtraInfo, initCache } from '@/core/potplayer/potplayer'
+import { clearTitleCache, getPotplayerExtraInfo, initCache } from '@/core/potplayer/potplayer'
 
 const hwnd = 1 as unknown as HWND
 const duration = 60 * 60 * 1000
 
 describe('getPotplayerExtraInfo', () => {
   beforeEach(() => {
+    clearTitleCache()
     osMocks.getPlaylists.mockReset()
     osMocks.getStreamHistory.mockReset()
     osMocks.getTotalVideoTime.mockReset()
@@ -101,7 +102,8 @@ describe('getPotplayerExtraInfo', () => {
           startTime: Date.parse('2023-04-21T22:30:07Z')
         }
       }),
-      set
+      set,
+      delete: vi.fn()
     } as never)
 
     const result = await getPotplayerExtraInfo({ hwnd, title })
@@ -109,5 +111,29 @@ describe('getPotplayerExtraInfo', () => {
     expect(result?.channel).toBe('valid_name')
     expect(osMocks.getPlaylists).not.toHaveBeenCalled()
     expect(set).toHaveBeenCalled()
+  })
+
+  it('clears cached title metadata from memory and persisted configuration', async () => {
+    const title = 'Title that requires playlist metadata.mp4'
+    const deleteEntry = vi.fn()
+    initCache({
+      get: vi.fn().mockReturnValue({
+        [title]: {
+          channel: 'cached_channel',
+          startTime: Date.parse('2023-04-21T22:30:07Z'),
+          endTime: Date.parse('2023-04-21T23:30:07Z')
+        }
+      }),
+      set: vi.fn(),
+      delete: deleteEntry
+    } as never)
+
+    clearTitleCache()
+    const result = await getPotplayerExtraInfo({ hwnd, title })
+
+    expect(result).toBeNull()
+    expect(deleteEntry).toHaveBeenCalledWith('cache:title')
+    expect(osMocks.getPlaylists).toHaveBeenCalledOnce()
+    expect(osMocks.getStreamHistory).toHaveBeenCalledOnce()
   })
 })

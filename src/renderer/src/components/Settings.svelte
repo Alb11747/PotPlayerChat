@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { UrlTracker } from '../core/url-tracker'
   import conf from '../state/config'
   import {
     defaultSettings,
@@ -8,8 +7,10 @@
     settings
   } from '../state/settings.svelte'
 
-  let { urlTracker }: { urlTracker?: UrlTracker } = $props()
-  let clearUrlDataStatus = $state<string | null>(null)
+  let maintenanceStatus = $state<string | null>(null)
+  let clearingCache = $state(false)
+  let clearingSavedUrls = $state(false)
+  const maintenanceBusy = $derived(clearingCache || clearingSavedUrls)
 
   $effect(() => {
     normalizeSettings()
@@ -29,21 +30,31 @@
     saveSettings()
   }
 
-  async function clearUrlData(): Promise<void> {
-    clearUrlDataStatus = null
-    if (!urlTracker) {
-      clearUrlDataStatus = 'URL tracker is unavailable.'
-      return
-    }
+  async function clearCache(): Promise<void> {
+    maintenanceStatus = null
+    clearingCache = true
     try {
-      await window.api.clearUrlSeen()
-      await window.api.clearUrlClicked()
-      urlTracker.clearSeenUrls()
-      urlTracker.clearVisitedUrls()
-      clearUrlDataStatus = 'URL seen/clicked data cleared.'
+      await window.api.clearAppCache()
+      maintenanceStatus = 'Cache cleared.'
     } catch (error) {
-      console.error('Failed to clear URL seen/clicked data:', error)
-      clearUrlDataStatus = 'Failed to clear URL data. Check logs and try again.'
+      console.error('Failed to clear cache:', error)
+      maintenanceStatus = 'Failed to clear cache. Check logs and try again.'
+    } finally {
+      clearingCache = false
+    }
+  }
+
+  async function clearSavedUrls(): Promise<void> {
+    maintenanceStatus = null
+    clearingSavedUrls = true
+    try {
+      await window.api.clearSavedUrls()
+      maintenanceStatus = 'Saved URLs cleared.'
+    } catch (error) {
+      console.error('Failed to clear saved URLs:', error)
+      maintenanceStatus = 'Failed to clear saved URLs. Check logs and try again.'
+    } finally {
+      clearingSavedUrls = false
     }
   }
 </script>
@@ -148,12 +159,6 @@
       <input type="checkbox" bind:checked={settings.interface.requireHttpInUrl} />
       Require HTTP in URL
     </label>
-    <button class="reset-button" onclick={clearUrlData} disabled={!urlTracker}>
-      Clear URL Seen and Clicked Data
-    </button>
-    {#if clearUrlDataStatus}
-      <p class="clear-status">{clearUrlDataStatus}</p>
-    {/if}
   </fieldset>
 
   <fieldset>
@@ -187,6 +192,22 @@
       Enable Prerelease Updates (Applies on next restart)
     </label>
   </fieldset>
+
+  <fieldset>
+    <legend>Maintenance</legend>
+    <div class="maintenance-actions">
+      <button class="reset-button" onclick={clearCache} disabled={maintenanceBusy}>
+        {clearingCache ? 'Clearing Cache...' : 'Clear Cache'}
+      </button>
+      <button class="reset-button" onclick={clearSavedUrls} disabled={maintenanceBusy}>
+        {clearingSavedUrls ? 'Clearing Saved URLs...' : 'Clear Saved URLs'}
+      </button>
+    </div>
+    <p class="maintenance-note">Clears both seen and clicked URL history.</p>
+    {#if maintenanceStatus}
+      <p class="clear-status" role="status" aria-live="polite">{maintenanceStatus}</p>
+    {/if}
+  </fieldset>
 </div>
 
 <style>
@@ -206,6 +227,18 @@
 
   .clear-status {
     margin-top: 0.5rem;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .maintenance-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .maintenance-note {
+    margin: 0.75rem 0 0;
     color: var(--color-text-muted);
     font-size: 0.9rem;
   }
@@ -233,11 +266,15 @@
     cursor: pointer;
     transition: background-color 0.2s ease;
   }
-  .reset-button:hover {
+  .reset-button:hover:not(:disabled) {
     background-color: var(--color-accent, #e74c3c);
   }
-  .reset-button:active {
+  .reset-button:active:not(:disabled) {
     transform: translateY(1px);
+  }
+  .reset-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
   fieldset {

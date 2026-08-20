@@ -41,12 +41,18 @@ export interface WindowApi {
   getPlaylists: typeof getPlaylists
   getStreamHistory: typeof getStreamHistory
   getPotplayerExtraInfo: typeof getPotplayerExtraInfo
+  clearAppCache: () => Promise<void>
+  onAppCacheCleared: (callback: () => void) => void
+  offAppCacheCleared: (callback: () => void) => void
   isUrlSeen: (url: string) => Promise<boolean>
   addUrlSeen: (url: string) => Promise<void>
   clearUrlSeen: () => Promise<void>
   isUrlClicked: (url: string) => Promise<boolean>
   addUrlClicked: (url: string) => Promise<void>
   clearUrlClicked: () => Promise<void>
+  clearSavedUrls: () => Promise<void>
+  onSavedUrlsCleared: (callback: () => void) => void
+  offSavedUrlsCleared: (callback: () => void) => void
   openUrl: (url: string) => Promise<void>
   getLinkPreview: typeof getLinkPreview
   clearLinkPreviewCache: () => Promise<void>

@@ -6,6 +6,7 @@ import { pathToFileURL } from 'url'
 
 import { initLinks } from './links'
 import { initLog } from './log'
+import { initMaintenanceHandlers } from './maintenance'
 import { initContextMenus } from './menu'
 import { initPotplayerHandlers } from './potplayer'
 import { initSecurity } from './security'
@@ -52,6 +53,7 @@ function createWindow(): void {
   initContextMenus(mainWindow)
   initLinks(conf)
   initPotplayerHandlers(mainWindow, conf)
+  initMaintenanceHandlers(conf)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()

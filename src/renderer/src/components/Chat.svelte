@@ -21,6 +21,7 @@
   import { debounce } from '@/utils/functions'
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
+  import { clearRendererCache, clearRendererSavedUrls } from '../core/maintenance'
   import { UrlTracker } from '../core/url-tracker'
   import {
     getSessionTimestampOffsetByTitle,
@@ -478,6 +479,25 @@
     for (const reloadServicesFunction of Object.values(reloadServicesFunctionMap))
       reloadServicesFunction?.()
   }
+
+  function handleAppCacheCleared(): void {
+    clearRendererCache(chatService, urlTracker)
+    loadedEmotes.clear()
+    reloadChatMessageServices()
+  }
+
+  function handleSavedUrlsCleared(): void {
+    clearRendererSavedUrls(urlTracker)
+  }
+
+  onMount(() => {
+    window.api.onAppCacheCleared(handleAppCacheCleared)
+    window.api.onSavedUrlsCleared(handleSavedUrlsCleared)
+    return () => {
+      window.api.offAppCacheCleared(handleAppCacheCleared)
+      window.api.offSavedUrlsCleared(handleSavedUrlsCleared)
+    }
+  })
 </script>
 
 <LinkPreview />
@@ -536,7 +556,7 @@
   </div>
 
   {#if showSettings}
-    <Settings {urlTracker} />
+    <Settings />
   {:else}
     <div
       class="chat-container"

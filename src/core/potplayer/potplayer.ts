@@ -26,8 +26,14 @@ async function getVideoEndTime(hwnd: HWND, startTime: number): Promise<number | 
 
 export function initCache(conf: Conf): void {
   config = conf
+  titleCache.clear()
   const cache = conf.get(configKey)
   if (cache) for (const [key, value] of Object.entries(cache)) titleCache.set(key, value)
+}
+
+export function clearTitleCache(): void {
+  titleCache.clear()
+  config?.delete(configKey)
 }
 
 export async function getPotplayerExtraInfo<

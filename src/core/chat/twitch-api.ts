@@ -123,9 +123,9 @@ export namespace TwitchUserService {
     })
   }
 
-  export function clear(): void {
+  export function clear(persist: boolean = true): void {
     userIdCache.clear()
-    saveCache()
+    if (persist) saveCache()
   }
 
   function saveCache(): void {
@@ -315,7 +315,7 @@ export namespace TwitchEmoteService {
     return channel.emotes
   }
 
-  export function clear(channelId?: number): void {
+  export function clear(channelId?: number, persist: boolean = true): void {
     if (channelId) {
       if (fetcher) {
         deleteChannel(fetcher, channelId)
@@ -324,7 +324,7 @@ export namespace TwitchEmoteService {
     } else {
       fetcher?.channels.clear()
     }
-    saveCache(channelId ?? null)
+    if (persist) saveCache(channelId ?? null)
   }
 
   function getCacheKey(channelId: number | null): string {
@@ -456,14 +456,14 @@ export namespace TwitchBadgeService {
     return undefined
   }
 
-  export function clear(channelId?: string): void {
+  export function clear(channelId?: string, persist: boolean = true): void {
     if (channelId) {
       channelBadgeCache.delete(channelId)
       channelBadgeCache.delete(null)
     } else {
       channelBadgeCache.clear()
     }
-    saveCache()
+    if (persist) saveCache()
   }
 
   function saveCache(): void {
@@ -573,14 +573,14 @@ export namespace TwitchCheerEmoteService {
     return undefined
   }
 
-  export function clear(channelId?: string): void {
+  export function clear(channelId?: string, persist: boolean = true): void {
     if (channelId) {
       channelCheerEmotesCache.delete(channelId)
       channelCheerEmotesCache.delete(null)
     } else {
       channelCheerEmotesCache.clear()
     }
-    saveCache()
+    if (persist) saveCache()
   }
 
   function saveCache(): void {
@@ -602,17 +602,19 @@ export function clearAll(
     userIds = false,
     emotes = true,
     badges = true,
-    cheerEmotes = true
+    cheerEmotes = true,
+    persist = true
   }: {
     userIds?: boolean
     emotes?: boolean
     badges?: boolean
     cheerEmotes?: boolean
+    persist?: boolean
   } = {}
 ): void {
   if (typeof userId === 'string') userId = parseInt(userId)
-  if (userIds) TwitchUserService.clear()
-  if (emotes) TwitchEmoteService.clear(userId)
-  if (badges) TwitchBadgeService.clear(userId?.toString())
-  if (cheerEmotes) TwitchCheerEmoteService.clear(userId?.toString())
+  if (userIds) TwitchUserService.clear(persist)
+  if (emotes) TwitchEmoteService.clear(userId, persist)
+  if (badges) TwitchBadgeService.clear(userId?.toString(), persist)
+  if (cheerEmotes) TwitchCheerEmoteService.clear(userId?.toString(), persist)
 }

@@ -12,10 +12,12 @@
     getClosestMessageIndex,
     isRangeInMessages
   } from '@/utils/chat'
+  import { deleteNullishKeysInPlace } from '@/utils/objects'
   import { regExpEscape } from '@/utils/strings'
   import { onMount } from 'svelte'
   import { VList } from 'virtua/svelte'
   import LinkPreview from '../components/LinkPreview.svelte'
+  import { clearRendererCache, clearRendererSavedUrls } from '../core/maintenance'
   import { UrlTracker } from '../core/url-tracker'
   import { settings } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
@@ -36,6 +38,7 @@
   let loadAllMessagesPromise: Promise<void> | null = null
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const seenMessages = new Set<string>()
+  const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
   let focusedMessage = $state<TwitchMessage | null>(null)
   let initialMessages = $state.raw<TwitchMessage[] | null>(null)
   let messages: TwitchMessageFormatted[] = $state.raw([])
@@ -66,7 +69,27 @@
   // Focus search input when component mounts
   onMount(() => {
     if (searchInputRef) searchInputRef.focus()
+    window.api.onAppCacheCleared(handleAppCacheCleared)
+    window.api.onSavedUrlsCleared(handleSavedUrlsCleared)
+    return () => {
+      window.api.offAppCacheCleared(handleAppCacheCleared)
+      window.api.offSavedUrlsCleared(handleSavedUrlsCleared)
+    }
   })
+
+  $effect(() => {
+    deleteNullishKeysInPlace(reloadServicesFunctionMap)
+  })
+
+  function handleAppCacheCleared(): void {
+    clearRendererCache(chatService, urlTracker)
+    for (const reloadServicesFunction of Object.values(reloadServicesFunctionMap))
+      reloadServicesFunction?.()
+  }
+
+  function handleSavedUrlsCleared(): void {
+    clearRendererSavedUrls(urlTracker)
+  }
 
   async function loadAllMessages(): Promise<void> {
     if (loadedMessages) return
@@ -283,7 +306,7 @@
           scrolled = true
         }}
       >
-        {#snippet children(msg)}
+        {#snippet children(msg, i)}
           {#if msg}
             <button
               type="button"
@@ -302,6 +325,7 @@
                   if (scrolled) return
                   scrollToTargetMessages()
                 }}
+                bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
               />
             </button>
           {/if}
