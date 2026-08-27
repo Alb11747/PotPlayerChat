@@ -1,4 +1,5 @@
 import {
+  deduplicateMessages,
   findIntersectingMessageIndex,
   getClosestMessageIndex,
   getMessagesBetween,
@@ -30,6 +31,16 @@ describe('chat utils', () => {
     createMessage('d', 3_000),
     createMessage('e', 5_000)
   ]
+
+  it('keeps the first message for each id while preserving order', () => {
+    const duplicateMessages = [
+      createMessage('a', 1_000),
+      createMessage('b', 2_000),
+      createMessage('a', 3_000)
+    ]
+
+    expect(deduplicateMessages(duplicateMessages)).toEqual(duplicateMessages.slice(0, 2))
+  })
 
   it('returns closest message index near boundaries', () => {
     expect(getClosestMessageIndex(messages, 500)).toBe(0)

@@ -3,6 +3,16 @@ import bounds from 'binary-searching'
 // Assumes messages are sorted by timestamp ascending
 const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp - b.timestamp
 
+export function deduplicateMessages<T extends { getId: () => string }>(messages: T[]): T[] {
+  const seenIds = new Set<string>()
+  return messages.filter((message) => {
+    const id = message.getId()
+    if (seenIds.has(id)) return false
+    seenIds.add(id)
+    return true
+  })
+}
+
 export function findMessageIndex<T extends { timestamp: number; getId: () => string }>(
   messages: T[],
   message: T | string,

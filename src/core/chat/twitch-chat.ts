@@ -1,6 +1,11 @@
 import type { PotPlayerInstance } from '@/types/potplayer'
 import type { WindowApi } from '@/types/preload'
-import { getMessagesBetween, getMessagesForTime, isMessageInMessages } from '@/utils/chat'
+import {
+  deduplicateMessages,
+  getMessagesBetween,
+  getMessagesForTime,
+  isMessageInMessages
+} from '@/utils/chat'
 import { TimelineMap } from '@/utils/datastructs'
 import { logTime } from '@/utils/debug'
 import { isSorted } from '@/utils/objects'
@@ -128,7 +133,7 @@ export class ChatService {
       // If the new data is already loaded, we can skip loading it
       if (!this.shouldLoadNewData(allCachedMessageData)) return true
 
-      const allMessages: TwitchMessage[] = allCachedMessageData.flat()
+      const allMessages = deduplicateMessages(allCachedMessageData.flat())
       console.assert(
         isSorted(allMessages, (a, b) => a.timestamp - b.timestamp),
         'Chat messages are not sorted'
@@ -224,7 +229,7 @@ export class ChatService {
                 return cachedMessages || []
               }
 
-              const newMessages = data.messages
+              const newMessages = deduplicateMessages(data.messages)
               this.updateMessageData(newMessages)
 
               let messages: TwitchMessage[]
@@ -267,7 +272,7 @@ export class ChatService {
       // If the new data is already loaded, we can skip loading it
       if (!this.shouldLoadNewData(chatDataArrays)) return
 
-      const allMessages = chatDataArrays.flat()
+      const allMessages = deduplicateMessages(chatDataArrays.flat())
 
       console.assert(
         isSorted(allMessages, (a, b) => a.timestamp - b.timestamp),
@@ -373,7 +378,7 @@ export class ChatService {
       )
     }
 
-    return [...cachedMessages, ...overlappedNew, ...filteredNew]
+    return deduplicateMessages([...cachedMessages, ...overlappedNew, ...filteredNew])
   }
 
   private async prefetchMessagesForTime(
@@ -432,16 +437,17 @@ export class ChatService {
         return false
       }
 
-      this.updateMessageData(prefetchedMessages.messages)
+      const messages = deduplicateMessages(prefetchedMessages.messages)
+      this.updateMessageData(messages)
 
       if (isCached()) {
         console.debug(`Messages for ${channel} from ${startDate} to ${endDate} are already cached`)
         return false
       }
       console.debug(
-        `Prefetched ${prefetchedMessages.messages.length} messages for ${channel} from ${startTime} to ${endTime}`
+        `Prefetched ${messages.length} messages for ${channel} from ${startTime} to ${endTime}`
       )
-      this.currentChatData = prefetchedMessages.messages.sort((a, b) => a.timestamp - b.timestamp)
+      this.currentChatData = messages.sort((a, b) => a.timestamp - b.timestamp)
       this.lastPrefetchRange = {
         channel,
         startTime: startDate.getTime(),
