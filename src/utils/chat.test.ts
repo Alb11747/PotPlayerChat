@@ -5,11 +5,13 @@ import {
   getMessagesBetween,
   getMessagesForTime
 } from '@/utils/chat'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 type Message = {
   timestamp: number
   id: string
+  username: string
+  message: string
   getId: () => string
 }
 
@@ -17,6 +19,8 @@ function createMessage(id: string, timestamp: number): Message {
   return {
     id,
     timestamp,
+    username: `user-${id}`,
+    message: `message-${id}`,
     getId() {
       return id
     }
@@ -33,6 +37,7 @@ describe('chat utils', () => {
   ]
 
   it('keeps the first message for each id while preserving order', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const duplicateMessages = [
       createMessage('a', 1_000),
       createMessage('b', 2_000),
@@ -40,6 +45,13 @@ describe('chat utils', () => {
     ]
 
     expect(deduplicateMessages(duplicateMessages)).toEqual(duplicateMessages.slice(0, 2))
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith('Duplicate chat message ignored', {
+      id: 'a',
+      username: 'user-a',
+      message: 'message-a'
+    })
+    warn.mockRestore()
   })
 
   it('returns closest message index near boundaries', () => {
