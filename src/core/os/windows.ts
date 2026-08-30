@@ -1,6 +1,5 @@
 import type { HWND } from '@/types/globals'
 import { logTime } from '@/utils/debug'
-import TTLCache from '@isaacs/ttlcache'
 import koffi from 'koffi'
 import { tasklist, type TasklistWindow, type TasklistWindowVerbose } from 'tasklist'
 import { promisify } from 'util'
@@ -50,25 +49,57 @@ const GetWindowTextA = promisify(
 const GetWindowTextW = promisify(
   user32.func('int __stdcall GetWindowTextW(HWND hWnd, LPWSTR lpString, int nMaxCount)').async
 )
+const SendMessageTimeoutW = promisify(
+  user32.func(
+    'LRESULT __stdcall SendMessageTimeoutW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam, UINT fuFlags, UINT uTimeout, uintptr_t *lpdwResult)'
+  ).async
+)
+const GetClassNameW = promisify(
+  user32.func('int __stdcall GetClassNameW(HWND hWnd, LPWSTR lpClassName, int nMaxCount)').async
+)
 const titleBufferSize = 1024
-const titleBuffer = Buffer.alloc(titleBufferSize)
-let titleBufferLocked = false
+const WM_GETTEXT = 0x000d
+const SMTO_ABORTIFHUNG = 0x0002
+
+function readWindowTextBuffer(buffer: Buffer, unicode: boolean): string {
+  return buffer.toString(unicode ? 'utf16le' : 'utf8').replace(/\0.*$/s, '')
+}
 
 export async function getWindowText(hwnd: HWND, unicode: boolean = false): Promise<string> {
-  if (titleBufferLocked) throw new Error('Title buffer is locked, cannot get window text')
-  titleBufferLocked = true
-
-  let title: string
+  const buffer = Buffer.alloc(titleBufferSize * (unicode ? 2 : 1))
   if (unicode) {
-    await GetWindowTextW(hwnd, titleBuffer, titleBufferSize)
-    title = titleBuffer.toString('utf16le').replace(/\0.*$/, '')
+    await GetWindowTextW(hwnd, buffer, titleBufferSize)
   } else {
-    await GetWindowTextA(hwnd, titleBuffer, titleBufferSize)
-    title = titleBuffer.toString('utf8').replace(/\0.*$/, '')
+    await GetWindowTextA(hwnd, buffer, titleBufferSize)
   }
+  return readWindowTextBuffer(buffer, unicode)
+}
 
-  titleBufferLocked = false
-  return title
+/**
+ * Requests the caption from the target window with a bounded wait. The regular
+ * GetWindowText path remains as a fallback for windows that reject WM_GETTEXT.
+ */
+export async function getLiveWindowText(hwnd: HWND, timeoutMs = 250): Promise<string> {
+  const buffer = Buffer.alloc(titleBufferSize * 2)
+  const result = Buffer.alloc(8)
+  try {
+    const succeeded = await SendMessageTimeoutW(
+      hwnd,
+      WM_GETTEXT,
+      titleBufferSize,
+      buffer,
+      SMTO_ABORTIFHUNG,
+      timeoutMs,
+      result
+    )
+    if (succeeded) {
+      const title = readWindowTextBuffer(buffer, true)
+      if (title) return title
+    }
+  } catch (error) {
+    console.debug('Direct window title query failed; using GetWindowTextW fallback:', error)
+  }
+  return getWindowText(hwnd, true)
 }
 
 const FindWindowExA = promisify(
@@ -81,16 +112,15 @@ const GetWindowThreadProcessId = promisify(
     .async
 )
 
-export async function findHwndByPidAndTitle(
-  pid: number,
-  title: string
-): Promise<{ hwnd: HWND; title: string } | null> {
-  console.debug(`Searching for window with PID ${pid} and title:`, title)
+const potPlayerWindowClasses = new Set(['PotPlayer64', 'PotPlayer'])
 
-  const hwnds: { hwnd: HWND; title: string }[] = []
+export async function findPotPlayerHwndByPid(pid: number): Promise<HWND | null> {
+  console.debug(`Searching for PotPlayer window with PID ${pid}`)
+
+  const hwnds: HWND[] = []
   let hwndCount = 0
 
-  await logTime('FindWindowByPidAndTitle', async () => {
+  await logTime('FindPotPlayerWindowByPid', async () => {
     try {
       let hCurWnd: HWND = await FindWindowExA(0, 0, 0, 0)
 
@@ -101,17 +131,16 @@ export async function findHwndByPidAndTitle(
         await GetWindowThreadProcessId(hCurWnd, pidBuffer)
         const foundPid = pidBuffer.readUInt32LE(0)
         if (foundPid === pid) {
-          const currentTitle = await getWindowText(hCurWnd, false)
-          if (currentTitle === title) {
-            hwnds.push({ hwnd: hCurWnd, title: await getWindowText(hCurWnd, true) })
-            if (process.env['NODE_ENV'] === 'production') break
-          }
+          const classBuffer = Buffer.alloc(256 * 2)
+          await GetClassNameW(hCurWnd, classBuffer, 256)
+          const className = readWindowTextBuffer(classBuffer, true)
+          if (potPlayerWindowClasses.has(className)) hwnds.push(hCurWnd)
         }
 
         hCurWnd = await FindWindowExA(0, hCurWnd, 0, 0)
       }
     } catch (error) {
-      console.error(`Error while searching for window with PID ${pid} and title "${title}":`, error)
+      console.error(`Error while searching for PotPlayer window with PID ${pid}:`, error)
     }
   })
 
@@ -120,31 +149,10 @@ export async function findHwndByPidAndTitle(
   if (hwnds.length === 0) {
     return null
   } else if (hwnds.length > 1) {
-    console.warn(`Multiple windows found for PID ${pid}:`, hwnds.map((h) => h.title).join(', '))
+    console.warn(`Multiple PotPlayer windows found for PID ${pid}:`, hwnds)
   }
 
   return hwnds[0]!
-}
-
-const pidByHwndCache = new TTLCache<number, { hwnd: HWND; title: string }>({
-  ttl: 2 * 60 * 60 * 1000,
-  max: 1024,
-  updateAgeOnGet: true
-})
-
-export async function getHwndByPidAndTitle(
-  pid: number,
-  title: string
-): Promise<{ hwnd: HWND; title: string } | null> {
-  const cached = pidByHwndCache.get(pid)
-  if (cached !== undefined) {
-    return cached
-  }
-  const { hwnd = null, title: displayTitle = null } =
-    (await findHwndByPidAndTitle(pid, title)) ?? {}
-  if (hwnd === null || displayTitle === null) return null
-  pidByHwndCache.set(pid, { hwnd, title: displayTitle })
-  return { hwnd, title: displayTitle }
 }
 
 export async function getWindowsByExe<V extends boolean>(

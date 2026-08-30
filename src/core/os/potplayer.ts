@@ -1,11 +1,6 @@
-import {
-  getHwndByPidAndTitle,
-  getWindowsByExe,
-  getWindowText,
-  sendMessage
-} from '@/core/os/windows'
+import { findPotPlayerHwndByPid, getWindowsByExe, sendMessage } from '@/core/os/windows'
 import type { HWND } from '@/types/globals'
-import type { PotPlayerInstance } from '@/types/potplayer'
+import type { PotPlayerWindow } from '@/types/potplayer'
 import { logTime } from '@/utils/debug'
 import { removeSuffix } from '@/utils/strings'
 import AsyncLock from 'async-lock'
@@ -50,29 +45,20 @@ export function getTotalVideoTime(hwnd: HWND): Promise<number> {
   return sendMessage(hwnd, WinMsgs.REQUEST_TYPE, PotPlayerWParams.GET_TOTAL_TIME, 0)
 }
 
-export async function getPotPlayerInstances(): Promise<PotPlayerInstance[]> {
+export async function discoverPotPlayerInstances(): Promise<PotPlayerWindow[]> {
   return lock.acquire('potplayer-instances', async () => {
-    const hwnds: PotPlayerInstance[] = []
+    const instances: PotPlayerWindow[] = []
     const potPlayerWindows = await getWindowsByExe('PotPlayerMini64.exe', true)
     for (const window of potPlayerWindows) {
-      if (
-        window.imageName !== 'PotPlayerMini64.exe' ||
-        window.sessionName !== 'Console' ||
-        window.windowTitle === 'N/A'
-      )
-        continue
-      const { hwnd = null } = (await getHwndByPidAndTitle(window.pid, window.windowTitle)) ?? {}
+      if (window.imageName !== 'PotPlayerMini64.exe' || window.sessionName !== 'Console') continue
+      const hwnd = await findPotPlayerHwndByPid(window.pid)
       if (hwnd === null) {
-        console.warn(`No HWND found for PID ${window.pid} with title "${window.windowTitle}"`)
+        console.warn(`No PotPlayer HWND found for PID ${window.pid}`)
         continue
       }
-      hwnds.push({
-        pid: window.pid,
-        hwnd,
-        title: removeSuffix(await getWindowText(hwnd, true), ' - PotPlayer')
-      })
+      instances.push({ pid: window.pid, hwnd })
     }
-    return hwnds
+    return instances
   })
 }
 

@@ -99,6 +99,7 @@ flowchart LR
 - `src/core/os/potplayer.ts` low-level PotPlayer integration (native calls).
 - `src/core/os/windows.ts` Windows foreground and process/window helpers.
 - `src/core/potplayer/potplayer.ts` PotPlayer-derived stream/channel metadata.
+- `src/main/potplayer-manager.ts` PotPlayer identity, title freshness, recovery, and rate limits.
 
 ## 4) Process and IPC Model
 
@@ -158,27 +159,44 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant Main as MainPotplayerHandlers
+  participant Manager as PotPlayerInstanceManager
   participant WinOS as WindowsAdapters
   participant Rend as ChatRenderer
 
   loop pollingIntervals.potplayerInstances
-    Main->>WinOS: getPotPlayerInstances()
-    WinOS-->>Main: instances
-    Main-->>Rend: potplayerInstancesChanged
+    Main->>Manager: requestVerification()
+    Manager->>WinOS: discoverPotPlayerInstances()
+    WinOS-->>Manager: pid + hwnd topology
+    Manager->>WinOS: bounded live title query
+    Manager-->>Rend: potplayerInstancesChanged (if identity/title changed)
   end
 
   loop pollingIntervals.videoTime
-    Main->>WinOS: getCurrentVideoTime(hwnd)
-    WinOS-->>Main: currentMs
+    Main->>Manager: pollCurrentTime()
+    Manager->>WinOS: getCurrentVideoTime(hwnd)
+    WinOS-->>Manager: currentMs
+    opt failed/default response
+      Manager->>Manager: queue rate-limited verification
+    end
+    opt timeline discontinuity
+      Manager->>WinOS: queue rate-limited live title query
+    end
+    Manager-->>Main: valid currentMs
     Main-->>Rend: updateCurrentVideoTime
   end
 
   loop pollingIntervals.activeWindow
     Main->>WinOS: getForegroundWindow()
     WinOS-->>Main: hwnd
-    Main-->>Rend: potplayerInstancesChanged (if active changed)
+    Main->>Manager: noteActiveHwnd(hwnd)
+    Manager-->>Rend: potplayerInstancesChanged (if active changed)
   end
 ```
+
+Full topology verification and live-title synchronization use independent 5-second and 1-second
+leading-plus-trailing rate limiters. Discovery never treats the `tasklist` caption as authoritative;
+title-sensitive operations synchronize the selected window caption directly before resolving stream
+metadata.
 
 ### C) Chat loading and cache usage
 
