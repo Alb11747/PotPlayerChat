@@ -31,6 +31,9 @@ import { getRawData } from '@twurple/common'
 import AsyncLock from 'async-lock'
 import { Conf } from 'electron-conf/renderer'
 import { CheerEmote } from './twitch-emotes'
+import { normalizeTwitchUserProfile, type TwitchUserProfile } from './twitch-user-profile'
+
+export type { TwitchUserProfile } from './twitch-user-profile'
 
 class NoAuthProvider implements AuthProvider {
   constructor(public clientId: string) {}
@@ -82,18 +85,34 @@ const ttl = 24 * 60 * 60 * 1000
 
 export namespace TwitchUserService {
   export const userIdCache = new Map<string, string | null>()
+  export const userProfileCache = new Map<string, TwitchUserProfile | null>()
 
-  const configKey = 'cache:twitch-user-id'
-  type CacheValue = Record<string, string | null>
-  const loadCachePromise = loadTTLSetting<CacheValue>(configPromise, configKey, ttl).then(
-    (data) => {
-      try {
-        if (data) for (const [key, value] of Object.entries(data)) userIdCache.set(key, value)
-      } catch (error) {
-        console.error('Failed to load user ID cache:', error, data)
-      }
+  const userIdConfigKey = 'cache:twitch-user-id'
+  const userProfileConfigKey = 'cache:twitch-user-profile'
+  type UserIdCacheValue = Record<string, string | null>
+  type UserProfileCacheValue = Record<string, TwitchUserProfile | null>
+  const loadUserIdCachePromise = loadTTLSetting<UserIdCacheValue>(
+    configPromise,
+    userIdConfigKey,
+    ttl
+  ).then((data) => {
+    try {
+      if (data) for (const [key, value] of Object.entries(data)) userIdCache.set(key, value)
+    } catch (error) {
+      console.error('Failed to load user ID cache:', error, data)
     }
-  )
+  })
+  const loadUserProfileCachePromise = loadTTLSetting<UserProfileCacheValue>(
+    configPromise,
+    userProfileConfigKey,
+    ttl
+  ).then((data) => {
+    try {
+      if (data) for (const [key, value] of Object.entries(data)) userProfileCache.set(key, value)
+    } catch (error) {
+      console.error('Failed to load Twitch user profile cache:', error, data)
+    }
+  })
 
   /**
    * Get a Twitch user ID from a username
@@ -101,7 +120,7 @@ export namespace TwitchUserService {
   export async function getUserIdByName(username: string): Promise<string | null> {
     if (userIdCache.has(username)) return userIdCache.get(username) ?? null
     return await lock.acquire(`userid:${username}`, async () => {
-      await loadCachePromise
+      await loadUserIdCachePromise
       if (userIdCache.has(username)) return userIdCache.get(username) ?? null
 
       const api = await apiPromise
@@ -113,7 +132,7 @@ export namespace TwitchUserService {
         )
         const userId = user?.id ?? null
         userIdCache.set(username, userId)
-        saveCache()
+        saveUserIdCache()
 
         return userId
       } catch {
@@ -123,13 +142,66 @@ export namespace TwitchUserService {
     })
   }
 
-  export function clear(persist: boolean = true): void {
-    userIdCache.clear()
-    if (persist) saveCache()
+  /**
+   * Get the public profile fields available without Twitch user authentication.
+   */
+  export async function getUserProfileByName(username: string): Promise<TwitchUserProfile | null> {
+    const normalizedUsername = username.toLowerCase()
+    await loadUserProfileCachePromise
+    if (userProfileCache.has(normalizedUsername))
+      return userProfileCache.get(normalizedUsername) ?? null
+
+    return await lock.acquire(`userprofile:${normalizedUsername}`, async () => {
+      if (userProfileCache.has(normalizedUsername))
+        return userProfileCache.get(normalizedUsername) ?? null
+
+      const api = await apiPromise
+      if (!api) return null
+
+      try {
+        const user = await logTime(`Fetching Twitch user profile: ${username}`, () =>
+          api.users.getUserByName(username)
+        )
+        const profile = user ? normalizeTwitchUserProfile(user) : null
+        userProfileCache.set(normalizedUsername, profile)
+        if (profile) {
+          userProfileCache.set(profile.login.toLowerCase(), profile)
+          userIdCache.set(username, profile.id)
+          userIdCache.set(profile.login, profile.id)
+          saveUserIdCache()
+        }
+        saveUserProfileCache()
+        return profile
+      } catch (error) {
+        console.warn(`Failed to fetch Twitch user profile for ${username}:`, error)
+        return null
+      }
+    })
   }
 
-  function saveCache(): void {
-    saveTTLSetting<CacheValue>(configPromise, configKey, Object.fromEntries(userIdCache.entries()))
+  export function clear(persist: boolean = true): void {
+    userIdCache.clear()
+    userProfileCache.clear()
+    if (persist) {
+      saveUserIdCache()
+      saveUserProfileCache()
+    }
+  }
+
+  function saveUserIdCache(): void {
+    saveTTLSetting<UserIdCacheValue>(
+      configPromise,
+      userIdConfigKey,
+      Object.fromEntries(userIdCache.entries())
+    )
+  }
+
+  function saveUserProfileCache(): void {
+    saveTTLSetting<UserProfileCacheValue>(
+      configPromise,
+      userProfileConfigKey,
+      Object.fromEntries(userProfileCache.entries())
+    )
   }
 }
 

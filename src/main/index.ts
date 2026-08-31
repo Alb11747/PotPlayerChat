@@ -13,21 +13,26 @@ import { initSecurity } from './security'
 import { initStorage } from './storage'
 import { initAutoUpdater } from './update'
 
-function getSearchWindowUrl(): string {
+type PopupKind = 'search' | 'user'
+
+function getRendererWindowUrl(fileName: `${PopupKind}.html`): string {
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
   if (is.dev && rendererUrl) {
-    return new URL('search.html', rendererUrl.endsWith('/') ? rendererUrl : `${rendererUrl}/`).href
+    return new URL(fileName, rendererUrl.endsWith('/') ? rendererUrl : `${rendererUrl}/`).href
   }
-  return pathToFileURL(join(__dirname, '../renderer/search.html')).href
+  return pathToFileURL(join(__dirname, `../renderer/${fileName}`)).href
 }
 
-function isSearchWindowUrl(url: string, expectedUrl: string): boolean {
+function getPopupKind(url: string, expectedUrls: Record<PopupKind, string>): PopupKind | null {
   try {
     const parsedUrl = new URL(url)
     parsedUrl.hash = ''
-    return parsedUrl.href === expectedUrl
+    for (const [kind, expectedUrl] of Object.entries(expectedUrls)) {
+      if (parsedUrl.href === expectedUrl) return kind as PopupKind
+    }
+    return null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -66,17 +71,24 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  const searchWindowUrl = getSearchWindowUrl()
+  const popupUrls: Record<PopupKind, string> = {
+    search: getRendererWindowUrl('search.html'),
+    user: getRendererWindowUrl('user.html')
+  }
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!isSearchWindowUrl(url, searchWindowUrl)) return { action: 'deny' }
+    const popupKind = getPopupKind(url, popupUrls)
+    if (!popupKind) return { action: 'deny' }
 
     const mainBounds = mainWindow.getBounds()
+    const isUserWindow = popupKind === 'user'
     return {
       action: 'allow',
       outlivesOpener: false,
       overrideBrowserWindowOptions: {
-        width: Math.round(mainBounds.width * 0.8),
-        height: Math.round(mainBounds.height * 0.8),
+        width: isUserWindow ? 600 : Math.round(mainBounds.width * 0.8),
+        height: isUserWindow ? 640 : Math.round(mainBounds.height * 0.8),
+        minWidth: isUserWindow ? 420 : undefined,
+        minHeight: isUserWindow ? 400 : undefined,
         show: false,
         autoHideMenuBar: true,
         parent: mainWindow,
@@ -89,11 +101,11 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.webContents.on('did-create-window', (searchWindow, { url }) => {
-    if (!isSearchWindowUrl(url, searchWindowUrl)) return
-    searchWindow.once('ready-to-show', () => {
-      searchWindow.show()
-      searchWindow.focus()
+  mainWindow.webContents.on('did-create-window', (popupWindow, { url }) => {
+    if (!getPopupKind(url, popupUrls)) return
+    popupWindow.once('ready-to-show', () => {
+      popupWindow.show()
+      popupWindow.focus()
     })
   })
 }

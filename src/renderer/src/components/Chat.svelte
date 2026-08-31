@@ -8,6 +8,8 @@
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import { isEqualMessageBoundary } from '@/renderer/src/core/chat-view'
   import { openSearchPopup, type SearchOptions } from '@/renderer/src/core/search-window'
+  import { getUsernameClickAction, type UsernameClickInfo } from '../core/username-click'
+  import { openUserPopup } from '../core/user-window'
   import {
     calculateTargetElement,
     scrollToTarget as scrollToTargetBase
@@ -408,16 +410,41 @@
     })
   }
 
-  function handleUsernameClick(info: { username: string; message: TwitchMessage }): void {
+  function openUserWindow(info: UsernameClickInfo): void {
     if (
       !selectedPotplayerInfo ||
       !selectedPotplayerInfo.startTime ||
       !selectedPotplayerInfo.endTime
     )
       return
+
+    const searchRangeBuffer = 60 * 60 * 1000
+    openUserPopup({
+      username: info.username,
+      clickedMessage: info.message,
+      potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
+      initialMessages: messages,
+      loadedMessages: chatService.currentChatData,
+      focusMessage: onFocusMessage,
+      searchRange: settings.search.showAllMessages
+        ? {
+            startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,
+            endTime: selectedPotplayerInfo.endTime + searchRangeBuffer
+          }
+        : undefined
+    })
+  }
+
+  function handleUsernameClick(info: UsernameClickInfo): void {
+    const action = getUsernameClickAction(info.username, info.altKey)
+    if (action.kind === 'user') {
+      openUserWindow(info)
+      return
+    }
+
     openSearchWindow(
       {
-        initialSearch: `${info.username}: `
+        initialSearch: action.initialSearch
       },
       { message: info.message }
     )

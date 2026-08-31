@@ -17,6 +17,7 @@
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { UrlTracker, type LinkPreview } from '../core/url-tracker'
+  import type { UsernameClickInfo } from '../core/username-click'
   import conf from '../state/config'
   import {
     currentPreviewType,
@@ -35,7 +36,7 @@
     usernameColorTimelineMap?: TimelineMap<string, string>
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
-    onUsernameClick?: (info: { username: string; message: TwitchMessage }) => void
+    onUsernameClick?: (info: UsernameClickInfo) => void
     onEmoteLoad?: (data: {
       emote: CheerEmote | TwitchEmote | NativeTwitchEmote
       hash: string
@@ -336,13 +337,14 @@
       style="color: {message.color}"
       onclick={(e) => {
         if (onUsernameClick) {
-          onUsernameClick({ username: message.username, message })
+          onUsernameClick({ username: message.username, message, altKey: e.altKey })
           e.preventDefault()
           e.stopPropagation()
         }
       }}
       onkeydown={(e) =>
-        e.key === 'Enter' && onUsernameClick?.({ username: message.username, message })}
+        e.key === 'Enter' &&
+        onUsernameClick?.({ username: message.username, message, altKey: e.altKey })}
       style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
     >
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -400,13 +402,14 @@
             ) || '#ffffff'}"
             onclick={(e) => {
               if (onUsernameClick) {
-                onUsernameClick({ username: segment.username, message })
+                onUsernameClick({ username: segment.username, message, altKey: e.altKey })
                 e.preventDefault()
                 e.stopPropagation()
               }
             }}
             onkeydown={(e) =>
-              e.key === 'Enter' && onUsernameClick?.({ username: segment.username, message })}
+              e.key === 'Enter' &&
+              onUsernameClick?.({ username: segment.username, message, altKey: e.altKey })}
             style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
           >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
