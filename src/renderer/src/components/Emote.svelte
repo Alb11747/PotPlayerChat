@@ -214,8 +214,12 @@
     z-index: 1;
   }
 
+  .cheer-emote-container {
+    vertical-align: middle;
+  }
+
   .cheer-emote-container > .bits {
-    align-self: end;
+    align-self: center;
     margin-right: 0.2rem;
   }
 </style>
