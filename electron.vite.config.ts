@@ -12,6 +12,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin(), tsconfigPaths()]
   },
   renderer: {
+    publicDir: resolve(__dirname, 'resources'),
     plugins: [svelte(), tsconfigPaths(), tailwindcss()],
     build: {
       rollupOptions: {

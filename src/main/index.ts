@@ -2,6 +2,7 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { BrowserWindow, app } from 'electron'
 import { Conf } from 'electron-conf/main'
 import { join } from 'path'
+import icon from '../../resources/icon.png?asset'
 import { initPopupWindows } from './popup-windows'
 import { initAppearanceHandlers } from './appearance'
 
@@ -16,6 +17,7 @@ import { initAutoUpdater } from './update'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
+    icon,
     width: 600,
     height: 800,
     show: false,

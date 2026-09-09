@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">PotPlayerChat B3.2 — Original blue, uniform channel</title>
+  <desc id="desc">A golden player and blue chat bubble divided by a transparent channel with a constant 18-unit width, or 20.88 pixels at 512 pixels.</desc>
+  <defs>
+    <linearGradient id="player" x1="40" y1="30" x2="277" y2="310" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCD3D"/><stop offset="1" stop-color="#FFBA23"/>
+    </linearGradient>
+    <linearGradient id="chat" x1="154" y1="166" x2="375" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3997F3"/><stop offset="1" stop-color="#1868D5"/>
+    </linearGradient>
+    <!-- Both parts meet on this one curve. Its stroked mask makes the gap uniform. -->
+    <mask id="channel" maskUnits="userSpaceOnUse" x="0" y="0" width="440" height="440" style="mask-type:luminance">
+      <rect width="440" height="440" fill="white"/>
+      <path id="channel-centerline" d="M320 80V124C320 147 302 160 287 169L160 240C112 266 96 287 103 324L114 381" fill="none" stroke="black" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g transform="translate(3 0) scale(1.16)">
+    <g mask="url(#channel)">
+      <path id="player-shape" fill="url(#player)" d="M20 116C20 62 59 22 101 22C116 22 126 26 140 32L277 83C299 91 311 102 311 124H320C320 147 302 160 287 169L160 240C112 266 96 287 103 324C48 313 20 277 20 239Z"/>
+      <path id="chat-shape" fill="url(#chat)" d="M320 124C379 129 416 167 416 211V304C416 345 384 379 342 379H298C292 379 290 381 284 385L238 412C230 417 222 413 222 404V391C222 382 218 378 208 378H195C145 378 118 357 112 322L103 324C96 287 112 266 160 240L287 169C302 160 320 147 320 124Z"/>
+    </g>
+    <path id="play" fill="#242C3B" d="M91 94C91 84 98 80 106 85L191 133C201 139 201 148 191 154L106 202C98 207 91 202 91 193Z"/>
+    <g id="message-lines" fill="#FFFFFF">
+      <rect x="195" y="242" width="177" height="35" rx="17.5"/>
+      <rect x="195" y="300" width="127" height="35" rx="17.5"/>
+    </g>
+  </g>
+</svg>

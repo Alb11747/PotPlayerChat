@@ -2,6 +2,7 @@ import { is } from '@electron-toolkit/utils'
 import type { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
+import icon from '../../resources/icon.png?asset'
 
 export type PopupKind = 'search' | 'user' | 'preview'
 
@@ -40,6 +41,7 @@ export function initPopupWindows(source: BrowserWindow): void {
       action: 'allow',
       outlivesOpener: false,
       overrideBrowserWindowOptions: {
+        icon,
         width: kind === 'preview' ? 420 : kind === 'user' ? 600 : Math.round(bounds.width * 0.8),
         height: kind === 'preview' ? 690 : kind === 'user' ? 640 : Math.round(bounds.height * 0.8),
         minWidth: 360,
