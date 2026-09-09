@@ -28,7 +28,7 @@ Expanded links provide Open link, Copy link, and SauceNAO. Copy retains the orig
 
 Main chat, Search, and profile history share a virtual transcript. Pretext prepares text once and estimates mixed text/media row heights; native DOM measurements remain authoritative for wrapping, selection, and interactions. Rows are keyed by message identity, with one viewport of overscan on each side. Prepared text and decoded media dimensions survive row recycling.
 
-Unresolved inline previews reserve 20rem of height. Unresolved emotes reserve the existing 2.5rem height and a conservative width within the 9rem cap; badge IDs reserve their boxes before metadata arrives. Loaded media compacts to its actual bounded size. A single scroll owner preserves the first visible message and, when available, its visible text fragment during reflow. Following playback pins the bottom; user navigation cancels outstanding positioning. Media callbacks must update asset state without issuing scroll commands.
+Unresolved inline previews reserve 20rem of height. Unresolved emotes reserve the existing 2.5rem height and a conservative width within the 9rem cap; badge IDs reserve their boxes before metadata arrives. Loaded media compacts to its actual bounded size. Cheers scale to the full emote height even when their decoded asset is smaller, preserving aspect ratio and the 9rem width cap. A single scroll owner preserves the first visible message and, when available, its visible text fragment during reflow. Following playback pins the bottom; user navigation cancels outstanding positioning. Media callbacks must update asset state without issuing scroll commands.
 
 ## Verification and delivery
 

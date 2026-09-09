@@ -105,6 +105,16 @@ describe('Pretext message measurement', () => {
     expect(measureMessage(cheerModel, 90, metrics, tracker)).toBe(
       metrics.lineHeight + 44 + metrics.padding * 2
     )
+    tracker.recordImageDimensions('image.png', {
+      naturalWidth: 20,
+      naturalHeight: 20
+    } as HTMLImageElement)
+    expect(measureMessage(cheerModel, 90, metrics, tracker)).toBe(
+      metrics.lineHeight + 44 + metrics.padding * 2
+    )
+    expect(measureMessage(base, 90, metrics, tracker)).toBe(
+      metrics.lineHeight + metrics.padding * 2
+    )
   })
 
   it('preserves hard breaks and repeated spaces through the core pre-wrap API', () => {

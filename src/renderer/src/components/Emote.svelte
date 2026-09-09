@@ -52,19 +52,27 @@
     }
   })
   const ratio = $derived(dimensions ? dimensions.width / dimensions.height : undefined)
+  // Cheers can decode below the display size, especially with fallback scale URLs.
+  const intrinsicWidthLimit = $derived(
+    dimensions && segment.type !== 'cheer' ? `${dimensions.width}px, ` : ''
+  )
+  const intrinsicHeightLimit = $derived(
+    dimensions && segment.type !== 'cheer' ? `${dimensions.height}px, ` : ''
+  )
   const frameWidth = $derived(
     dimensions
-      ? `min(${dimensions.width}px, calc(var(--deck-emote-size, 2.5rem) * ${ratio}), 9rem)`
+      ? `min(${intrinsicWidthLimit}calc(var(--deck-emote-size, 2.5rem) * ${ratio}), 9rem)`
       : '9rem'
   )
   const frameHeight = $derived(
     dimensions
-      ? `min(${dimensions.height}px, var(--deck-emote-size, 2.5rem), calc(9rem / ${ratio}))`
+      ? `min(${intrinsicHeightLimit}var(--deck-emote-size, 2.5rem), calc(9rem / ${ratio}))`
       : 'var(--deck-emote-size, 2.5rem)'
   )
 
   const emoteSizeMap: Record<string, string> = {
     '1': '0.5x',
+    '1.5': '0.75x',
     '2': '1x',
     '3': '1.5x',
     '4': '2x'

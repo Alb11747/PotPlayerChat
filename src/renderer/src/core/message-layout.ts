@@ -79,9 +79,14 @@ export function fitMedia(
   width: number,
   height: number,
   maxWidth: number,
-  maxHeight: number
+  maxHeight: number,
+  allowUpscale = false
 ): { width: number; height: number } {
-  const scale = Math.min(1, maxWidth / Math.max(1, width), maxHeight / Math.max(1, height))
+  const scale = Math.min(
+    allowUpscale ? Infinity : 1,
+    maxWidth / Math.max(1, width),
+    maxHeight / Math.max(1, height)
+  )
   return { width: width * scale, height: height * scale }
 }
 
@@ -210,7 +215,13 @@ export function measureMessage(
       const url = Object.values(segment.urls)[0]!
       const dimensions = tracker.getImageDimensions(url)
       const size = dimensions
-        ? fitMedia(dimensions.width, dimensions.height, metrics.rem * 9, metrics.emoteSize)
+        ? fitMedia(
+            dimensions.width,
+            dimensions.height,
+            metrics.rem * 9,
+            metrics.emoteSize,
+            segment.type === 'cheer'
+          )
         : { width: metrics.rem * 9, height: metrics.emoteSize }
       const amountWidth =
         segment.type === 'cheer'

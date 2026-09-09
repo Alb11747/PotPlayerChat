@@ -8,6 +8,45 @@ async function frames(page: Page, count = 4): Promise<void> {
   }, count)
 }
 
+test('small cheer assets fill the emote size across layouts and text scaling', async ({ page }) => {
+  await page.route('https://**/*', async (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="purple"/></svg>'
+    })
+  )
+  await page.goto('/?media')
+  await page.waitForFunction(() => window.fixtureReady)
+  await page.evaluate(() => {
+    window.resolveFixtureMedia!()
+    window.transcriptTest.list().scrollToIndex(106)
+  })
+  const row = page.locator('[data-message-id="message-106"]')
+  const cheer = row.locator('.cheer-emote-container .emote-frame')
+  await expect(row.locator('.bits')).toHaveText('100')
+  await expect(cheer.locator('span')).toHaveCount(0)
+  for (const layout of ['streamlined', 'comfort'] as const) {
+    for (const rem of [16, 20]) {
+      await page.evaluate(
+        ({ layout, rem }) => {
+          document.documentElement.style.fontSize = `${rem}px`
+          window.fixtureDisplay!(layout, true)
+          window.transcriptTest.width(360)
+          window.transcriptTest.list().scrollToIndex(106)
+        },
+        { layout, rem }
+      )
+      await expect.poll(async () => (await cheer.boundingBox())?.height).toBe(rem * 2.5)
+      await expect.poll(async () => (await cheer.boundingBox())?.width).toBe(rem * 2.5)
+      expect(
+        await page
+          .locator('.virtual-transcript')
+          .evaluate((node) => node.scrollWidth <= node.clientWidth)
+      ).toBe(true)
+    }
+  }
+})
+
 test('native messages compact delayed and failed previews without moving the reader', async ({
   page
 }) => {
