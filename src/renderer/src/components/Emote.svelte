@@ -173,7 +173,7 @@
   .emote-container {
     display: inline-grid;
     grid-auto-flow: column;
-    vertical-align: middle;
+    vertical-align: baseline;
   }
 
   .emote-container:focus-visible {
