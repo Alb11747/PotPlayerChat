@@ -603,7 +603,7 @@
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
-    margin-top: 0.45rem;
+    margin-block: 0.45rem;
     max-width: 100%;
   }
 
