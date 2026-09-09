@@ -16,7 +16,8 @@
   } from '@/utils/chat'
   import { deleteNullishKeysInPlace } from '@/utils/objects'
   import { onMount } from 'svelte'
-  import { VList } from 'virtua/svelte'
+  import MessageTranscript from './MessageTranscript.svelte'
+  import type { TranscriptHandle } from '../core/transcript-handle'
   import LinkPreview from '../components/LinkPreview.svelte'
   import { clearRendererCache, clearRendererSavedUrls } from '../core/maintenance'
   import { UrlTracker } from '../core/url-tracker'
@@ -57,7 +58,9 @@
   )
 
   let searchInputRef: HTMLInputElement | null = $state(null)
-  let vlistRef: VList<TwitchMessageFormatted> | null = $state(null)
+  let vlistRef: TranscriptHandle | null = $state(null)
+  let navigationGeneration = 0
+  let previousSearchSignature: string | undefined
 
   // Focus search input when component mounts
   onMount(() => {
@@ -77,6 +80,7 @@
   })
 
   function handleAppCacheCleared(): void {
+    vlistRef?.clearCache?.()
     clearRendererCache(chatService, urlTracker)
     for (const reloadServicesFunction of Object.values(reloadServicesFunctionMap))
       reloadServicesFunction?.()
@@ -172,7 +176,9 @@
   }
 
   function scrollToTargetMessages(): void {
+    const generation = navigationGeneration
     setTimeout(() => {
+      if (scrolled || generation !== navigationGeneration) return
       if (!vlistRef || !filteredMessages || filteredMessages.length === 0) return
 
       let targetElementIndex = null
@@ -216,6 +222,12 @@
   })
 
   function updateFilteredMessages(): void {
+    const signature = JSON.stringify([searchQuery, caseSensitive, useRegex])
+    if (signature !== previousSearchSignature) {
+      previousSearchSignature = signature
+      navigationGeneration++
+      scrolled = false
+    }
     filteredMessages = filterSearchMessages(
       messages,
       searchQuery,
@@ -223,7 +235,6 @@
       useRegex,
       searchPattern
     )
-    scrolled = false
     scrollToTargetMessages()
   }
 
@@ -283,16 +294,20 @@
 
   <div class="search-results" aria-busy={isLoading}>
     {#if filteredMessages.length > 0}
-      <VList
+      <MessageTranscript
         bind:this={vlistRef}
         data={filteredMessages}
-        getKey={(item, i) => item?.getId() ?? i}
-        itemSize={48}
-        onscroll={() => {
+        {urlTracker}
+        videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
+        videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
+        searchQuery={searchPattern}
+        gutter
+        onuserinteraction={() => {
           scrolled = true
+          navigationGeneration++
         }}
       >
-        {#snippet children(msg, i)}
+        {#snippet children(msg, i, presentationStore)}
           {#if msg}
             <div
               class="search-result-item"
@@ -310,6 +325,7 @@
                 onclick={() => context.focusMessage(msg)}>↩</button
               >
               <ChatMessage
+                {presentationStore}
                 message={msg}
                 videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
                 videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
@@ -318,15 +334,12 @@
                 searchQuery={searchPattern}
                 onUsernameClick={context.onUsernameClick}
                 onUrlClick={handleUrlClick}
-                onEmoteLoad={() => {
-                  if (!scrolled) scrollToTargetMessages()
-                }}
                 bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
               />
             </div>
           {/if}
         {/snippet}
-      </VList>
+      </MessageTranscript>
     {:else}
       <div class="search-state" role="status">
         {#if isLoading}

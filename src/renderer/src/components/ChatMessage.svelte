@@ -1,24 +1,13 @@
 <script lang="ts">
-  import { isActionMessage, parseFullMessage, type Segment } from '@/renderer/src/core/chat-dom'
-  import { formatTime } from '@/utils/strings'
-  import {
-    setConfig,
-    TwitchBadgeService,
-    TwitchCheerEmoteService,
-    TwitchEmoteService,
-    TwitchUserService
-  } from '@core/chat/twitch-api'
-  import type { CheerEmote, NativeTwitchEmote } from '@core/chat/twitch-emotes'
+  import { isActionMessage, type Segment } from '@/renderer/src/core/chat-dom'
+  import { MessagePresentationStore, presentationOptions } from '../core/message-presentation'
   import type { TwitchMessage } from '@core/chat/twitch-msg'
-  import { Collection, TwitchEmote, type Emote } from '@mkody/twitch-emoticons'
 
   import type { TimelineMap } from '@/utils/datastructs'
-  import type { HelixChatBadgeVersion } from '@twurple/api'
   import { onMount, untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { UrlTracker, type LinkPreview } from '../core/url-tracker'
   import type { UsernameClickInfo } from '../core/username-click'
-  import conf from '../state/config'
   import {
     clearPreview,
     focusPreviewElement,
@@ -36,6 +25,7 @@
 
   interface Props {
     message: TwitchMessage
+    presentationStore?: MessagePresentationStore
     videoStartTime?: number
     videoEndTime?: number
     elapsedTime?: number
@@ -44,11 +34,6 @@
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
     onUsernameClick?: (info: UsernameClickInfo) => void
-    onEmoteLoad?: (data: {
-      emote: CheerEmote | TwitchEmote | NativeTwitchEmote
-      hash: string
-    }) => void
-    onImageLoad?: () => void
     enableLinkPreviews?: boolean
     enableEmotePreviews?: boolean
     enableEmotes?: boolean
@@ -59,6 +44,7 @@
 
   let {
     message,
+    presentationStore = new MessagePresentationStore(),
     videoStartTime,
     videoEndTime,
     elapsedTime,
@@ -67,8 +53,6 @@
     searchQuery,
     onUrlClick,
     onUsernameClick,
-    onEmoteLoad,
-    onImageLoad,
     enableLinkPreviews: enableLinkPreviewsOverride,
     enableEmotePreviews: enableEmotePreviewsOverride,
     enableEmotes: enableEmotesOverride,
@@ -111,133 +95,44 @@
     }
   }
 
-  let channelUserId: number | null = $state(null)
-  let badges: [string, HelixChatBadgeVersion][] = $state([])
-  const badgeInfo: Map<string, string> | undefined = $derived(
-    message.type === 'chat' ? message.badgeInfo : undefined
+  const badgeInfo = $derived(message.type === 'chat' ? message.badgeInfo : undefined)
+  const subscriberMonths = $derived(badgeInfo?.get('subscriber'))
+  const options = $derived(
+    presentationOptions({
+      videoStartTime,
+      videoEndTime,
+      elapsedTime,
+      searchQuery,
+      enableEmotes,
+      enableBadges,
+      requireHttpInUrl
+    })
   )
-  const subscriberMonths: string | undefined = $derived(badgeInfo?.get('subscriber'))
-  let cheerEmotes: Map<string, CheerEmote> | null = $state.raw(null)
+  const presentation = $derived(presentationStore.get(message, options))
+  const escapedMessagePrefix = $derived(presentation.prefix)
+  const parsedMessageSegments = $derived(presentation.segments)
+  const badges = $derived(presentation.badges)
 
-  async function loadServices(
-    requested = { badges: enableBadges, emotes: enableEmotes }
-  ): Promise<void> {
-    setConfig(conf)
-
-    if (!message || !message.channel) return
-    const id = await TwitchUserService.getUserIdByName(message.channel)
-    if (id) channelUserId = parseInt(id, 10)
-
-    if (requested.badges) await loadBadges()
-
-    if (requested.emotes) {
-      // Load emote service
-      await loadCheerEmotes()
-      await loadEmotes()
+  async function loadServices(): Promise<void> {
+    try {
+      await presentationStore.load(message, options)
+    } catch (error) {
+      console.error('Failed to load message assets:', error)
     }
   }
-
+  $effect(() => {
+    // Only mounted rows fetch services. The transcript retains resolved parsing on recycle.
+    void message
+    void enableBadges
+    void enableEmotes
+    untrack(() => void loadServices())
+  })
   onMount(() => {
     reloadServicesFunction = loadServices
     return () => {
       if (reloadServicesFunction === loadServices) reloadServicesFunction = undefined
     }
   })
-
-  async function loadBadges(): Promise<void> {
-    if (!channelUserId || !message || message.type !== 'chat') return
-    const badgeList = message.badges
-    if (!badgeList) return
-    const loadedBadges: [string, HelixChatBadgeVersion][] = []
-    for (const [badgeId, version] of badgeList) {
-      const badgeData = await TwitchBadgeService.getBadgeInfo(
-        badgeId,
-        version,
-        channelUserId.toString()
-      )
-      if (badgeData) loadedBadges.push([badgeId, badgeData])
-    }
-    badges = loadedBadges
-  }
-
-  async function loadCheerEmotes(): Promise<void> {
-    if (!message.bits || !channelUserId || !message.message) return
-    const msgBits = parseInt(message.bits, 10)
-    if (isNaN(msgBits)) return
-
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    const cheerEmotesMap: Map<string, CheerEmote> = new Map()
-
-    // Extract cheer emote names from message
-    for (const [, emote, name, amount] of message.message.matchAll(
-      /(?:^|\s)(([^\W\d]+)(\d+))(?:\s|$)/g
-    )) {
-      if (!emote || !name || !amount) continue
-      const bits = parseInt(amount, 10)
-      if (isNaN(bits)) continue // Skip if bits is not a number
-      if (bits > msgBits) continue // Skip if bits is greater than message bits
-
-      const info = await TwitchCheerEmoteService.getCheerEmoteInfo(
-        name,
-        bits,
-        channelUserId?.toString()
-      )
-      if (info) cheerEmotesMap.set(emote, info)
-    }
-
-    cheerEmotes = cheerEmotesMap
-  }
-
-  let previousServiceFlags = { badges: false, emotes: false }
-  $effect(() => {
-    const enabled = { badges: enableBadges, emotes: enableEmotes }
-    const requested = {
-      badges: enabled.badges && !previousServiceFlags.badges,
-      emotes: enabled.emotes && !previousServiceFlags.emotes
-    }
-    previousServiceFlags = enabled
-    // Mounted rows survive Settings. Fetch only newly enabled assets; appearance
-    // changes and disabling a feature must not refetch either service.
-    if (requested.badges || requested.emotes) untrack(() => void loadServices(requested))
-  })
-
-  const [systemText, systemMsg]: [string | undefined, string | undefined] = $derived(
-    (message.type === 'system' ? message?.getSystemTextAndMessage() : undefined) ?? [
-      undefined,
-      undefined
-    ]
-  )
-
-  let emotes: Collection<string, Emote | CheerEmote> | null = $state(null)
-
-  async function loadEmotes(): Promise<void> {
-    // Get base emotes
-    const tempEmotes = await TwitchEmoteService.getEmotes(channelUserId ?? undefined)
-    if (tempEmotes && cheerEmotes) {
-      const allEmotes = new Collection(tempEmotes) as Collection<string, Emote | CheerEmote>
-      for (const [name, emote] of cheerEmotes.entries()) {
-        allEmotes.set(name, emote)
-      }
-      emotes = allEmotes
-    } else {
-      emotes = tempEmotes
-    }
-  }
-
-  // Highlight search terms in the message and parse emotes
-  const [escapedMessagePrefix, parsedMessageSegments]: [string, Segment[] | undefined] =
-    $derived.by(() => {
-      if (!message) return ['', undefined]
-      return parseFullMessage(message, {
-        messagePrefix: systemText,
-        messageStr: message.type === 'system' ? (systemMsg ?? null) : undefined,
-        twitchEmotes: emotes ?? undefined,
-        enableEmotes,
-        showName: settings.interface.showName,
-        searchQuery,
-        requireHttpInUrl
-      })
-    })
 
   const primedUrlStatus = new SvelteSet<string>()
 
@@ -287,9 +182,15 @@
     }
   }
 
-  onMount(() => {
+  $effect(() => {
     const element = chatMessageElement
-    if (!element || orderedUrlSegments.length === 0) return
+    void urlTracker.cacheVersion
+    if (
+      !element ||
+      orderedUrlSegments.length === 0 ||
+      !settings.interface.enableInlineImagePreviews
+    )
+      return
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -310,6 +211,17 @@
       observer.disconnect()
     }
   })
+
+  const inlineUrlSegments = $derived(
+    orderedUrlSegments.filter(
+      (segment) =>
+        isInlinePreviewPending(segment.url) || getInlineImagePreview(segment.url) !== null
+    )
+  )
+
+  function isInlinePreviewPending(url: string): boolean {
+    return !urlTracker.isFailedUrl(url) && !urlTracker.getCachedPreview(url)
+  }
 
   function getInlineImagePreview(url: string): LinkPreview | null {
     const preview = urlTracker.getCachedPreview(url)
@@ -336,41 +248,37 @@
   class:first-message={message.type === 'chat' && message.firstMsg === '1'}
   data-timestamp={message.timestamp}
 >
-  {#if settings.interface.showTimestamps}
-    <span class="chat-time color-muted mr-0.5">
-      {#if settings.interface.absoluteTimestamps}
-        {formatTime(message.timestamp)}
-      {:else}
-        {formatTime(message.timestamp, {
-          offset: settings.chat.timestampOffset + settings.chat._sessionTimestampOffset,
-          startTime: videoStartTime,
-          endTime: videoEndTime,
-          elapsedTime
-        })}
-      {/if}
-    </span>
+  {#if presentation.timestamp}
+    <span class="chat-time color-muted mr-0.5" data-message-part="time"
+      >{presentation.timestamp}</span
+    >
   {/if}
   {#if message.type === 'chat'}
     {#if enableBadges && badges.length > 0}
       <span class="chat-badges">
         {#each badges as [badgeId, badge] (badgeId)}
-          <img
-            class="chat-badge"
-            src={badge.getImageUrl(4)}
-            alt={badge.title}
-            title={badgeId === 'subscriber'
-              ? `${badge.title} (${subscriberMonths} ${subscriberMonths === '1' ? 'Month' : 'Months'})`
-              : badgeId === 'predictions'
-                ? `${badge.title} - ${badgeInfo?.get('predictions')}`
-                : badge.title}
-            loading="lazy"
-            decoding="async"
-          />
+          {#if badge}
+            <img
+              class="chat-badge"
+              src={badge.getImageUrl(4)}
+              alt={badge.title}
+              title={badgeId === 'subscriber'
+                ? `${badge.title} (${subscriberMonths} ${subscriberMonths === '1' ? 'Month' : 'Months'})`
+                : badgeId === 'predictions'
+                  ? `${badge.title} - ${badgeInfo?.get('predictions')}`
+                  : badge.title}
+              loading="lazy"
+              decoding="async"
+            />
+          {:else}
+            <span class="chat-badge badge-placeholder" aria-hidden="true"></span>
+          {/if}
         {/each}
       </span>
     {/if}
     <span
       class="chat-username ml-0.5 font-bold"
+      data-message-part="prefix"
       role="link"
       tabindex={onUsernameClick ? 0 : -1}
       style="color: {message.color}"
@@ -390,7 +298,7 @@
       {@html escapedMessagePrefix + ': '}
     </span>
   {:else if message.type === 'system'}
-    <span class="chat-system whitespace-pre-wrap text-system"
+    <span data-message-part="prefix" class="chat-system whitespace-pre-wrap text-system"
       >{#if parsedMessageSegments}
         <!-- eslint-disable-next-line svelte/no-at-html-tags -->
         {@html escapedMessagePrefix + ': '}
@@ -408,83 +316,87 @@
         : ''}
     >
       {#each parsedMessageSegments || [] as segment (`${message.getId()}-${segment.index}`)}
-        {#if (segment.type === 'emote' || segment.type === 'cheer') && Object.values(segment.urls).some((url) => !urlTracker.isFailedUrl(url))}
-          <EmoteComponent {message} {segment} {urlTracker} {onEmoteLoad} {enableEmotePreviews} />
-        {:else if segment.type === 'url'}
-          <a
-            href={segment.url}
-            class="chat-url"
-            aria-describedby={previewState.url === segment.url
-              ? 'potplayerchat-hover-preview'
-              : undefined}
-            class:visited={isVisitedUrl(segment.url)}
-            class:seen={isSeenUrl(segment.url)}
-            onclick={(e) => {
-              handleUrlClick(segment.url, e)
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onkeydown={(e) => {
-              if (e.key === 'Enter' && e.ctrlKey) {
-                e.preventDefault()
-                e.stopPropagation()
+        <span data-message-part={`segment-${segment.index}`}>
+          {#if (segment.type === 'emote' || segment.type === 'cheer') && Object.values(segment.urls).some((url) => !urlTracker.isFailedUrl(url))}
+            <EmoteComponent {message} {segment} {urlTracker} {enableEmotePreviews} />
+          {:else if segment.type === 'url'}
+            <a
+              href={segment.url}
+              class="chat-url"
+              aria-describedby={previewState.url === segment.url
+                ? 'potplayerchat-hover-preview'
+                : undefined}
+              class:visited={isVisitedUrl(segment.url)}
+              class:seen={isSeenUrl(segment.url)}
+              onclick={(e) => {
                 handleUrlClick(segment.url, e)
-              }
-              if (e.key === 'Escape') clearPreview()
-            }}
-            onfocus={(e) => {
-              focusPreviewElement(e.currentTarget)
-              mouseUpdateUrl(segment)
-            }}
-            onblur={clearPreview}
-            onmouseenter={() => mouseUpdateUrl(segment)}
-            onmousemove={() => mouseUpdateUrl(segment)}
-            onmouseleave={() => {
-              if (enableLinkPreviews) onMouseLeavePreviewElement()
-            }}
-          >
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            {@html segment.escaped}
-          </a>
-        {:else if segment.type === 'mention'}
-          <span
-            role="link"
-            tabindex={onUsernameClick ? 0 : -1}
-            class="chat-username"
-            style="color: {usernameColorTimelineMap?.get(
-              segment.username.toLowerCase(),
-              message.timestamp
-            ) || '#ffffff'}"
-            onclick={(e) => {
-              if (onUsernameClick) {
-                onUsernameClick({ username: segment.username, message, altKey: e.altKey })
                 e.preventDefault()
                 e.stopPropagation()
-              }
-            }}
-            onkeydown={(e) =>
-              e.key === 'Enter' &&
-              onUsernameClick?.({ username: segment.username, message, altKey: e.altKey })}
-            style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
-          >
+              }}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleUrlClick(segment.url, e)
+                }
+                if (e.key === 'Escape') clearPreview()
+              }}
+              onfocus={(e) => {
+                focusPreviewElement(e.currentTarget)
+                mouseUpdateUrl(segment)
+              }}
+              onblur={clearPreview}
+              onmouseenter={() => mouseUpdateUrl(segment)}
+              onmousemove={() => mouseUpdateUrl(segment)}
+              onmouseleave={() => {
+                if (enableLinkPreviews) onMouseLeavePreviewElement()
+              }}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html segment.escaped}
+            </a>
+          {:else if segment.type === 'mention'}
+            <span
+              role="link"
+              tabindex={onUsernameClick ? 0 : -1}
+              class="chat-username"
+              style="color: {usernameColorTimelineMap?.get(
+                segment.username.toLowerCase(),
+                message.timestamp
+              ) || '#ffffff'}"
+              onclick={(e) => {
+                if (onUsernameClick) {
+                  onUsernameClick({ username: segment.username, message, altKey: e.altKey })
+                  e.preventDefault()
+                  e.stopPropagation()
+                }
+              }}
+              onkeydown={(e) =>
+                e.key === 'Enter' &&
+                onUsernameClick?.({ username: segment.username, message, altKey: e.altKey })}
+              style:cursor={onUsernameClick ? 'pointer' : 'inherit'}
+            >
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+              {@html segment.escaped}
+            </span>
+          {:else}
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             {@html segment.escaped}
-          </span>
-        {:else}
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          {@html segment.escaped}
-        {/if}
+          {/if}
+        </span>
       {/each}
     </span>
   {/if}
-  {#if settings.interface.enableInlineImagePreviews && orderedUrlSegments.length > 0}
+  {#if settings.interface.enableInlineImagePreviews && inlineUrlSegments.length > 0}
     <div class="inline-image-previews">
-      {#each orderedUrlSegments as segment (`${message.getId()}-inline-${segment.index}`)}
+      {#each inlineUrlSegments as segment (`${message.getId()}-inline-${segment.index}`)}
         {@const preview = getInlineImagePreview(segment.url)}
         {#if preview?.thumbnail}
           <a
             href={segment.url}
             class="inline-image-preview-link"
+            class:pending-preview={!urlTracker.getImageDimensions(preview.thumbnail)}
+            data-message-part={`preview-${segment.index}`}
             style:cursor={settings.interface.openInlineImagePreviewsOnClick ? 'pointer' : 'default'}
             onclick={(event) => onInlineImageClick(event, segment.url)}
           >
@@ -494,14 +406,29 @@
               class="inline-image-preview"
               loading="lazy"
               decoding="async"
-              onload={() => {
-                if (onImageLoad) onImageLoad()
+              onload={async (event) => {
+                const image = event.currentTarget
+                if (!(image instanceof HTMLImageElement)) return
+                try {
+                  await image.decode()
+                } catch {
+                  if (image.isConnected) urlTracker.markFailedUrl(segment.url)
+                  return
+                }
+                if (!image.isConnected) return
+                urlTracker.recordImageDimensions(preview.thumbnail!, image)
               }}
               onerror={() => {
                 urlTracker.markFailedUrl(segment.url)
               }}
             />
           </a>
+        {:else if isInlinePreviewPending(segment.url)}
+          <div
+            class="pending-preview"
+            data-message-part={`preview-${segment.index}`}
+            aria-hidden="true"
+          ></div>
         {/if}
       {/each}
     </div>
@@ -592,8 +519,17 @@
   }
 
   .chat-badge {
+    width: var(--deck-badge-size, 1.5rem);
     height: var(--deck-badge-size, 1.5rem);
     object-fit: contain;
+  }
+
+  .pending-preview {
+    height: 20rem;
+    width: min(30rem, 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .inline-image-previews {

@@ -103,6 +103,10 @@ export function utf8IndexToUtf16IndexMap(str: string): Record<number, number> {
   return map
 }
 
+// Chat layout can format an entire recording before any rows mount. Reuse the
+// two locale formatters instead of constructing one for every timestamp.
+const timestampFormatters = new Map<boolean, Intl.DateTimeFormat>()
+
 /**
  * Formats a time value relative to a given start time.
  * - During playback time, returns the elapsed time as "[H:MM:SS]" or "[M:SS]".
@@ -143,7 +147,12 @@ export function formatTime(
       second: '2-digit'
     }
 
-    const dateStr = realTime.toLocaleString([], options)
+    let formatter = timestampFormatters.get(!sameDayMonth)
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat([], options)
+      timestampFormatters.set(!sameDayMonth, formatter)
+    }
+    const dateStr = formatter.format(realTime)
     if (sameDayYear) {
       return `[${dateStr}]`
     } else {

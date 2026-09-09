@@ -16,6 +16,13 @@ export class UrlTracker {
   private loadingUrls = new SvelteSet<string>()
   private failedUrls = new SvelteSet<string>()
   private lock = new AsyncLock()
+  private imageDimensions = new SvelteMap<string, { width: number; height: number }>()
+  private generation = 0
+  private cacheState = new SvelteMap([['version', 0]])
+
+  get cacheVersion(): number {
+    return this.cacheState.get('version') ?? 0
+  }
 
   constructor(private settings: { chatterinoBaseUrl: string }) {}
 
@@ -23,9 +30,11 @@ export class UrlTracker {
    * Fetch link preview data for a URL
    */
   async getPreview(url: string, refresh = false): Promise<LinkPreview | null> {
+    const generation = this.generation
     if (!refresh && this.cache.has(url)) return this.cache.get(url) ?? null
     if (!refresh && this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
     return await this.lock.acquire(url, async () => {
+      if (generation !== this.generation) return null
       if (!refresh && this.cache.has(url)) return this.cache.get(url) ?? null
       if (!refresh && this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
 
@@ -39,6 +48,7 @@ export class UrlTracker {
         const data = await window.api.getLinkPreview(url, this.settings.chatterinoBaseUrl, {
           refresh
         })
+        if (generation !== this.generation) return null
 
         if (!data) {
           const errorResult: LinkPreview = { status: 0, link: url }
@@ -52,6 +62,7 @@ export class UrlTracker {
 
         return data
       } catch (error) {
+        if (generation !== this.generation) return null
         console.warn('Failed to fetch link preview:', error)
         // Cache null result to avoid repeated failed requests
         const errorResult: LinkPreview = { status: 0, link: url }
@@ -59,7 +70,7 @@ export class UrlTracker {
         this.cache.set(url, errorResult)
         return errorResult
       } finally {
-        this.loadingUrls.delete(url)
+        if (generation === this.generation) this.loadingUrls.delete(url)
       }
     })
   }
@@ -96,8 +107,23 @@ export class UrlTracker {
    * Clear the preview cache
    */
   clearCache(): void {
+    this.generation++
+    this.cacheState.set('version', this.generation)
     this.cache.clear()
     this.failedUrls.clear()
+    this.loadingUrls.clear()
+    this.imageDimensions.clear()
+  }
+
+  getImageDimensions(url: string): { width: number; height: number } | undefined {
+    return this.imageDimensions.get(url)
+  }
+
+  recordImageDimensions(url: string, image: HTMLImageElement): void {
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) return
+    const previous = this.imageDimensions.get(url)
+    if (previous?.width === image.naturalWidth && previous.height === image.naturalHeight) return
+    this.imageDimensions.set(url, { width: image.naturalWidth, height: image.naturalHeight })
   }
 
   /**

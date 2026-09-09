@@ -24,6 +24,12 @@ Preview windows use the same one-time popup context registry as Search and profi
 
 Expanded links provide Open link, Copy link, and SauceNAO. Copy retains the original URL. SauceNAO encodes the HTTP(S) thumbnail URL and is disabled without one. Retry refreshes only that URL's metadata/cache entry. Tooltip markup continues through the existing sanitizer.
 
+## Transcript layout and scrolling
+
+Main chat, Search, and profile history share a virtual transcript. Pretext prepares text once and estimates mixed text/media row heights; native DOM measurements remain authoritative for wrapping, selection, and interactions. Rows are keyed by message identity, with one viewport of overscan on each side. Prepared text and decoded media dimensions survive row recycling.
+
+Unresolved inline previews reserve 20rem of height. Unresolved emotes reserve the existing 2.5rem height and a conservative width within the 9rem cap; badge IDs reserve their boxes before metadata arrives. Loaded media compacts to its actual bounded size. A single scroll owner preserves the first visible message and, when available, its visible text fragment during reflow. Following playback pins the bottom; user navigation cancels outstanding positioning. Media callbacks must update asset state without issuing scroll commands.
+
 ## Verification and delivery
 
 Keep regression coverage focused on settings migration/reset, cross-window notifications, popup ownership, activation modifiers, URL actions, and targeted retry. Inspect real components across the supported palette/layout/width combinations, including empty/error states and focus. Verify the actual unpacked executable with isolated test settings and distinguish fixture-backed UI checks from live PotPlayer/service integration.

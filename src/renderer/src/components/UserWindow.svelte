@@ -5,7 +5,8 @@
   import { isRangeInMessages } from '@/utils/chat'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { VList } from 'virtua/svelte'
+  import MessageTranscript from './MessageTranscript.svelte'
+  import type { TranscriptHandle } from '../core/transcript-handle'
   import { clearRendererCache, clearRendererSavedUrls } from '../core/maintenance'
   import {
     getMessagesFromUser,
@@ -37,19 +38,21 @@
   let messages: TwitchChatMessage[] = $state.raw([])
   let copiedField: 'username' | 'id' | null = $state(null)
   let copyResetTimeout: ReturnType<typeof setTimeout> | null = null
-  let vlistRef: VList<TwitchChatMessage> | null = $state(null)
+  let vlistRef: TranscriptHandle | null = $state(null)
+  let historyNavigationGeneration = 0
+  let readerInteracted = false
   const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
 
   const clickedSenderMessage = $derived(
     isMessageFromUser(context.clickedMessage, context.username) ? context.clickedMessage : null
   )
   const mostRecentMessage = $derived(messages.at(-1) ?? clickedSenderMessage)
-  const displayName = $derived(
-    profile?.displayName || clickedSenderMessage?.displayName || context.username
+  const displayName = $derived.by(
+    () => profile?.displayName || clickedSenderMessage?.displayName || context.username
   )
-  const login = $derived(profile?.login || context.username)
+  const login = $derived.by(() => profile?.login || context.username)
   const headerName = $derived(formatChatName(login, displayName, settings.interface.showName))
-  const userId = $derived(profile?.id || clickedSenderMessage?.userId || null)
+  const userId = $derived.by(() => profile?.id || clickedSenderMessage?.userId || null)
   const usernameColor = $derived(mostRecentMessage?.color || '#efeff1')
 
   onMount(() => {
@@ -103,6 +106,7 @@
       await chatService.updateVideoInfo(potplayerInfo, -1)
       loadMessages(getMessagesFromUser(context.initialMessages, context.username))
       loadMessages(getMessagesFromUser(context.loadedMessages, context.username))
+      scrollToRelevantMessage()
 
       try {
         const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
@@ -129,7 +133,9 @@
   }
 
   function scrollToRelevantMessage(): void {
+    const generation = historyNavigationGeneration
     setTimeout(() => {
+      if (readerInteracted || generation !== historyNavigationGeneration) return
       if (!vlistRef || messages.length === 0) return
       const clickedIndex = messages.findIndex(
         (message) => message.getId() === context.clickedMessage.getId()
@@ -175,6 +181,7 @@
   }
 
   function handleAppCacheCleared(): void {
+    vlistRef?.clearCache?.()
     clearRendererCache(chatService, urlTracker)
     for (const reloadServicesFunction of Object.values(reloadServicesFunctionMap))
       reloadServicesFunction?.()
@@ -296,13 +303,19 @@
     {/if}
     <div class="history-list" aria-busy={!historyLoaded}>
       {#if messages.length > 0}
-        <VList
+        <MessageTranscript
           bind:this={vlistRef}
           data={messages}
-          getKey={(item, index) => item?.getId() ?? index}
-          itemSize={48}
+          {urlTracker}
+          videoStartTime={chatService.currentPotPlayerInfo?.startTime}
+          videoEndTime={chatService.currentPotPlayerInfo?.endTime}
+          gutter
+          onuserinteraction={() => {
+            readerInteracted = true
+            historyNavigationGeneration++
+          }}
         >
-          {#snippet children(message, index)}
+          {#snippet children(message, index, presentationStore)}
             {#if message}
               <div
                 class="history-item"
@@ -320,6 +333,7 @@
                   onclick={() => context.focusMessage(message)}>↩</button
                 >
                 <ChatMessage
+                  {presentationStore}
                   {message}
                   videoStartTime={chatService.currentPotPlayerInfo?.startTime}
                   videoEndTime={chatService.currentPotPlayerInfo?.endTime}
@@ -332,7 +346,7 @@
               </div>
             {/if}
           {/snippet}
-        </VList>
+        </MessageTranscript>
       {:else if !historyLoaded}
         <div class="history-state" role="status">Loading message history…</div>
       {:else if historyError}

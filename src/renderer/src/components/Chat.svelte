@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TwitchMessage } from '@core/chat/twitch-msg'
-  import { VList } from 'virtua/svelte'
+  import MessageTranscript from './MessageTranscript.svelte'
+  import type { TranscriptHandle } from '../core/transcript-handle'
 
   import { onMount, tick, untrack } from 'svelte'
 
@@ -10,17 +11,11 @@
   import { openSearchPopup, type SearchOptions } from '@/renderer/src/core/search-window'
   import { getUsernameClickAction, type UsernameClickInfo } from '../core/username-click'
   import { openUserPopup } from '../core/user-window'
-  import {
-    calculateTargetElement,
-    scrollToTarget as scrollToTargetBase
-  } from '@/renderer/src/utils/vlist'
   import type { PotPlayerInstance } from '@/types/potplayer'
-  import { deleteNullishKeysInPlace, isEqual, NumberObject } from '@/utils/objects'
+  import { deleteNullishKeysInPlace, isEqual } from '@/utils/objects'
   import { CurrentVideoTimeHistory } from '@/utils/time'
 
   import type { HWND } from '@/types/globals'
-  import { BoundedSet } from '@/utils/datastructs'
-  import { debounce } from '@/utils/functions'
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
   import { clearRendererCache, clearRendererSavedUrls } from '../core/maintenance'
@@ -38,7 +33,6 @@
   const chatService = new ChatService(window.api, loadingState, settings)
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker(settings.chat)
-  const loadedEmotes = new BoundedSet<string>(200)
 
   type SelectedPotplayerInfo = PotPlayerInfo | (PotPlayerInstance & Partial<PotPlayerInfo>)
   let selectedPotplayerInfo: SelectedPotplayerInfo | null = $state(null)
@@ -49,10 +43,10 @@
   let playbackTime = $state<number | null>(null)
   let settingsButton: HTMLButtonElement | null = $state(null)
   let instanceTabs: HTMLDivElement | null = $state(null)
-  const canSearch = $derived(
+  const canSearch = $derived.by(() =>
     Boolean(selectedPotplayerInfo?.startTime && selectedPotplayerInfo?.endTime)
   )
-  const statusLabel = $derived(
+  const statusLabel = $derived.by(() =>
     !selectedPotplayerInfo
       ? 'No player selected'
       : loadingState.state === 'loading'
@@ -77,11 +71,7 @@
   }
 
   function retainReadingPosition(): void {
-    if (!scrollToBottom && vlistRef) {
-      const target = calculateTargetElement(vlistRef, messages)
-      targetElement = target.targetElement
-      targetViewportOffset = target.targetViewportOffset
-    }
+    vlistRef?.preservePosition()
   }
 
   async function toggleSettings(): Promise<void> {
@@ -93,18 +83,6 @@
       settingsButton?.focus()
     }
   }
-
-  let previousLayout: string | undefined
-  $effect(() => {
-    // Capture the message anchor before the density change is measured by VList.
-    const layout = settings.interface.layout
-    if (layout === previousLayout) return
-    previousLayout = layout
-    untrack(() => {
-      retainReadingPosition()
-      void tick().then(() => scrollToTarget())
-    })
-  })
 
   function adjustSessionOffset(delta: number): void {
     if (!selectedPotplayerInfo?.title) return
@@ -132,78 +110,33 @@
   }
   let changingPotPlayerPromise: Promise<SelectedPotplayerInfo | null> | null = $state(null)
   let potPlayerSelectionNonce = 0
-  let lastPotplayerChangeTime: number = performance.now()
 
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
   let viewingHistory = false
   let navigationGeneration = 0
 
-  let chatContainerRef: HTMLDivElement | null = $state(null)
-  let vlistRef: VList<TwitchMessage> | null = $state(null)
-  let targetElement: TwitchMessage | null = $state(null)
-  let targetViewportOffset: NumberObject | number = 0
+  let vlistRef: TranscriptHandle | null = $state(null)
   let scrollToBottom: boolean = $state(true)
-  let nextScrollKeepTarget: boolean = false
-
-  const setNextScrollKeepTargetDebounced = debounce((value: boolean) => {
-    nextScrollKeepTarget = value
-  }, 5)
-
-  function isAtBottom(): boolean | null {
-    if (!vlistRef) return null
-    let bottomY = vlistRef.getScrollOffset() + vlistRef.getViewportSize()
-    let scrollSize = vlistRef.getScrollSize()
-    if (bottomY >= scrollSize - 1) return true
-    else if (bottomY >= scrollSize - 500) return null
-    else return false
-  }
-
-  $effect(() => {
-    const containerRef = chatContainerRef
-    if (!containerRef) return
-
-    const onUserScroll = (event: WheelEvent): void => {
-      if (event.deltaY < 0) scrollToBottom = false
-
-      if (typeof targetViewportOffset === 'object')
-        targetViewportOffset.setValue(targetViewportOffset.valueOf() + event.deltaY)
-      else targetViewportOffset += event.deltaY
-    }
-
-    containerRef.addEventListener('wheel', onUserScroll, { passive: true })
-    return () => {
-      // @ts-ignore svelte-check ignore
-      containerRef.removeEventListener('wheel', onUserScroll, { passive: true })
-    }
-  })
-
-  function clearTargetElement(): void {
-    targetElement = null
-    targetViewportOffset = 0
-  }
-
-  const scrollToTargetDebounced = debounce(scrollToTarget, 35)
   const doubleSpacebarThresholdMs = 350
   let lastSpacebarPressTime = 0
 
   function scrollToTarget(_scrollToBottom?: boolean): void {
     const _vlistRef = untrack(() => vlistRef)
     const _messages = untrack(() => messages)
-    const _targetElement = untrack(() => targetElement)
     _scrollToBottom = _scrollToBottom ?? untrack(() => scrollToBottom)
+    if (_scrollToBottom) _vlistRef?.scrollToIndex(_messages.length - 1, { align: 'end' })
+  }
 
-    if (!_vlistRef || !_messages) return
-
-    // The function vlist.scrollToIndex internally schedules a scroll until a measurement is done,
-    // this is an issue since the target position of a scroll can change before the measurement is complete.
-    // To avoid this, we use a modifiable NumberObject to store the targetViewportOffset,
-    targetViewportOffset = NumberObject.ensureObject(targetViewportOffset)
-    scrollToTargetBase(_vlistRef, _messages, {
-      targetElement: _targetElement,
-      targetViewportOffset: targetViewportOffset as unknown as number,
-      scrollToBottom: _scrollToBottom
-    })
+  function messageElapsedTime(message: TwitchMessage): number | undefined {
+    return selectedPotplayerInfo?.startTime
+      ? Math.floor(
+          message.timestamp -
+            selectedPotplayerInfo.startTime -
+            settings.chat.timestampOffset -
+            settings.chat._sessionTimestampOffset
+        )
+      : undefined
   }
 
   function scrollChatToBottom(): void {
@@ -216,8 +149,7 @@
         scrollToTarget(true)
     }
     void updateChatMessages().then(resume)
-    resume()
-    setTimeout(resume, 100)
+    void tick().then(resume)
   }
 
   function isEditableTarget(target: EventTarget | null): boolean {
@@ -260,7 +192,6 @@
       messages = []
       playbackTime = null
       videoTimeHistory.clear()
-      clearTargetElement()
       await chatService.updateVideoInfo(null)
       return
     }
@@ -292,7 +223,6 @@
       navigationGeneration++
       potPlayerSelectionNonce++
       scrollToBottom = true
-      clearTargetElement()
     }
     selectedPotplayerInfo = newSelectedPotplayerInstanceInfo
     settings.chat._sessionTimestampOffset = getSessionTimestampOffsetByTitle(
@@ -309,7 +239,6 @@
     }
 
     await resetVideoTimeHistory(selectedPotplayerInfo?.hwnd ?? null)
-    lastPotplayerChangeTime = performance.now()
     await updateChatMessages()
   }
 
@@ -364,24 +293,9 @@
       selectedPotplayerInfo = potplayerInfo ?? null
       messages = newMessages
       scrollToBottom = true
-      clearTargetElement()
       scrollToTarget()
     } else if (!isEqualMessageBoundary(messages, newMessages)) {
-      const _vlistRef = untrack(() => vlistRef)
-      const _targetElement = untrack(() => targetElement)
-      const _scrollToBottom = untrack(() => scrollToBottom)
-      if (!settings.interface.keepScrollPosition) clearTargetElement()
-      else if (_vlistRef && !_targetElement && !_scrollToBottom) {
-        const target = calculateTargetElement(_vlistRef, messages)
-        targetElement = target.targetElement
-        targetViewportOffset = target.targetViewportOffset
-      }
-
       messages = newMessages
-
-      nextScrollKeepTarget = true
-      setNextScrollKeepTargetDebounced(true)
-      scrollToTarget()
     }
 
     if (nextMessage) {
@@ -399,14 +313,7 @@
   function onCurrentTime(time: number): void {
     playbackTime = time
     videoTimeHistory.addSample(time)
-    if (videoTimeHistory.wasLastSampleDiscontinuous()) {
-      scrollToTargetDebounced(scrollToBottom)
-      const lastTargetElement = targetElement
-      updateChatMessages()
-      if (lastTargetElement) targetElement = lastTargetElement
-    } else {
-      updateChatMessages()
-    }
+    void updateChatMessages()
   }
 
   // Update potplayer instances if data is not available immediately
@@ -451,11 +358,8 @@
     const messageId = message.getId()
     const messageIndex = messages.findIndex((m) => m.getId() === messageId)
     if (messageIndex === -1) return
-    targetElement = message
-    targetViewportOffset = (vlistRef.getItemSize(messageIndex) - vlistRef.getViewportSize()) / 2
     scrollToBottom = false
-    scrollToTarget()
-    void tick().then(() => scrollToTarget())
+    vlistRef.scrollToIndex(messageIndex, { align: 'center' })
   }
 
   function setPotPlayerInstance(instanceInfo: PotPlayerInstance | PotPlayerInfo | null): void {
@@ -488,7 +392,6 @@
       settings.chat._sessionTimestampOffset = getSessionTimestampOffsetByTitle(
         currentSelectedPotPlayerInfo.title
       )
-      clearTargetElement()
       await resetVideoTimeHistory(hwnd)
       await chatService.updateVideoInfo(currentSelectedPotPlayerInfo)
       if (currentSelectionNonce !== potPlayerSelectionNonce) return null
@@ -663,8 +566,8 @@
   }
 
   function handleAppCacheCleared(): void {
+    vlistRef?.clearCache?.()
     clearRendererCache(chatService, urlTracker)
-    loadedEmotes.clear()
     reloadChatMessageServices()
   }
 
@@ -791,67 +694,38 @@
         }}
       />
     </div>{/if}
-  <div
-    class="chat-container"
-    class:concealed={showSettings}
-    bind:this={chatContainerRef}
-    onresize={() => {
-      const lastScrollToBottom = scrollToBottom
-      requestAnimationFrame(() => {
-        scrollToBottom = lastScrollToBottom
-        scrollToTarget()
-      })
-    }}
-  >
+  <div class="chat-container" class:concealed={showSettings}>
     {#if messages && messages.length > 0}
-      <VList
+      <MessageTranscript
         bind:this={vlistRef}
         data={messages}
-        getKey={(msg, i) => msg?.getId() ?? i}
-        onscroll={() => {
-          if (!nextScrollKeepTarget) {
-            targetElement = null
-            vlistRef?.scrollBy(0) // Cancel any pending scroll
-          } else {
-            setNextScrollKeepTargetDebounced(false)
-          }
-
-          if (viewingHistory || performance.now() - lastPotplayerChangeTime < 3000) return
-          const currentIsAtBottom = isAtBottom()
-          if (currentIsAtBottom !== null && currentIsAtBottom !== scrollToBottom) {
-            scrollToBottom = currentIsAtBottom
-            targetElement = null
-          }
+        {urlTracker}
+        videoStartTime={selectedPotplayerInfo?.startTime}
+        videoEndTime={selectedPotplayerInfo?.endTime}
+        getElapsedTime={messageElapsedTime}
+        follow={scrollToBottom}
+        preserveOnReplace={settings.interface.keepScrollPosition}
+        onfollowchange={(following) => {
+          scrollToBottom = following && !viewingHistory
+        }}
+        onuserinteraction={() => {
+          navigationGeneration++
         }}
       >
-        {#snippet children(msg, i)}
+        {#snippet children(msg, i, presentationStore)}
           <ChatMessage
+            {presentationStore}
             message={msg}
             videoStartTime={selectedPotplayerInfo?.startTime}
             videoEndTime={selectedPotplayerInfo?.endTime}
-            elapsedTime={selectedPotplayerInfo?.startTime
-              ? Math.floor(
-                  msg.timestamp -
-                    selectedPotplayerInfo?.startTime -
-                    settings.chat.timestampOffset -
-                    settings.chat._sessionTimestampOffset
-                )
-              : undefined}
+            elapsedTime={messageElapsedTime(msg)}
             {urlTracker}
             usernameColorTimelineMap={chatService.usernameColorTimelineMap}
             onUsernameClick={handleUsernameClick}
-            onEmoteLoad={({ hash }) => {
-              if (loadedEmotes.has(hash)) return
-              loadedEmotes.add(hash)
-              scrollToTargetDebounced(scrollToBottom)
-            }}
-            onImageLoad={() => {
-              scrollToTargetDebounced(scrollToBottom)
-            }}
             bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
           />
         {/snippet}
-      </VList>
+      </MessageTranscript>
     {:else if loadingState?.state === 'loading'}
       <div class="chat-message system center">Loading chat...</div>
     {:else if loadingState?.state === 'error'}

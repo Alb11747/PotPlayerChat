@@ -11,7 +11,7 @@
     "lint": "eslint --fix --cache --max-warnings=0 .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json ",
-    "svelte-check": "svelte-check --fail-on-warnings",
+    "svelte-check": "svelte-check --tsconfig tsconfig.web.json --fail-on-warnings",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web && pnpm run svelte-check",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:browser": "playwright test --config tests/browser/playwright.config.ts"
   },
   "lint-staged": {
     "*.{js,ts,mjs,cjs,svelte}": [
@@ -31,6 +32,7 @@
     ]
   },
   "dependencies": {
+    "@chenglou/pretext": "0.0.9",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@isaacs/ttlcache": "^1.4.1",
@@ -52,13 +54,13 @@
     "ms": "^2.1.3",
     "regedit": "^5.1.4",
     "sanitize-html": "^2.17.0",
-    "tasklist": "^5.0.0",
-    "virtua": "^0.41.5"
+    "tasklist": "^5.0.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^1.0.1",
+    "@playwright/test": "^1.63.0",
     "@sveltejs/vite-plugin-svelte": "^6.1.0",
     "@swc/core": "^1.13.1",
     "@tailwindcss/vite": "^4.1.11",
@@ -97,8 +99,7 @@
     ],
     "patchedDependencies": {
       "@tailwindcss/vite@4.1.18": "patches/@tailwindcss__vite@4.1.18.patch",
-      "electron-context-menu@4.1.1": "patches/electron-context-menu@4.1.1.patch",
-      "virtua@0.41.5": "patches/virtua@0.41.5.patch"
+      "electron-context-menu@4.1.1": "patches/electron-context-menu@4.1.1.patch"
     }
   }
 }

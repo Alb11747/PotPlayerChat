@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { CheerEmote, NativeTwitchEmote, TwitchEmote } from '@/core/chat/twitch-emotes'
   import type { TwitchMessage } from '@/core/chat/twitch-msg'
   import type { Segment } from '@/renderer/src/core/chat-dom'
   import type { UrlTracker } from '@/renderer/src/core/url-tracker'
@@ -22,20 +21,47 @@
     message,
     segment,
     urlTracker,
-    onEmoteLoad,
     enableEmotePreviews
   }: {
     message: TwitchMessage
     segment: Segment & { type: 'emote' | 'cheer' }
     urlTracker: UrlTracker
-    onEmoteLoad?: (data: {
-      emote: TwitchEmote | NativeTwitchEmote | CheerEmote
-      hash: string
-    }) => void
     enableEmotePreviews: boolean
   } = $props()
 
-  let imgLoaded = $state<boolean>(false)
+  const imageKey = $derived(Object.values(segment.urls)[0] ?? segment.name)
+  const dimensions = $derived(urlTracker.getImageDimensions(imageKey))
+  let baseImage: HTMLImageElement | undefined = $state()
+  async function recordDecodedImage(image: HTMLImageElement, key: string): Promise<void> {
+    const urls = segment.urls
+    try {
+      await image.decode()
+    } catch {
+      if (image.isConnected && key === imageKey)
+        for (const url of Object.values(urls)) urlTracker.markFailedUrl(url)
+      return
+    }
+    if (!image.isConnected || key !== imageKey || urlTracker.getImageDimensions(key)) return
+    urlTracker.recordImageDimensions(key, image)
+  }
+  $effect(() => {
+    // Clearing application caches does not reload an already mounted <img>.
+    // Reuse its decoded resource to restore dimensions instead of leaving a placeholder.
+    if (!dimensions && baseImage?.complete && baseImage.naturalWidth > 0) {
+      void recordDecodedImage(baseImage, imageKey)
+    }
+  })
+  const ratio = $derived(dimensions ? dimensions.width / dimensions.height : undefined)
+  const frameWidth = $derived(
+    dimensions
+      ? `min(${dimensions.width}px, calc(var(--deck-emote-size, 2.5rem) * ${ratio}), 9rem)`
+      : '9rem'
+  )
+  const frameHeight = $derived(
+    dimensions
+      ? `min(${dimensions.height}px, var(--deck-emote-size, 2.5rem), calc(9rem / ${ratio}))`
+      : 'var(--deck-emote-size, 2.5rem)'
+  )
 
   const emoteSizeMap: Record<string, string> = {
     '1': '0.5x',
@@ -101,46 +127,42 @@
     if (enableEmotePreviews) onMouseLeavePreviewElement()
   }}
 >
-  {#if !imgLoaded}
-    <span class="chat-emote" aria-hidden="true">
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      {@html segment.escaped}
-    </span>
-  {/if}
-  <img
-    class="chat-emote"
-    srcset={urlsToSrcset(segment.urls, emoteSizeMap)}
-    alt={segment.name}
-    loading="lazy"
-    decoding="async"
-    onload={() => {
-      imgLoaded = true
-      if (onEmoteLoad)
-        onEmoteLoad({ emote: segment.emote, hash: `${message.getId()}-${segment.index}` })
-    }}
-    onerror={(event) => onError(event, segment.urls)}
-  />
-  {#if segment.type === 'emote'}
-    {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] (`${message.getId()}-${attachedIndex}`)}
-      {#if Object.values(attachedEmote.urls).some((url) => !urlTracker.isFailedUrl(url))}
-        <img
-          class="chat-emote zero-width-emote"
-          srcset={urlsToSrcset(attachedEmote.urls, emoteSizeMap)}
-          alt={attachedEmote.alt}
-          loading="lazy"
-          decoding="async"
-          onload={() => {
-            if (onEmoteLoad)
-              onEmoteLoad({
-                emote: attachedEmote.emote,
-                hash: `${message.getId()}-${segment.index}-${attachedIndex}`
-              })
-          }}
-          onerror={(event) => onError(event, attachedEmote.urls)}
-        />
-      {/if}
-    {/each}
-  {:else if segment.type === 'cheer'}
+  <span class="emote-frame" style:width={frameWidth} style:height={frameHeight}>
+    {#if !dimensions}
+      <span class="chat-emote" aria-hidden="true">
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+        {@html segment.escaped}
+      </span>
+    {/if}
+    <img
+      bind:this={baseImage}
+      class="chat-emote"
+      srcset={urlsToSrcset(segment.urls, emoteSizeMap)}
+      alt={segment.name}
+      loading="lazy"
+      decoding="async"
+      onload={(event) => {
+        if (event.currentTarget instanceof HTMLImageElement)
+          void recordDecodedImage(event.currentTarget, imageKey)
+      }}
+      onerror={(event) => onError(event, segment.urls)}
+    />
+    {#if segment.type === 'emote'}
+      {#each segment.attachedEmotes?.entries() || [] as [attachedIndex, attachedEmote] (`${message.getId()}-${attachedIndex}`)}
+        {#if Object.values(attachedEmote.urls).some((url) => !urlTracker.isFailedUrl(url))}
+          <img
+            class="chat-emote zero-width-emote"
+            srcset={urlsToSrcset(attachedEmote.urls, emoteSizeMap)}
+            alt={attachedEmote.alt}
+            loading="lazy"
+            decoding="async"
+            onerror={(event) => onError(event, attachedEmote.urls)}
+          />
+        {/if}
+      {/each}
+    {/if}
+  </span>
+  {#if segment.type === 'cheer'}
     <span class="bits" style:color={segment.type === 'cheer' ? segment.emote.color : ''}>
       {segment.bits}
     </span>
@@ -152,13 +174,6 @@
     display: inline-grid;
     grid-auto-flow: column;
     vertical-align: middle;
-
-    img {
-      height: var(--deck-emote-size, 2.5rem);
-      max-height: max-content;
-      max-width: 9rem;
-      object-fit: contain;
-    }
   }
 
   .emote-container:focus-visible {
@@ -166,11 +181,25 @@
     outline-offset: 2px;
   }
 
+  .emote-frame {
+    display: inline-grid;
+    position: relative;
+    margin-right: 0.125rem;
+  }
+  .emote-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .emote-frame > span {
+    position: absolute;
+    max-width: 100%;
+    overflow: hidden;
+  }
   .chat-emote {
     grid-area: 1 / 1;
     justify-self: center;
     align-self: center;
-    margin-right: 0.125rem;
     font-weight: 900;
   }
   .zero-width-emote {

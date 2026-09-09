@@ -4,6 +4,43 @@ import { UrlTracker } from './url-tracker'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('URL tracker retry', () => {
+  it('does not restore a preview cache cleared while a request was pending', async () => {
+    let finish!: (value: { status: number; link: string }) => void
+    vi.stubGlobal('window', {
+      api: {
+        getLinkPreview: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve
+            })
+        )
+      }
+    })
+    const tracker = new UrlTracker({ chatterinoBaseUrl: 'https://resolver.example/' })
+    const pending = tracker.getPreview('https://example.com')
+    const queued = tracker.getPreview('https://example.com')
+    tracker.clearCache()
+    finish({ status: 200, link: 'https://example.com' })
+    expect(await pending).toBeNull()
+    expect(await queued).toBeNull()
+    expect(tracker.hasPreview('https://example.com')).toBe(false)
+  })
+
+  it('shares decoded image dimensions until the cache is cleared', () => {
+    const tracker = new UrlTracker({ chatterinoBaseUrl: 'https://resolver.example/' })
+    tracker.recordImageDimensions('image', {
+      naturalWidth: 320,
+      naturalHeight: 180
+    } as HTMLImageElement)
+    tracker.recordImageDimensions('image', {
+      naturalWidth: 0,
+      naturalHeight: 0
+    } as HTMLImageElement)
+    expect(tracker.getImageDimensions('image')).toEqual({ width: 320, height: 180 })
+    tracker.clearCache()
+    expect(tracker.getImageDimensions('image')).toBeUndefined()
+  })
+
   it('clears only the retried renderer failure and forwards refresh to the main cache', async () => {
     const getLinkPreview = vi
       .fn()
