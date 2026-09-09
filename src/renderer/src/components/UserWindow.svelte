@@ -18,6 +18,7 @@
   import ChatMessage from './ChatMessage.svelte'
   import LinkPreview from './LinkPreview.svelte'
   import Icon from './Icon.svelte'
+  import { formatChatName } from '../core/chat-name'
 
   let { context }: { context: UserWindowContext } = $props()
 
@@ -47,6 +48,7 @@
     profile?.displayName || clickedSenderMessage?.displayName || context.username
   )
   const login = $derived(profile?.login || context.username)
+  const headerName = $derived(formatChatName(login, displayName, settings.interface.showName))
   const userId = $derived(profile?.id || clickedSenderMessage?.userId || null)
   const usernameColor = $derived(mostRecentMessage?.color || '#efeff1')
 
@@ -209,12 +211,8 @@
     </div>
     <div class="profile-details">
       <div class="profile-row primary-row">
-        <span class="display-name" title={displayName} style:color={usernameColor}
-          >{displayName}</span
+        <span class="display-name" title={headerName} style:color={usernameColor}>{headerName}</span
         >
-      </div>
-      <div class="profile-row">
-        <span class="login" title={login}>{login}</span>
         <button
           type="button"
           class="copy-button"
@@ -225,28 +223,30 @@
           ><Icon name={copiedField === 'username' ? 'check' : 'copy'} /></button
         >
       </div>
-      <div class="profile-row metadata-row">
-        <span class="label">ID</span><span class="profile-value" title={userId ?? 'Unavailable'}
-          >{userId ?? 'Unavailable'}</span
-        >
-        {#if userId}<button
-            type="button"
-            class="copy-button"
-            class:copied={copiedField === 'id'}
-            title={copiedField === 'id' ? 'Copied ID' : 'Copy ID'}
-            aria-label="Copy Twitch user ID"
-            onclick={() => copyText(userId, 'id')}
-            ><Icon name={copiedField === 'id' ? 'check' : 'copy'} /></button
-          >{/if}
-      </div>
-      <div class="profile-row metadata-row">
-        <span class="label">Created</span><span
-          >{profile
-            ? formatCreatedAt(profile.createdAt)
-            : profileLoaded
-              ? 'Unavailable'
-              : 'Loading…'}</span
-        >
+      <div class="profile-metadata">
+        <div class="profile-row metadata-row">
+          <span class="label">ID</span><span class="profile-value" title={userId ?? 'Unavailable'}
+            >{userId ?? 'Unavailable'}</span
+          >
+          {#if userId}<button
+              type="button"
+              class="copy-button"
+              class:copied={copiedField === 'id'}
+              title={copiedField === 'id' ? 'Copied ID' : 'Copy ID'}
+              aria-label="Copy Twitch user ID"
+              onclick={() => copyText(userId, 'id')}
+              ><Icon name={copiedField === 'id' ? 'check' : 'copy'} /></button
+            >{/if}
+        </div>
+        <div class="profile-row metadata-row">
+          <span class="label">Created</span><span
+            >{profile
+              ? formatCreatedAt(profile.createdAt)
+              : profileLoaded
+                ? 'Unavailable'
+                : 'Loading…'}</span
+          >
+        </div>
       </div>
     </div>
   </section>
@@ -359,7 +359,8 @@
     display: grid;
     grid-template-columns: 64px minmax(0, 1fr);
     gap: 12px;
-    padding: 12px;
+    padding: 8px 12px;
+    align-items: center;
     background: var(--deck-surface);
   }
   .avatar-frame {
@@ -389,6 +390,11 @@
   .profile-details {
     min-width: 0;
   }
+  .profile-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 12px;
+  }
   .profile-row {
     display: flex;
     align-items: center;
@@ -403,13 +409,11 @@
     font-weight: 650;
   }
   .display-name,
-  .login,
   .profile-value {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .login,
   .label {
     color: var(--deck-muted);
   }

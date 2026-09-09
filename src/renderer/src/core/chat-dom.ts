@@ -9,6 +9,7 @@ import { NativeTwitchEmote, type TwitchEmote } from '@core/chat/twitch-emotes'
 import type { TwitchMessage } from '@core/chat/twitch-msg'
 import type { Collection, Emote } from '@mkody/twitch-emoticons'
 import type { CheermoteScale } from '@twurple/api/lib/endpoints/bits/CheermoteDisplayInfo'
+import { formatChatName } from './chat-name'
 import {
   HTTP_URL_REGEX,
   MarkType,
@@ -145,17 +146,10 @@ export function parseFullMessage(
 
   if (messagePrefix) {
     /* empty */
-  } else if (messageObj.type === 'system' || showName === 'username' || !messageObj.displayName) {
+  } else if (messageObj.type === 'system') {
     messagePrefix = username || ''
-  } else if (
-    showName === 'displayName' ||
-    username.toLowerCase() === messageObj.displayName.toLowerCase()
-  ) {
-    messagePrefix = messageObj.displayName
-  } else if (showName === 'usernameFirst') {
-    messagePrefix = `${username} (${messageObj.displayName})`
   } else {
-    messagePrefix = `${messageObj.displayName} (${username})`
+    messagePrefix = formatChatName(username, messageObj.displayName, showName)
   }
 
   const isAction = isActionMessage(processedMessage)

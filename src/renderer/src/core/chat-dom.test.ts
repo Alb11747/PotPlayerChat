@@ -2,10 +2,10 @@ import { TwitchChatMessage } from '@/core/chat/twitch-msg'
 import { isActionMessage, parseFullMessage, stripActionMessage } from '@/renderer/src/core/chat-dom'
 import { describe, expect, it } from 'vitest'
 
-function createChatMessage(message: string): TwitchChatMessage {
+function createChatMessage(message: string, displayName = 'DisplayName'): TwitchChatMessage {
   return new TwitchChatMessage(
     `raw:${message}`,
-    { 'display-name': 'DisplayName', id: `id-${message}`, 'tmi-sent-ts': '1710000000000' },
+    { 'display-name': displayName, id: `id-${message}`, 'tmi-sent-ts': '1710000000000' },
     `id-${message}`,
     1_710_000_000_000,
     'channel',
@@ -15,6 +15,12 @@ function createChatMessage(message: string): TwitchChatMessage {
 }
 
 describe('chat-dom parser', () => {
+  it('escapes a formatted sender name before rendering it as HTML', () => {
+    const msg = createChatMessage('hello', '<Cozy&Bytes>')
+    const [prefix] = parseFullMessage(msg, { debug: false })
+    expect(prefix).toBe('&lt;Cozy&amp;Bytes&gt; (username)')
+  })
+
   it('detects and strips ACTION payloads', () => {
     const action = '\u0001ACTION waves\u0001'
     expect(isActionMessage(action)).toBe(true)

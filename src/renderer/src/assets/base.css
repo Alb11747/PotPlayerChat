@@ -114,6 +114,7 @@
   --deck-good: #a1cab7;
   --deck-bad: #ffb1a3;
   --deck-message-size: 1.08rem;
+  --deck-timestamp-size: 14px;
   --deck-message-line-height: 1.5;
   --deck-message-gap: 3px;
   --deck-control-height: 30px;

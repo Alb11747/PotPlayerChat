@@ -520,6 +520,12 @@
     cursor: default;
   }
 
+  .chat-time {
+    font-size: var(--deck-timestamp-size, 14px);
+    font-variant-numeric: tabular-nums;
+    color: var(--deck-muted);
+  }
+
   .chat-message.first-message {
     background-color: var(--color-success-alpha);
   }
