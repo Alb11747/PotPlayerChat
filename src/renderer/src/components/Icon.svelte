@@ -1,5 +1,8 @@
 <script lang="ts">
-  const { name }: { name: 'search' | 'clock' | 'settings' | 'minus' | 'plus' | 'back' } = $props()
+  const {
+    name
+  }: { name: 'search' | 'clock' | 'settings' | 'minus' | 'plus' | 'back' | 'copy' | 'check' } =
+    $props()
 </script>
 
 <svg
@@ -25,6 +28,11 @@
       r="2"
       fill="var(--deck-surface)"
     />
+  {:else if name === 'copy'}
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  {:else if name === 'check'}
+    <path d="m5 12 4 4L19 6" />
   {:else if name === 'back'}
     <path d="m10 5-7 7 7 7M3 12h18" />
   {:else}

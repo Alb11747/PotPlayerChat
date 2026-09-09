@@ -17,6 +17,7 @@
   import { settings } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
   import LinkPreview from './LinkPreview.svelte'
+  import Icon from './Icon.svelte'
 
   let { context }: { context: UserWindowContext } = $props()
 
@@ -216,11 +217,12 @@
         <span class="login" title={login}>{login}</span>
         <button
           type="button"
-          class="icon-button"
+          class="copy-button"
+          class:copied={copiedField === 'username'}
           title={copiedField === 'username' ? 'Copied username' : 'Copy username'}
           aria-label="Copy username"
           onclick={() => copyText(login, 'username')}
-          >{copiedField === 'username' ? '✓' : '▣'}</button
+          ><Icon name={copiedField === 'username' ? 'check' : 'copy'} /></button
         >
       </div>
       <div class="profile-row metadata-row">
@@ -229,10 +231,12 @@
         >
         {#if userId}<button
             type="button"
-            class="icon-button"
+            class="copy-button"
+            class:copied={copiedField === 'id'}
             title={copiedField === 'id' ? 'Copied ID' : 'Copy ID'}
             aria-label="Copy Twitch user ID"
-            onclick={() => copyText(userId, 'id')}>{copiedField === 'id' ? '✓' : '▣'}</button
+            onclick={() => copyText(userId, 'id')}
+            ><Icon name={copiedField === 'id' ? 'check' : 'copy'} /></button
           >{/if}
       </div>
       <div class="profile-row metadata-row">
@@ -434,13 +438,28 @@
     outline: 2px solid var(--deck-accent);
     outline-offset: 2px;
   }
-  .icon-button {
+  .copy-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: none;
-    min-height: 21px;
-    padding: 1px 4px;
-    border: 0;
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
     background: transparent;
     color: var(--deck-muted);
+    line-height: 1;
+  }
+  .copy-button:hover,
+  .copy-button.copied {
+    color: var(--deck-accent);
+    background: var(--deck-hover);
+  }
+  .copy-button:focus-visible {
+    outline-offset: 0;
   }
   .profile-notice {
     flex: none;
