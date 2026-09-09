@@ -611,6 +611,7 @@
 
   .inline-image-preview {
     display: block;
+    margin-inline: auto;
     max-width: min(30rem, 100%);
     max-height: 20rem;
     border-radius: 0.35rem;

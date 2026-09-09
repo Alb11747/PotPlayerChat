@@ -702,6 +702,7 @@
       >
       {#each potplayerInstances as inst (inst.hwnd)}
         <button
+          class="recording-tab"
           role="tab"
           aria-selected={!autoSelectPotPlayer && inst.hwnd === selectedPotplayerInfo?.hwnd}
           tabindex={!autoSelectPotPlayer && inst.hwnd === selectedPotplayerInfo?.hwnd ? 0 : -1}
@@ -742,14 +743,54 @@
         onclick={toggleSettings}><Icon name={showSettings ? 'back' : 'settings'} /></button
       >
     </div>
-    {#if settings.interface.layout === 'comfort' && !showSettings}
+  </header>
+
+  {#if !showSettings}
+    <section class="playback-context" aria-label="Playback context">
       <div class="recording-row">
         <span title={selectedPotplayerInfo?.title}
-          >{selectedPotplayerInfo?.title ?? 'Waiting for a recording'}</span
+          >{selectedPotplayerInfo?.channel
+            ? selectedPotplayerInfo.channel + ' · '
+            : ''}{selectedPotplayerInfo?.title ?? 'Waiting for a recording'}</span
         ><time>{clockText(playbackTime)}</time>
       </div>
-    {/if}
-  </header>
+      <div class="status-row">
+        <span class="playback-status" title={statusLabel}>{statusLabel}</span>
+        {#if !scrollToBottom}<button class="return-button" onclick={scrollChatToBottom}
+            >Return to playback</button
+          >{/if}
+        <button
+          class="offset-button"
+          title="Adjust session timestamp offset"
+          aria-expanded={showOffset}
+          disabled={!selectedPotplayerInfo?.title}
+          onclick={() => {
+            retainReadingPosition()
+            showOffset = !showOffset
+            void tick().then(() => scrollToTarget())
+          }}
+          >Offset {settings.chat._sessionTimestampOffset > 0 ? '+' : ''}{settings.chat
+            ._sessionTimestampOffset / 1000} s</button
+        >
+      </div>
+      {#if showOffset}
+        <div class="offset-controls">
+          <span>Session offset</span>
+          <button
+            class="icon-button"
+            aria-label="Decrease session offset by 0.5 seconds"
+            onclick={() => adjustSessionOffset(-500)}><Icon name="minus" /></button
+          >
+          <output>{settings.chat._sessionTimestampOffset / 1000} s</output>
+          <button
+            class="icon-button"
+            aria-label="Increase session offset by 0.5 seconds"
+            onclick={() => adjustSessionOffset(500)}><Icon name="plus" /></button
+          >
+        </div>
+      {/if}
+    </section>
+  {/if}
 
   {#if showSettings}<div class="settings-content">
       <Settings
@@ -847,55 +888,6 @@
       </div>
     {/if}
   </div>
-
-  {#if !showSettings}
-    <footer class="chat-footer">
-      {#if settings.interface.layout === 'streamlined'}
-        <div class="recording-row">
-          <span title={selectedPotplayerInfo?.title}
-            >{selectedPotplayerInfo?.channel
-              ? selectedPotplayerInfo.channel + ' · '
-              : ''}{selectedPotplayerInfo?.title ?? 'Waiting for a recording'}</span
-          ><time>{clockText(playbackTime)}</time>
-        </div>
-      {/if}
-      <div class="status-row">
-        <span class="playback-status" title={statusLabel}>{statusLabel}</span>
-        {#if !scrollToBottom}<button class="return-button" onclick={scrollChatToBottom}
-            >Return to playback</button
-          >{/if}
-        <button
-          class="offset-button"
-          title="Adjust session timestamp offset"
-          aria-expanded={showOffset}
-          disabled={!selectedPotplayerInfo?.title}
-          onclick={() => {
-            retainReadingPosition()
-            showOffset = !showOffset
-            void tick().then(() => scrollToTarget())
-          }}
-          >Offset {settings.chat._sessionTimestampOffset > 0 ? '+' : ''}{settings.chat
-            ._sessionTimestampOffset / 1000} s</button
-        >
-      </div>
-      {#if showOffset}
-        <div class="offset-controls">
-          <span>Session offset</span>
-          <button
-            class="icon-button"
-            aria-label="Decrease session offset by 0.5 seconds"
-            onclick={() => adjustSessionOffset(-500)}><Icon name="minus" /></button
-          >
-          <output>{settings.chat._sessionTimestampOffset / 1000} s</output>
-          <button
-            class="icon-button"
-            aria-label="Increase session offset by 0.5 seconds"
-            onclick={() => adjustSessionOffset(500)}><Icon name="plus" /></button
-          >
-        </div>
-      {/if}
-    </footer>
-  {/if}
 </div>
 
 <style>
@@ -927,7 +919,6 @@
   }
   .instance-tabs button {
     flex: 0 0 auto;
-    max-width: 150px;
     min-width: 44px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -937,6 +928,10 @@
     color: var(--deck-muted);
     padding: 5px 8px;
     border-radius: 4px;
+  }
+  .instance-tabs .recording-tab {
+    flex: 1 0 80px;
+    text-align: left;
   }
   .instance-tabs button[aria-selected='true'] {
     background: var(--deck-selection);
@@ -1032,13 +1027,13 @@
   .concealed {
     display: none;
   }
-  .chat-footer {
+  .playback-context {
     flex: none;
     display: flex;
     flex-direction: column;
     gap: 5px;
     padding: 6px 9px;
-    border-top: 1px solid var(--deck-line);
+    border-bottom: 1px solid var(--deck-line);
   }
   .status-row {
     display: flex;
