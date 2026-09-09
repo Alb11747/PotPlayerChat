@@ -210,20 +210,21 @@
       {/if}
     </div>
     <div class="profile-details">
-      <div class="profile-row primary-row">
-        <span class="display-name" title={headerName} style:color={usernameColor}>{headerName}</span
-        >
-        <button
-          type="button"
-          class="copy-button"
-          class:copied={copiedField === 'username'}
-          title={copiedField === 'username' ? 'Copied username' : 'Copy username'}
-          aria-label="Copy username"
-          onclick={() => copyText(login, 'username')}
-          ><Icon name={copiedField === 'username' ? 'check' : 'copy'} /></button
-        >
-      </div>
-      <div class="profile-metadata">
+      <div class="profile-heading">
+        <div class="profile-row primary-row">
+          <span class="display-name" title={headerName} style:color={usernameColor}
+            >{headerName}</span
+          >
+          <button
+            type="button"
+            class="copy-button"
+            class:copied={copiedField === 'username'}
+            title={copiedField === 'username' ? 'Copied username' : 'Copy username'}
+            aria-label="Copy username"
+            onclick={() => copyText(login, 'username')}
+            ><Icon name={copiedField === 'username' ? 'check' : 'copy'} /></button
+          >
+        </div>
         <div class="profile-row metadata-row">
           <span class="label">ID</span><span class="profile-value" title={userId ?? 'Unavailable'}
             >{userId ?? 'Unavailable'}</span
@@ -238,16 +239,40 @@
               ><Icon name={copiedField === 'id' ? 'check' : 'copy'} /></button
             >{/if}
         </div>
-        <div class="profile-row metadata-row">
-          <span class="label">Created</span><span
-            >{profile
-              ? formatCreatedAt(profile.createdAt)
-              : profileLoaded
-                ? 'Unavailable'
-                : 'Loading…'}</span
-          >
-        </div>
       </div>
+      <div class="profile-row created-row">
+        <span class="label">Created</span><span
+          >{profile
+            ? formatCreatedAt(profile.createdAt)
+            : profileLoaded
+              ? 'Unavailable'
+              : 'Loading…'}</span
+        >
+      </div>
+    </div>
+    <div class="history-header">
+      <div class="history-summary">
+        <span class="history-label" title={`Messages from ${login}`}>Messages</span><span
+          class="history-count">{messages.length}</span
+        >
+      </div>
+      <button type="button" onclick={openUsercard}>Usercard</button>
+      <button
+        class="search-user"
+        type="button"
+        title="Search username"
+        aria-label="Search username"
+        onclick={() => context.searchUsername(context.username)}
+        ><svg
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="m12 12 5 5" /></svg
+        ></button
+      >
     </div>
   </section>
   {#if profileError || copyError}
@@ -260,29 +285,6 @@
   {/if}
   <span class="sr-only" role="status">{copiedField ? `Copied ${copiedField}.` : ''}</span>
   <section class="history-section" aria-label="Message history">
-    <div class="history-header">
-      <div class="history-summary">
-        <span class="history-label" title={`Messages from ${login}`}>Messages from {login}</span
-        ><span class="history-count">{messages.length}</span>
-      </div>
-      <button type="button" onclick={openUsercard}>Usercard</button>
-      <button
-        class="search-user"
-        type="button"
-        title="Search username"
-        aria-label="Search username"
-        onclick={() => context.searchUsername(context.username)}
-        ><svg
-          width="14"
-          height="14"
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.6"
-          aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="m12 12 5 5" /></svg
-        ></button
-      >
-    </div>
     {#if historyError || loadingState.state === 'error'}
       <div class="profile-notice" role="alert">
         <span>{historyError || loadingState.errorMessage}</span><button
@@ -357,18 +359,20 @@
   .profile-header {
     flex: none;
     display: grid;
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: 144px minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
     gap: 12px;
-    padding: 8px 12px;
-    align-items: center;
+    padding: 16px;
+    align-items: start;
     background: var(--deck-surface);
+    border-bottom: 1px solid var(--deck-line);
   }
   .avatar-frame {
-    width: 64px;
-    height: 64px;
+    grid-row: 1 / 3;
+    width: 144px;
+    height: 144px;
     overflow: hidden;
     background: var(--deck-bg);
-    border-radius: 4px;
   }
   .avatar-frame img,
   .avatar-fallback {
@@ -384,16 +388,17 @@
     align-items: center;
     justify-content: center;
     color: var(--deck-muted);
-    font-size: 28px;
+    font-size: 48px;
     font-weight: 600;
   }
   .profile-details {
     min-width: 0;
   }
-  .profile-metadata {
+  .profile-heading {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 12px;
+    align-items: center;
+    gap: 6px 8px;
   }
   .profile-row {
     display: flex;
@@ -405,7 +410,9 @@
     line-height: 1.4;
   }
   .primary-row {
-    font-size: 16px;
+    flex: 1;
+    min-width: 100px;
+    font-size: 24px;
     font-weight: 650;
   }
   .display-name,
@@ -418,7 +425,12 @@
     color: var(--deck-muted);
   }
   .metadata-row {
-    font-size: 11px;
+    flex: none;
+    font-size: 18px;
+  }
+  .created-row {
+    margin-top: 7px;
+    font-size: 16px;
   }
   .label {
     flex: none;
@@ -447,9 +459,9 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 24px;
-    height: 24px;
-    min-height: 24px;
+    width: 26px;
+    height: 26px;
+    min-height: 26px;
     padding: 0;
     border: 1px solid transparent;
     border-radius: 4px;
@@ -487,12 +499,19 @@
     flex-direction: column;
   }
   .history-header {
-    flex: none;
+    grid-column: 2;
+    align-self: end;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
-    border-block: 1px solid var(--deck-line);
+  }
+  .history-header button {
+    height: 38px;
+    min-height: 38px;
+    padding: 7px 12px;
+    font-size: 16px;
+    line-height: 20px;
   }
   .history-summary {
     display: flex;
@@ -501,7 +520,7 @@
     min-width: 0;
     margin-right: auto;
     color: var(--deck-muted);
-    font-size: 11px;
+    font-size: 14px;
   }
   .history-label {
     min-width: 0;
@@ -517,8 +536,39 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    padding: 4px;
+    width: 38px;
+  }
+  .history-header .search-user {
+    padding: 8px;
+  }
+  @media (max-width: 480px) {
+    .profile-header {
+      grid-template-columns: 112px minmax(0, 1fr);
+      grid-template-rows: auto auto;
+    }
+    .avatar-frame {
+      grid-row: 1;
+      width: 112px;
+      height: 112px;
+    }
+    .avatar-fallback {
+      font-size: 40px;
+    }
+    .primary-row {
+      flex-basis: 100%;
+      min-width: 0;
+      font-size: 22px;
+    }
+    .metadata-row {
+      font-size: 16px;
+    }
+    .created-row {
+      margin-top: 3px;
+      font-size: 15px;
+    }
+    .history-header {
+      grid-column: 1 / -1;
+    }
   }
   .history-list {
     min-height: 0;
