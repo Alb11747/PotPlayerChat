@@ -129,7 +129,7 @@
             </select>
           </label>
           <p class="section-note">
-            Streamlined maximizes chat space. Comfort uses larger messages and more spacing.
+            Streamlined maximizes chat space. Comfort adds more spacing between messages.
           </p>
           <label
             ><span class="label-text">Color</span>

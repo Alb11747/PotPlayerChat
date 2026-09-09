@@ -113,7 +113,7 @@
   --deck-selection: #253b57;
   --deck-good: #a1cab7;
   --deck-bad: #ffb1a3;
-  --deck-message-size: 12px;
+  --deck-message-size: 1.08rem;
   --deck-message-line-height: 1.5;
   --deck-message-gap: 3px;
   --deck-control-height: 30px;
@@ -143,7 +143,6 @@
   --deck-bad: #ffb4ae;
 }
 :root[data-layout='comfort'] {
-  --deck-message-size: 13px;
   --deck-message-line-height: 1.62;
   --deck-message-gap: 6px;
   --deck-control-height: 32px;
