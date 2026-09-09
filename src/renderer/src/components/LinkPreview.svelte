@@ -257,14 +257,18 @@
           />
         {/if}
         <div class="emote-preview-name">{emoteSegment.name}</div>
-        {#if source}
-          <div class="emote-preview-source">
-            Source: {source}
-          </div>
-        {/if}
-        {#if 'ownerName' in emoteSegment.emote && emoteSegment.emote.ownerName}
-          <div class="emote-preview-author">
-            Author: {emoteSegment.emote.ownerName}
+        {#if source || ('ownerName' in emoteSegment.emote && emoteSegment.emote.ownerName)}
+          <div class="emote-preview-metadata">
+            {#if source}
+              <div class="emote-preview-source">
+                Source: {source}
+              </div>
+            {/if}
+            {#if 'ownerName' in emoteSegment.emote && emoteSegment.emote.ownerName}
+              <div class="emote-preview-author">
+                Author: {emoteSegment.emote.ownerName}
+              </div>
+            {/if}
           </div>
         {/if}
         {#if emoteSegment.type === 'emote' && emoteSegment.attachedEmotes && emoteSegment.attachedEmotes.length > 0}
@@ -356,6 +360,12 @@
     font-size: 16px;
     font-weight: bold;
     color: var(--color-text-light);
+  }
+
+  .emote-preview-metadata {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .emote-preview-source,
