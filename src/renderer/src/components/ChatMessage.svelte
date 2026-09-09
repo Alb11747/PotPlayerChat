@@ -352,10 +352,10 @@
   {/if}
   {#if message.type === 'chat'}
     {#if enableBadges && badges.length > 0}
-      <span class="chat-badges inline-flex items-center justify-center align-middle">
+      <span class="chat-badges">
         {#each badges as [badgeId, badge] (badgeId)}
           <img
-            class="chat-badge h-5.8 object-contain inline-flex items-center align-text-bottom"
+            class="chat-badge"
             src={badge.getImageUrl(4)}
             alt={badge.title}
             title={badgeId === 'subscriber'
@@ -513,7 +513,7 @@
     width: 100%;
     padding: var(--deck-message-gap, 2px) 0.6rem;
     line-height: var(--deck-message-line-height, 1.5);
-    font-size: var(--deck-message-size, 13px);
+    font-size: var(--deck-message-size, 1.09375rem);
     box-sizing: border-box;
     word-break: break-word;
     user-select: text;
@@ -521,7 +521,7 @@
   }
 
   .chat-time {
-    font-size: var(--deck-timestamp-size, 14px);
+    font-size: var(--deck-timestamp-size, 0.90625rem);
     font-variant-numeric: tabular-nums;
     color: var(--deck-muted);
   }
@@ -587,15 +587,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin: 0.05rem 0;
-    gap: 0.2rem;
+    gap: 0.125rem;
     vertical-align: middle;
   }
 
   .chat-badge {
-    height: 1.45rem;
+    height: var(--deck-badge-size, 1.5rem);
     object-fit: contain;
-    vertical-align: text-bottom;
   }
 
   .inline-image-previews {

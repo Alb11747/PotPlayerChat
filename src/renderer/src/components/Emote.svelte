@@ -151,10 +151,10 @@
   .emote-container {
     display: inline-grid;
     grid-auto-flow: column;
-    vertical-align: text-bottom;
+    vertical-align: middle;
 
     img {
-      height: 2.6rem;
+      height: var(--deck-emote-size, 2.5rem);
       max-height: max-content;
       max-width: 9rem;
       object-fit: contain;
@@ -170,16 +170,13 @@
     grid-area: 1 / 1;
     justify-self: center;
     align-self: center;
-    margin-right: 0.25rem;
+    margin-right: 0.125rem;
     font-weight: 900;
   }
   .zero-width-emote {
     z-index: 1;
   }
 
-  .cheer-emote-container {
-    vertical-align: bottom;
-  }
   .cheer-emote-container > .bits {
     align-self: end;
     margin-right: 0.2rem;

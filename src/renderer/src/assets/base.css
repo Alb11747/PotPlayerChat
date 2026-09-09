@@ -113,8 +113,10 @@
   --deck-selection: #253b57;
   --deck-good: #a1cab7;
   --deck-bad: #ffb1a3;
-  --deck-message-size: 1.08rem;
-  --deck-timestamp-size: 14px;
+  --deck-message-size: 1.09375rem;
+  --deck-timestamp-size: 0.90625rem;
+  --deck-badge-size: 1.5rem;
+  --deck-emote-size: 2.5rem;
   --deck-message-line-height: 1.5;
   --deck-message-gap: 3px;
   --deck-control-height: 30px;
