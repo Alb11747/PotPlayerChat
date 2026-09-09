@@ -25,3 +25,15 @@ export function onMouseLeavePreviewElement(): void {
     previewState.emoteSegment = null
   }
 }
+
+export function clearPreview(): void {
+  previewState.url = null
+  previewState.emoteSegment = null
+  previewState.clearOnMove = false
+}
+
+export function focusPreviewElement(element: HTMLElement): void {
+  clearPreview()
+  const bounds = element.getBoundingClientRect()
+  previewState.mousePosition = { x: bounds.left + bounds.width / 2, y: bounds.bottom }
+}

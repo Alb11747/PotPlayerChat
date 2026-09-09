@@ -18,7 +18,8 @@ export default defineConfig({
         input: {
           main: resolve(__dirname, 'src/renderer/index.html'),
           search: resolve(__dirname, 'src/renderer/search.html'),
-          user: resolve(__dirname, 'src/renderer/user.html')
+          user: resolve(__dirname, 'src/renderer/user.html'),
+          preview: resolve(__dirname, 'src/renderer/preview.html')
         }
       }
     }

@@ -22,17 +22,23 @@ export class UrlTracker {
   /**
    * Fetch link preview data for a URL
    */
-  async getPreview(url: string): Promise<LinkPreview | null> {
-    if (this.cache.has(url)) return this.cache.get(url) ?? null
-    if (this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
+  async getPreview(url: string, refresh = false): Promise<LinkPreview | null> {
+    if (!refresh && this.cache.has(url)) return this.cache.get(url) ?? null
+    if (!refresh && this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
     return await this.lock.acquire(url, async () => {
-      if (this.cache.has(url)) return this.cache.get(url) ?? null
-      if (this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
+      if (!refresh && this.cache.has(url)) return this.cache.get(url) ?? null
+      if (!refresh && this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
 
+      if (refresh) {
+        this.cache.delete(url)
+        this.failedUrls.delete(url)
+      }
       this.loadingUrls.add(url)
       try {
         // Use IPC to fetch from main process (avoids CORS)
-        const data = await window.api.getLinkPreview(url, this.settings.chatterinoBaseUrl)
+        const data = await window.api.getLinkPreview(url, this.settings.chatterinoBaseUrl, {
+          refresh
+        })
 
         if (!data) {
           const errorResult: LinkPreview = { status: 0, link: url }

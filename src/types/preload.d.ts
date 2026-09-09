@@ -1,3 +1,4 @@
+import type { AppearancePreferences } from './appearance'
 import type {
   getCurrentVideoTime,
   getPlaylists,
@@ -27,6 +28,9 @@ export type PollingIntervals = {
 }
 
 export interface WindowApi {
+  getAppearancePreferences: () => Promise<AppearancePreferences>
+  onAppearanceChanged: (callback: (preferences: AppearancePreferences) => void) => void
+  offAppearanceChanged: (callback: (preferences: AppearancePreferences) => void) => void
   loadDataFile: <T = unknown>(subpath: string) => Promise<T | null>
   saveDataFile: <T = unknown>(subpath: string, value: T) => Promise<boolean>
   loadKeys: () => Promise<{ twitch?: { clientId: string; clientSecret?: string } }>

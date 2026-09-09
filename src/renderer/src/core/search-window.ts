@@ -1,3 +1,4 @@
+import type { UsernameClickInfo } from './username-click'
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type { TwitchMessage } from '@/core/chat/twitch-msg'
 import {
@@ -21,6 +22,7 @@ export type SearchContext = SearchOptions & {
   initialMessages: TwitchMessage[]
   loadedMessages: TwitchMessage[]
   focusMessage: (message: TwitchMessage) => void
+  onUsernameClick: (info: UsernameClickInfo) => void
 }
 
 export class SearchContextRegistry extends PopupContextRegistry<SearchContext> {}

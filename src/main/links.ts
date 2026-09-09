@@ -72,7 +72,8 @@ export function clearLinkPreviewCache(): void {
 
 export async function getLinkPreview(
   url: string,
-  chatterinoBaseUrl: string = defaultLinkPreviewUrl
+  chatterinoBaseUrl: string = defaultLinkPreviewUrl,
+  options: { refresh?: boolean } = {}
 ): Promise<LinkPreview | null> {
   return await lock.acquire(url, async () => {
     try {
@@ -87,6 +88,7 @@ export async function getLinkPreview(
         return null
       }
 
+      if (options.refresh) linkPreviewCache.delete(url)
       if (linkPreviewCache.has(url)) return linkPreviewCache.get(url) ?? null
 
       const encodedUrl = encodeURIComponent(url)

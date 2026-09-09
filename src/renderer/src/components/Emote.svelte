@@ -4,10 +4,18 @@
   import type { Segment } from '@/renderer/src/core/chat-dom'
   import type { UrlTracker } from '@/renderer/src/core/url-tracker'
   import {
+    clearPreview,
+    focusPreviewElement,
     currentPreviewType,
     onMouseLeavePreviewElement,
     previewState
   } from '@/renderer/src/state/preview.svelte'
+  import { settings } from '../state/settings.svelte'
+  import {
+    openPreviewPopup,
+    restorePreviewTrigger,
+    shouldOpenExpandedPreview
+  } from '../core/preview-window'
   import { urlsToSrcset } from '@/utils/dom'
 
   let {
@@ -37,11 +45,27 @@
   }
 
   function mouseUpdateEmote(segment: Segment & { type: 'emote' | 'cheer' }): void {
-    if (enableEmotePreviews && !currentPreviewType()) {
+    if (
+      enableEmotePreviews &&
+      settings.interface.previewMode === 'hover' &&
+      !currentPreviewType()
+    ) {
       previewState.emoteSegment = segment
     }
     if (previewState.emoteSegment?.name === segment.name)
       previewState.lastUpdateTime = performance.now()
+  }
+
+  function activate(event: MouseEvent | KeyboardEvent): void {
+    if (
+      !shouldOpenExpandedPreview(enableEmotePreviews, settings.interface.previewMode, event.ctrlKey)
+    )
+      return
+    event.preventDefault()
+    event.stopPropagation()
+    const trigger = event.currentTarget as HTMLElement
+    clearPreview()
+    openPreviewPopup({ kind: 'emote', segment, restoreFocus: () => restorePreviewTrigger(trigger) })
   }
 
   function onError(event: Event, urls: Record<string, string>): void {
@@ -54,7 +78,23 @@
 <span
   class="emote-container"
   class:cheer-emote-container={segment.type === 'cheer'}
-  role="group"
+  role="button"
+  tabindex={enableEmotePreviews ? 0 : -1}
+  aria-label={`Preview ${segment.name}`}
+  aria-describedby={previewState.emoteSegment?.name === segment.name
+    ? 'potplayerchat-hover-preview'
+    : undefined}
+  aria-disabled={!enableEmotePreviews}
+  onclick={activate}
+  onkeydown={(event) => {
+    if (event.key === 'Enter' || event.key === ' ') activate(event)
+    if (event.key === 'Escape') clearPreview()
+  }}
+  onfocus={(event) => {
+    focusPreviewElement(event.currentTarget)
+    mouseUpdateEmote(segment)
+  }}
+  onblur={clearPreview}
   onmouseenter={() => mouseUpdateEmote(segment)}
   onmousemove={() => mouseUpdateEmote(segment)}
   onmouseleave={() => {
@@ -119,6 +159,11 @@
       max-width: 9rem;
       object-fit: contain;
     }
+  }
+
+  .emote-container:focus-visible {
+    outline: 2px solid var(--deck-accent);
+    outline-offset: 2px;
   }
 
   .chat-emote {

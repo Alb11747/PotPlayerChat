@@ -34,7 +34,9 @@ function createContext(): UserWindowContext {
     },
     initialMessages: [clickedMessage],
     loadedMessages: [],
-    focusMessage: vi.fn()
+    focusMessage: vi.fn(),
+    onUsernameClick: vi.fn(),
+    searchUsername: vi.fn()
   }
 }
 
@@ -54,6 +56,8 @@ describe('user window context', () => {
     expect(loadedContext?.initialMessages).toBe(context.initialMessages)
     expect(loadedContext?.loadedMessages).toBe(context.loadedMessages)
     expect(registry.take('user-token')).toBeNull()
+    expect(loadedContext?.onUsernameClick).toBe(context.onUsernameClick)
+    expect(loadedContext?.searchUsername).toBe(context.searchUsername)
   })
 
   it('expires unused contexts', () => {

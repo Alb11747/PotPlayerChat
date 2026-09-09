@@ -62,7 +62,7 @@ function exposePopupContextProvider(
 }
 
 export function openPopupContext<T>(
-  page: 'search.html' | 'user.html',
+  page: 'search.html' | 'user.html' | 'preview.html',
   context: T,
   label: string,
   hostWindow: PopupWindowHost = window,

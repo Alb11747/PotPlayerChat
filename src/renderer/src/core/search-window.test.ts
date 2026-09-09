@@ -14,7 +14,8 @@ function createContext(): SearchContext {
     },
     initialMessages: [],
     loadedMessages: [],
-    focusMessage: vi.fn()
+    focusMessage: vi.fn(),
+    onUsernameClick: vi.fn()
   }
 }
 
@@ -37,6 +38,7 @@ describe('SearchContextRegistry', () => {
     expect(loadedContext?.initialMessages).toBe(initialMessages)
     expect(loadedContext?.loadedMessages).toBe(loadedMessages)
     expect(registry.take('search-token')).toBeNull()
+    expect(loadedContext?.onUsernameClick).toBe(context.onUsernameClick)
   })
 
   it('returns null for unknown and expired tokens', () => {

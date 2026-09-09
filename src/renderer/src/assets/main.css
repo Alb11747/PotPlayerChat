@@ -1,13 +1,13 @@
 @import './base.css';
 
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Segoe UI', sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
 
-  color: var(--color-text-invert);
-  background-color: var(--color-white-alpha);
+  color: var(--deck-text);
+  background-color: var(--deck-bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

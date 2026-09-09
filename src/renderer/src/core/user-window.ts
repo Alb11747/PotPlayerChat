@@ -1,3 +1,4 @@
+import type { UsernameClickInfo } from './username-click'
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import { TwitchChatMessage, type TwitchMessage } from '@/core/chat/twitch-msg'
 import {
@@ -14,6 +15,8 @@ export type UserWindowContext = {
   initialMessages: TwitchMessage[]
   loadedMessages: TwitchMessage[]
   focusMessage: (message: TwitchMessage) => void
+  onUsernameClick: (info: UsernameClickInfo) => void
+  searchUsername: (username: string) => void
   searchRange?: {
     startTime: number
     endTime: number

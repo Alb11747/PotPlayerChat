@@ -3,7 +3,7 @@
   import { debounce } from '@/utils/functions'
   import { onMount } from 'svelte'
   import type { UrlTracker } from '../core/url-tracker'
-  import { previewState } from '../state/preview.svelte'
+  import { clearPreview, previewState } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
 
   const { defaultPosition }: { defaultPosition?: 'top' | 'bottom' } = $props()
@@ -29,9 +29,7 @@
 
   onMount(() => {
     document.addEventListener('mousemove', handleMouseMove, { passive: true, capture: true })
-    return () =>
-      // @ts-ignore svelte-check ignore
-      document.removeEventListener('mousemove', handleMouseMove, { passive: true, capture: true })
+    return () => document.removeEventListener('mousemove', handleMouseMove, { capture: true })
   })
 
   $effect(() => {
@@ -51,7 +49,7 @@
 
     const marginTop = 8
     const marginBottom = 25
-    const isTopDefault = defaultPosition ?? settings.interface.defaultPreviewPosition === 'top'
+    const isTopDefault = (defaultPosition ?? settings.interface.defaultPreviewPosition) === 'top'
 
     let top: number
 
@@ -78,6 +76,7 @@
       left = windowWidth - rect.width - marginX
     }
 
+    top = Math.max(5, Math.min(top, windowHeight - rect.height - 5))
     previewStyle = `top: ${top}px; left: ${left}px;`
   }
 
@@ -88,28 +87,39 @@
   let foundLinkInToolTip: boolean = $state(false)
 
   $effect(() => {
-    if (!preview?.tooltip) return
+    const activePreview = preview
+    sanitizedTooltipHtml = null
     foundLinkInToolTip = false
-    sanitizeTooltip(preview.tooltip).then((html) => {
-      sanitizedTooltipHtml = html
-      updatePosition()
-      requestAnimationFrame(() => {
+    if (!activePreview?.tooltip) return
+    let cancelled = false
+    sanitizeTooltip(activePreview.tooltip)
+      .then((html) => {
+        if (cancelled) return
+        sanitizedTooltipHtml = html
         updatePosition()
-        if (!tooltipElement) return
-        const link = findChildByText(tooltipElement, preview.link)
-        const linkClass = 'preview-url'
-        if (!link) return
-        foundLinkInToolTip = true
-        const linkElement = document.createElement('span')
-        linkElement.classList.add(linkClass)
-        linkElement.appendChild(document.createElement('br'))
-        if (link.previousSibling?.textContent?.trim() === 'URL:') link.previousSibling?.remove()
-        link.textContent = link.textContent?.trim() ?? ''
-        linkElement.appendChild(link.cloneNode(true))
-        link.replaceWith(linkElement)
-        sanitizedTooltipHtml = tooltipElement.innerHTML
+        requestAnimationFrame(() => {
+          updatePosition()
+          if (cancelled || !tooltipElement) return
+          const link = findChildByText(tooltipElement, activePreview.link)
+          const linkClass = 'preview-url'
+          if (!link) return
+          foundLinkInToolTip = true
+          const linkElement = document.createElement('span')
+          linkElement.classList.add(linkClass)
+          linkElement.appendChild(document.createElement('br'))
+          if (link.previousSibling?.textContent?.trim() === 'URL:') link.previousSibling?.remove()
+          link.textContent = link.textContent?.trim() ?? ''
+          linkElement.appendChild(link.cloneNode(true))
+          link.replaceWith(linkElement)
+          sanitizedTooltipHtml = tooltipElement.innerHTML
+        })
       })
-    })
+      .catch(() => {
+        if (!cancelled) sanitizedTooltipHtml = 'Preview details unavailable.'
+      })
+    return () => {
+      cancelled = true
+    }
   })
 
   const preview = $derived(
@@ -118,6 +128,10 @@
       : null
   )
   const emoteSegment = $derived(previewState.emoteSegment)
+  let emoteImageFailed = $state(false)
+  $effect(() => {
+    if (emoteSegment) emoteImageFailed = false
+  })
   const emote = $derived(emoteSegment?.emote)
   const source = $derived.by(() => {
     if (emote && 'type' in emote) return emote.type
@@ -145,17 +159,24 @@
   })
 </script>
 
+<svelte:window
+  onkeydown={(event) => {
+    if (event.key === 'Escape') clearPreview()
+  }}
+/>
+
 {#if (previewState.url && previewState.urlTrackerInstance) || emoteSegment}
   <div
+    id="potplayerchat-hover-preview"
     class="link-preview"
-    role="dialog"
-    tabindex="0"
-    aria-modal="true"
+    role="tooltip"
     bind:this={previewElement}
     style={previewStyle}
   >
     {#if previewState.url && previewState.urlTrackerInstance}
-      {#if previewState.urlTrackerInstance.hasPreview(previewState.url)}
+      {#if previewState.urlTrackerInstance.isPreviewLoading(previewState.url)}
+        <div class="preview-loading-content">Loading preview…</div>
+      {:else if previewState.urlTrackerInstance.hasPreview(previewState.url)}
         {#if preview && 200 <= preview.status && preview.status < 300}
           <div class="p-2 flex-1">
             {#if preview.thumbnail}
@@ -211,29 +232,30 @@
             <div class="preview-url">{preview.link}</div>
           </div>
         {/if}
-      {:else if previewState.urlTrackerInstance.isPreviewLoading(previewState.url)}
-        <div class="preview-loading-content">
-          <div class="text-4xl animate-spin">⏳</div>
-          <div class="font-medium">Loading preview...</div>
-          <div class="preview-url">{previewState.url}</div>
-        </div>
       {/if}
     {:else if emoteSegment}
       <div class="p-3 flex flex-col items-center gap-2">
-        <img
-          class="emote-preview-image"
-          srcset={urlsToSrcset(emoteSegment.urls, {
-            '1': '0.25x',
-            '2': '0.5x',
-            '3': '0.75x',
-            '4': '1x'
-          })}
-          alt={emoteSegment.name}
-          onload={() => {
-            updatePosition()
-            requestAnimationFrame(updatePosition)
-          }}
-        />
+        {#if emoteImageFailed}
+          <p>Image failed to load</p>
+        {:else}
+          <img
+            onerror={() => {
+              emoteImageFailed = true
+            }}
+            class="emote-preview-image"
+            srcset={urlsToSrcset(emoteSegment.urls, {
+              '1': '0.25x',
+              '2': '0.5x',
+              '3': '0.75x',
+              '4': '1x'
+            })}
+            alt={emoteSegment.name}
+            onload={() => {
+              updatePosition()
+              requestAnimationFrame(updatePosition)
+            }}
+          />
+        {/if}
         <div class="emote-preview-name">{emoteSegment.name}</div>
         {#if source}
           <div class="emote-preview-source">
@@ -271,11 +293,14 @@
     height: max-content;
     position: fixed;
     z-index: 1000;
-    background: var(--color-bg-modal);
-    border: 1px solid var(--color-gray-5);
+    pointer-events: none;
+    background: var(--deck-surface);
+    color: var(--deck-text);
+    border: 1px solid var(--deck-line);
     border-radius: 8px;
     box-shadow: 0 4px 12px var(--color-shadow-modal);
-    max-width: 80vw;
+    max-width: calc(100vw - 10px);
+    max-height: calc(100vh - 10px);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -296,7 +321,7 @@
     flex: 1 1 auto;
     width: fit-content;
     height: fit-content;
-    max-width: 400px;
+    max-width: min(400px, calc(100vw - 32px));
     max-height: 250px;
     object-fit: contain;
     margin-left: auto;
@@ -306,7 +331,7 @@
   .preview-tooltip {
     color: var(--color-text-light);
     font-size: 12px;
-    line-height: 0.8;
+    line-height: 1.4;
     white-space: pre-wrap;
     padding: 2px 0;
   }
@@ -337,7 +362,7 @@
   .emote-preview-author {
     font-size: 12px;
     color: var(--color-text-muted);
-    line-height: 0.8;
+    line-height: 1.4;
     text-align: center;
   }
 

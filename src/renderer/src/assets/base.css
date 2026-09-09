@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
   /* Base colors */
@@ -100,6 +100,117 @@
   --color-text: var(--color-text-main);
 }
 
+/* Approved Chat Deck palettes; layout affects geometry independently. */
+:root {
+  color-scheme: dark;
+  --deck-bg: #15181d;
+  --deck-surface: #1d222a;
+  --deck-hover: #2b333e;
+  --deck-text: #e1e7ef;
+  --deck-muted: #a5b2c4;
+  --deck-line: #3d495a;
+  --deck-accent: #92bffa;
+  --deck-selection: #253b57;
+  --deck-good: #a1cab7;
+  --deck-bad: #ffb1a3;
+  --deck-message-size: 12px;
+  --deck-message-line-height: 1.5;
+  --deck-message-gap: 3px;
+  --deck-control-height: 30px;
+  --deck-spacing: 12px;
+}
+:root[data-palette='graphite'] {
+  --deck-bg: #1b1e23;
+  --deck-surface: #252a31;
+  --deck-hover: #343b44;
+  --deck-text: #e6e9ed;
+  --deck-muted: #b1bac5;
+  --deck-line: #454e59;
+  --deck-accent: #d0d8e3;
+  --deck-selection: #394451;
+  --deck-good: #aecab8;
+}
+:root[data-palette='lavender'] {
+  --deck-bg: #292a32;
+  --deck-surface: #32333e;
+  --deck-hover: #414350;
+  --deck-text: #eceaf2;
+  --deck-muted: #c0bdce;
+  --deck-line: #565565;
+  --deck-accent: #d1c0f5;
+  --deck-selection: #494156;
+  --deck-good: #b4d4c0;
+  --deck-bad: #ffb4ae;
+}
+:root[data-layout='comfort'] {
+  --deck-message-size: 13px;
+  --deck-message-line-height: 1.62;
+  --deck-message-gap: 6px;
+  --deck-control-height: 32px;
+  --deck-spacing: 16px;
+}
+:root {
+  --color-black: var(--deck-bg);
+  --color-black-soft: var(--deck-surface);
+  --color-black-mute: var(--deck-hover);
+  --color-black-alt: var(--deck-surface);
+  --color-black-dark: var(--deck-bg);
+  --color-black-deep: var(--deck-surface);
+  --color-black-modal: var(--deck-hover);
+  --color-black-modal-transparent: var(--deck-surface);
+  --color-gray-1: var(--deck-line);
+  --color-gray-2: var(--deck-hover);
+  --color-gray-3: var(--deck-surface);
+  --color-gray-4: var(--deck-line);
+  --color-gray-5: var(--deck-line);
+  --color-gray-6: var(--deck-surface);
+  --color-text-main: var(--deck-text);
+  --color-text-light: var(--deck-text);
+  --color-text-secondary: var(--deck-muted);
+  --color-text-tertiary: var(--deck-muted);
+  --color-text-muted: var(--deck-muted);
+  --color-text-system: var(--deck-muted);
+  --color-accent: var(--deck-accent);
+  --color-accent-light: var(--deck-accent);
+  --color-accent-hover: var(--deck-accent);
+  --color-accent-faded: var(--deck-selection);
+  --color-error: var(--deck-bad);
+  --color-error-soft: var(--deck-bad);
+  --color-success: var(--deck-good);
+  --color-bg-hover: var(--deck-hover);
+  --color-bg-main-alpha-97: var(--deck-surface);
+  --color-bg-main-alpha-90: var(--deck-surface);
+}
+::selection {
+  background: var(--deck-selection);
+  color: var(--deck-text);
+}
+:focus-visible {
+  outline: 2px solid var(--deck-accent);
+  outline-offset: -2px;
+}
+input,
+textarea {
+  caret-color: var(--deck-accent);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--deck-muted);
+  opacity: 1;
+}
+a {
+  text-underline-offset: 3px;
+}
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+* {
+  scrollbar-color: var(--deck-line) var(--deck-bg);
+}
+
 /* Global resets and base element styles */
 *,
 *::before,
@@ -118,19 +229,7 @@ body {
   color: var(--color-text);
   background: var(--color-background);
   line-height: 1.6;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
+  font-family: 'Segoe UI', sans-serif;
   text-rendering: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

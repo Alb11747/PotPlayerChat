@@ -14,17 +14,24 @@
 
   import type { TimelineMap } from '@/utils/datastructs'
   import type { HelixChatBadgeVersion } from '@twurple/api'
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { UrlTracker, type LinkPreview } from '../core/url-tracker'
   import type { UsernameClickInfo } from '../core/username-click'
   import conf from '../state/config'
   import {
+    clearPreview,
+    focusPreviewElement,
     currentPreviewType,
     onMouseLeavePreviewElement,
     previewState
   } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
+  import {
+    openPreviewPopup,
+    restorePreviewTrigger,
+    shouldOpenExpandedPreview
+  } from '../core/preview-window'
   import EmoteComponent from './Emote.svelte'
 
   interface Props {
@@ -62,17 +69,40 @@
     onUsernameClick,
     onEmoteLoad,
     onImageLoad,
-    enableLinkPreviews = settings.interface.enableLinkPreviews,
-    enableEmotePreviews = settings.interface.enableEmotePreviews,
-    enableEmotes = settings.interface.enableEmotes,
-    enableBadges = settings.interface.enableBadges,
-    requireHttpInUrl = settings.interface.requireHttpInUrl,
+    enableLinkPreviews: enableLinkPreviewsOverride,
+    enableEmotePreviews: enableEmotePreviewsOverride,
+    enableEmotes: enableEmotesOverride,
+    enableBadges: enableBadgesOverride,
+    requireHttpInUrl: requireHttpInUrlOverride,
     reloadServicesFunction = $bindable()
   }: Props = $props()
 
+  const enableLinkPreviews = $derived(
+    enableLinkPreviewsOverride ?? settings.interface.enableLinkPreviews
+  )
+  const enableEmotePreviews = $derived(
+    enableEmotePreviewsOverride ?? settings.interface.enableEmotePreviews
+  )
+  const enableEmotes = $derived(enableEmotesOverride ?? settings.interface.enableEmotes)
+  const enableBadges = $derived(enableBadgesOverride ?? settings.interface.enableBadges)
+  const requireHttpInUrl = $derived(requireHttpInUrlOverride ?? settings.interface.requireHttpInUrl)
+
   let chatMessageElement: HTMLDivElement | null = $state(null)
 
-  function handleUrlClick(url: string): void {
+  function handleUrlClick(url: string, event: MouseEvent | KeyboardEvent): void {
+    if (
+      shouldOpenExpandedPreview(enableLinkPreviews, settings.interface.previewMode, event.ctrlKey)
+    ) {
+      const trigger = event.currentTarget as HTMLElement
+      clearPreview()
+      openPreviewPopup({
+        kind: 'link',
+        url,
+        tracker: urlTracker,
+        restoreFocus: () => restorePreviewTrigger(trigger)
+      })
+      return
+    }
     urlTracker.markVisitedUrl(url)
     if (onUrlClick) {
       onUrlClick(url)
@@ -89,19 +119,18 @@
   const subscriberMonths: string | undefined = $derived(badgeInfo?.get('subscriber'))
   let cheerEmotes: Map<string, CheerEmote> | null = $state.raw(null)
 
-  async function loadServices(): Promise<void> {
+  async function loadServices(
+    requested = { badges: enableBadges, emotes: enableEmotes }
+  ): Promise<void> {
     setConfig(conf)
 
     if (!message || !message.channel) return
     const id = await TwitchUserService.getUserIdByName(message.channel)
     if (id) channelUserId = parseInt(id, 10)
 
-    if (enableBadges) {
-      // Load badge service
-      loadBadges()
-    }
+    if (requested.badges) await loadBadges()
 
-    if (enableEmotes) {
+    if (requested.emotes) {
       // Load emote service
       await loadCheerEmotes()
       await loadEmotes()
@@ -119,15 +148,16 @@
     if (!channelUserId || !message || message.type !== 'chat') return
     const badgeList = message.badges
     if (!badgeList) return
-    badges.length = 0
+    const loadedBadges: [string, HelixChatBadgeVersion][] = []
     for (const [badgeId, version] of badgeList) {
       const badgeData = await TwitchBadgeService.getBadgeInfo(
         badgeId,
         version,
         channelUserId.toString()
       )
-      if (badgeData) badges.push([badgeId, badgeData])
+      if (badgeData) loadedBadges.push([badgeId, badgeData])
     }
+    badges = loadedBadges
   }
 
   async function loadCheerEmotes(): Promise<void> {
@@ -158,8 +188,17 @@
     cheerEmotes = cheerEmotesMap
   }
 
-  onMount(() => {
-    void loadServices()
+  let previousServiceFlags = { badges: false, emotes: false }
+  $effect(() => {
+    const enabled = { badges: enableBadges, emotes: enableEmotes }
+    const requested = {
+      badges: enabled.badges && !previousServiceFlags.badges,
+      emotes: enabled.emotes && !previousServiceFlags.emotes
+    }
+    previousServiceFlags = enabled
+    // Mounted rows survive Settings. Fetch only newly enabled assets; appearance
+    // changes and disabling a feature must not refetch either service.
+    if (requested.badges || requested.emotes) untrack(() => void loadServices(requested))
   })
 
   const [systemText, systemMsg]: [string | undefined, string | undefined] = $derived(
@@ -185,7 +224,7 @@
     }
   }
 
-  // Highlight search terms in the message and parse emotes and parse emotes
+  // Highlight search terms in the message and parse emotes
   const [escapedMessagePrefix, parsedMessageSegments]: [string, Segment[] | undefined] =
     $derived.by(() => {
       if (!message) return ['', undefined]
@@ -228,7 +267,7 @@
   }
 
   function mouseUpdateUrl(segment: Segment & { type: 'url' }): void {
-    if (enableLinkPreviews && !currentPreviewType()) {
+    if (enableLinkPreviews && settings.interface.previewMode === 'hover' && !currentPreviewType()) {
       previewState.url = segment.url
       previewState.urlTrackerInstance = urlTracker
     }
@@ -333,7 +372,7 @@
     <span
       class="chat-username ml-0.5 font-bold"
       role="link"
-      tabindex="-1"
+      tabindex={onUsernameClick ? 0 : -1}
       style="color: {message.color}"
       onclick={(e) => {
         if (onUsernameClick) {
@@ -375,13 +414,29 @@
           <a
             href={segment.url}
             class="chat-url"
+            aria-describedby={previewState.url === segment.url
+              ? 'potplayerchat-hover-preview'
+              : undefined}
             class:visited={isVisitedUrl(segment.url)}
             class:seen={isSeenUrl(segment.url)}
             onclick={(e) => {
-              handleUrlClick(segment.url)
+              handleUrlClick(segment.url, e)
               e.preventDefault()
               e.stopPropagation()
             }}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault()
+                e.stopPropagation()
+                handleUrlClick(segment.url, e)
+              }
+              if (e.key === 'Escape') clearPreview()
+            }}
+            onfocus={(e) => {
+              focusPreviewElement(e.currentTarget)
+              mouseUpdateUrl(segment)
+            }}
+            onblur={clearPreview}
             onmouseenter={() => mouseUpdateUrl(segment)}
             onmousemove={() => mouseUpdateUrl(segment)}
             onmouseleave={() => {
@@ -394,7 +449,7 @@
         {:else if segment.type === 'mention'}
           <span
             role="link"
-            tabindex="-1"
+            tabindex={onUsernameClick ? 0 : -1}
             class="chat-username"
             style="color: {usernameColorTimelineMap?.get(
               segment.username.toLowerCase(),
@@ -456,9 +511,9 @@
 <style>
   .chat-message {
     width: 100%;
-    padding: 0.25rem 0.5rem;
-    line-height: 1.7;
-    font-size: 108%;
+    padding: var(--deck-message-gap, 2px) 0.6rem;
+    line-height: var(--deck-message-line-height, 1.5);
+    font-size: var(--deck-message-size, 13px);
     box-sizing: border-box;
     word-break: break-word;
     user-select: text;
@@ -495,9 +550,14 @@
     transition: color 0.2s ease;
     background: none;
     border: none;
-    outline: none;
+    outline-offset: 2px;
     padding: 0;
     margin: 0;
+  }
+  .chat-url:focus-visible,
+  .chat-username:focus-visible {
+    outline: 2px solid var(--deck-accent);
+    outline-offset: 2px;
   }
   .chat-url.seen {
     color: var(--color-accent-light);

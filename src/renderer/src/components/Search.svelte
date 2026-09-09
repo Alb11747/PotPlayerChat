@@ -3,6 +3,8 @@
   import type { TwitchMessage } from '@/core/chat/twitch-msg'
   import {
     formattedTwitchMessageFactory,
+    getSearchPattern,
+    filterSearchMessages,
     type TwitchMessageFormatted
   } from '@/renderer/src/core/search-messages'
   import type { SearchContext } from '@/renderer/src/core/search-window'
@@ -13,7 +15,6 @@
     isRangeInMessages
   } from '@/utils/chat'
   import { deleteNullishKeysInPlace } from '@/utils/objects'
-  import { regExpEscape } from '@/utils/strings'
   import { onMount } from 'svelte'
   import { VList } from 'virtua/svelte'
   import LinkPreview from '../components/LinkPreview.svelte'
@@ -34,8 +35,8 @@
   let useRegex = $state(false)
 
   let scrolled = $state(false)
-  let loadedMessages = $state(false)
-  let loadAllMessagesPromise: Promise<void> | null = null
+  let isLoading = $state(false)
+  let loadError = $state('')
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const seenMessages = new Set<string>()
   const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
@@ -58,17 +59,11 @@
   let searchInputRef: HTMLInputElement | null = $state(null)
   let vlistRef: VList<TwitchMessageFormatted> | null = $state(null)
 
-  // Load all messages when component mounts
-  $effect(() => {
-    if (loadedMessages || loadAllMessagesPromise) return
-    loadAllMessagesPromise = loadAllMessages().finally(() => {
-      loadAllMessagesPromise = null
-    })
-  })
-
   // Focus search input when component mounts
   onMount(() => {
     if (searchInputRef) searchInputRef.focus()
+    searchQuery = context.initialSearch ?? ''
+    void loadAllMessages()
     window.api.onAppCacheCleared(handleAppCacheCleared)
     window.api.onSavedUrlsCleared(handleSavedUrlsCleared)
     return () => {
@@ -92,14 +87,14 @@
   }
 
   async function loadAllMessages(): Promise<void> {
-    if (loadedMessages) return
-    loadedMessages = true
+    if (isLoading) return
+    isLoading = true
+    loadError = ''
 
     try {
       let potplayerInfo = context.potplayerInfo
       focusedMessage = context.focusedMessage ?? null
       await chatService.updateVideoInfo(potplayerInfo, -1)
-      if (context.initialSearch) searchQuery = context.initialSearch
 
       if (focusedMessage) console.debug('Focused message:', focusedMessage)
 
@@ -123,12 +118,12 @@
         const instances = await window.api.getPotPlayers()
         const potplayerInstance = instances.find((p) => p.hwnd === selectedHwnd)
         if (!potplayerInstance?.hwnd) {
-          console.error('No PotPlayer instance found')
+          loadError = 'No PotPlayer instance is connected.'
           return
         }
         const resolvedPotplayerInfo = await window.api.getPotplayerExtraInfo(potplayerInstance)
         if (!resolvedPotplayerInfo) {
-          console.error('No PotPlayer info available')
+          loadError = 'Recording information is unavailable.'
           return
         }
         potplayerInfo = resolvedPotplayerInfo
@@ -149,22 +144,25 @@
         scrollToTargetMessages()
       }
     } catch (error) {
-      loadedMessages = false
+      loadError = error instanceof Error ? error.message : 'Unable to load chat messages.'
       console.error('Failed to load messages for search:', error)
+    } finally {
+      isLoading = false
     }
   }
 
   function loadMessages(msgs: TwitchMessage[]): void {
-    // Merge new messages with existing ones
+    const additions: TwitchMessageFormatted[] = []
     for (const msg of msgs) {
       const formattedMsg = formattedTwitchMessageFactory(msg)
       if (seenMessages.has(formattedMsg.getId())) continue // Skip duplicates
       seenMessages.add(formattedMsg.getId())
-      messages.push(formattedMsg)
+      additions.push(formattedMsg)
     }
+    if (additions.length === 0) return
 
-    // Sort messages by timestamp
-    messages.sort((a, b) => a.timestamp - b.timestamp)
+    // Raw state and the virtual transcript observe array identity, including an empty query.
+    messages = [...messages, ...additions].sort((a, b) => a.timestamp - b.timestamp)
 
     // Update message data
     chatService.updateMessageData(messages)
@@ -211,44 +209,32 @@
     }, 0)
   }
 
-  // Computed search pattern for highlighting
-  const searchPattern: string | RegExp | undefined = $derived.by(() => {
-    if (!searchQuery) return undefined
-    if (useRegex || !caseSensitive) {
-      try {
-        const escapedQuery = useRegex ? searchQuery : regExpEscape(searchQuery)
-        return new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi')
-      } catch (error) {
-        // Invalid regex, fall back to string search
-        console.warn('Invalid regex pattern:', searchQuery, error)
-        return searchQuery
-      }
-    }
-    return searchQuery
-  })
+  const searchPattern = $derived(getSearchPattern(searchQuery, caseSensitive, useRegex))
 
-  // Filter messages when search query changes
   $effect(() => {
     updateFilteredMessages()
   })
-  async function updateFilteredMessages(): Promise<void> {
-    if (!searchQuery) {
-      filteredMessages = messages
-      return
-    }
 
-    const regex =
-      useRegex && searchPattern instanceof RegExp
-        ? new RegExp(searchPattern.source, searchPattern.flags)
-        : null
-    filteredMessages = messages.filter((msg) => {
-      if (regex) return regex.test(msg.formattedMessage)
-      if (caseSensitive) return msg.formattedMessage?.includes(searchQuery)
-      return msg.formattedMessage?.toLowerCase().includes(searchQuery.toLowerCase())
-    })
-
+  function updateFilteredMessages(): void {
+    filteredMessages = filterSearchMessages(
+      messages,
+      searchQuery,
+      caseSensitive,
+      useRegex,
+      searchPattern
+    )
     scrolled = false
     scrollToTargetMessages()
+  }
+
+  function activateResult(event: MouseEvent, message: TwitchMessage): void {
+    if (
+      event.target instanceof Element &&
+      event.target.closest('button, a, input, [role="button"]')
+    )
+      return
+    if (window.getSelection()?.toString()) return
+    context.focusMessage(message)
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -265,54 +251,64 @@
 <LinkPreview />
 
 <div class="search-container" role="presentation" onkeydown={handleKeydown}>
-  <div class="search-header">
-    <h2>Search Chat Messages</h2>
-    <div class="search-input-container">
-      <input
-        bind:this={searchInputRef}
-        bind:value={searchQuery}
-        type="text"
-        placeholder="Search messages and usernames..."
-        class="search-input"
-      />
-      <div class="search-options">
-        <label class="search-option">
-          <input type="checkbox" bind:checked={caseSensitive} class="search-checkbox" />
-          <span class="search-option-text">Case sensitive</span>
-        </label>
-        <label class="search-option">
-          <input type="checkbox" bind:checked={useRegex} class="search-checkbox" />
-          <span class="search-option-text">Regular expression</span>
-        </label>
-      </div>
-      <div class="search-stats">
-        {#if searchQuery}
-          {filteredMessages.length} result{filteredMessages.length !== 1 ? 's' : ''} found
-        {:else}
-          Enter search terms above
-        {/if}
-      </div>
+  <header class="search-header">
+    <input
+      bind:this={searchInputRef}
+      bind:value={searchQuery}
+      type="search"
+      aria-label="Search messages and usernames"
+      placeholder="Search messages and usernames…"
+      class="search-input"
+    />
+    <div class="search-options">
+      <label><input type="checkbox" bind:checked={caseSensitive} /> Case sensitive</label>
+      <label><input type="checkbox" bind:checked={useRegex} /> Regular expression</label>
     </div>
-  </div>
+    <div class="search-context">
+      <span class="recording-context" title={context.potplayerInfo.title}>
+        {context.potplayerInfo.channel} · {context.potplayerInfo.title}
+      </span>
+      <span class="search-stats" role="status"
+        >{filteredMessages.length} result{filteredMessages.length !== 1 ? 's' : ''}</span
+      >
+    </div>
+  </header>
 
-  <div class="search-results">
+  {#if loadError || loadingState.state === 'error'}
+    <div class="load-notice" role="alert">
+      <span>{loadError || loadingState.errorMessage || 'Unable to load chat messages.'}</span>
+      <button type="button" disabled={isLoading} onclick={() => loadAllMessages()}>Retry</button>
+    </div>
+  {/if}
+
+  <div class="search-results" aria-busy={isLoading}>
     {#if filteredMessages.length > 0}
       <VList
         bind:this={vlistRef}
         data={filteredMessages}
         getKey={(item, i) => item?.getId() ?? i}
-        itemSize={80}
+        itemSize={48}
         onscroll={() => {
           scrolled = true
         }}
       >
         {#snippet children(msg, i)}
           {#if msg}
-            <button
-              type="button"
+            <div
               class="search-result-item"
-              onclick={() => context.focusMessage(msg)}
+              role="group"
+              aria-label="Search result"
+              onpointerup={(event) => {
+                if (event.button === 0) activateResult(event, msg)
+              }}
             >
+              <button
+                class="return-message"
+                type="button"
+                aria-label="Return to this message in chat"
+                title="Return to message in chat"
+                onclick={() => context.focusMessage(msg)}>↩</button
+              >
               <ChatMessage
                 message={msg}
                 videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
@@ -320,28 +316,34 @@
                 {urlTracker}
                 usernameColorTimelineMap={chatService.usernameColorTimelineMap ?? undefined}
                 searchQuery={searchPattern}
+                onUsernameClick={context.onUsernameClick}
                 onUrlClick={handleUrlClick}
                 onEmoteLoad={() => {
-                  if (scrolled) return
-                  scrollToTargetMessages()
+                  if (!scrolled) scrollToTargetMessages()
                 }}
                 bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
               />
-            </button>
+            </div>
           {/if}
         {/snippet}
       </VList>
-    {:else if searchQuery && filteredMessages.length === 0}
-      <div class="no-results">
-        <div class="no-results-icon">🔍</div>
-        <div class="no-results-text">No messages found</div>
-        <div class="no-results-hint">Try different search terms</div>
-      </div>
     {:else}
-      <div class="search-placeholder">
-        <div class="placeholder-icon">💬</div>
-        <div class="placeholder-text">Start typing to search through chat messages</div>
-        <div class="placeholder-hint">Search by message content or username</div>
+      <div class="search-state" role="status">
+        {#if isLoading}
+          <strong>Loading chat messages…</strong>
+        {:else if loadError || loadingState.state === 'error'}
+          <strong>Messages are unavailable</strong>
+          <span>Retry when the recording or connection is available.</span>
+        {:else if loadingState.state === 'chat-not-found'}
+          <strong>No chat found for this recording</strong>
+          <span>Check the recording information and chat source.</span>
+        {:else if searchQuery}
+          <strong>No messages found</strong>
+          <span>Try different search terms.</span>
+        {:else}
+          <strong>No messages in this range</strong>
+          <span>Open Search from a recording with loaded chat.</span>
+        {/if}
       </div>
     {/if}
   </div>
@@ -351,144 +353,162 @@
   .search-container {
     width: 100%;
     height: 100%;
-    min-height: fit-content;
-    background: var(--color-black-dark);
-    color: var(--color-text-light);
-
-    --header-height: 10.4rem;
-  }
-
-  .search-header {
-    flex: 0 1 auto;
-    max-height: var(--header-height);
-    background: var(--color-black-soft);
-    border-bottom: 1px solid var(--color-gray-4);
-    padding: 15px;
-  }
-  .search-header h2 {
-    margin: 0 0 16px 0;
-    color: var(--color-text-light);
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  .search-input-container {
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    overflow: hidden;
+    background: var(--deck-bg);
+    color: var(--deck-text);
   }
-
+  .search-header {
+    flex: none;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--deck-surface);
+    border-bottom: 1px solid var(--deck-line);
+  }
   .search-input {
     width: 100%;
-    padding: 12px 16px;
-    border: 1px solid var(--color-gray-5);
-    border-radius: 6px;
-    background: var(--color-bg-modal);
-    color: var(--color-text-light);
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.2s ease;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 7px 9px;
+    border: 1px solid var(--deck-line);
+    border-radius: 4px;
+    background: var(--deck-bg);
+    color: var(--deck-text);
+    font: inherit;
+    font-size: 13px;
   }
-  .search-input:focus {
-    border-color: var(--color-accent);
+  .search-input::placeholder {
+    color: var(--deck-muted);
   }
-
   .search-options {
     display: flex;
-    gap: 16px;
-    margin-top: 4px;
-    padding-left: 4px;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 12px;
+  }
+  .search-options label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+  .search-options input {
+    margin: 0;
+    accent-color: var(--deck-accent);
+  }
+  .search-context {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: var(--deck-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .recording-context {
+    min-width: 0;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .search-stats {
-    font-size: 12px;
-    color: var(--color-text-muted);
-    padding-left: 4px;
+    flex: none;
+    font-variant-numeric: tabular-nums;
   }
-
-  .search-option {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    color: var(--color-text-light);
-  }
-
-  .search-checkbox {
-    width: 14px;
-    height: 14px;
-    accent-color: var(--color-accent);
-    cursor: pointer;
-  }
-
-  .search-option-text {
-    user-select: none;
-  }
-
   .search-results {
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    gap: 16px;
+    min-height: 0;
+    flex: 1;
     width: 100%;
-    height: calc(100% - var(--header-height));
-    overflow: visible;
+    overflow: hidden;
   }
-
   .search-result-item {
-    padding: 8px 14px;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--deck-message-gap, 5px) 30px var(--deck-message-gap, 5px) 12px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
-    min-width: 100%;
-    width: fit-content;
-    text-align: left;
-    background: none;
-    border: none;
-    border-bottom: 1px solid var(--color-bg-hover);
-    color: inherit;
+    user-select: text;
+    overflow-wrap: anywhere;
+    font-size: var(--deck-message-size, 13px);
+    line-height: var(--deck-message-line-height, 1.45);
   }
-  .search-result-item:hover {
-    background: var(--color-bg-hover);
+  .search-result-item:hover,
+  .search-result-item:focus-within {
+    background: var(--deck-hover);
   }
-
-  .no-results,
-  .search-placeholder {
+  .return-message {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--deck-muted);
+    opacity: 0;
+    cursor: pointer;
+  }
+  .search-result-item:hover .return-message,
+  .search-result-item:focus-within .return-message {
+    opacity: 1;
+  }
+  .return-message:hover {
+    background: var(--deck-selection);
+    color: var(--deck-text);
+  }
+  input:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--deck-accent);
+    outline-offset: 2px;
+  }
+  .search-state {
+    height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 5px;
+    padding: 24px;
     text-align: center;
-    height: 200px;
-    padding: 40px;
+    color: var(--deck-muted);
+    font-size: 13px;
   }
-
-  .no-results-icon,
-  .placeholder-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.9;
+  .search-state strong {
+    font-weight: 600;
+    color: var(--deck-text);
   }
-
-  .no-results-text,
-  .placeholder-text {
-    font-size: 16px;
-    font-weight: 500;
-    margin-bottom: 8px;
-    color: var(--color-text-light);
+  .load-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--deck-line);
+    font-size: 12px;
   }
-
-  .no-results-hint,
-  .placeholder-hint {
-    font-size: 14px;
-    color: var(--color-text-muted);
+  .load-notice span {
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere;
   }
-
+  .load-notice button {
+    padding: 4px 8px;
+    color: var(--deck-text);
+    background: var(--deck-surface);
+    border: 1px solid var(--deck-line);
+    border-radius: 3px;
+    cursor: pointer;
+  }
   :global(mark) {
-    background: var(--color-accent);
-    color: var(--color-white);
-    padding: 1px 2px;
+    background: var(--deck-selection);
+    color: var(--deck-text);
+    padding: 0 1px;
     border-radius: 2px;
   }
 </style>

@@ -2,7 +2,7 @@
   import type { TwitchMessage } from '@core/chat/twitch-msg'
   import { VList } from 'virtua/svelte'
 
-  import { onMount, untrack } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
 
   import { clearAll, TwitchUserService } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
@@ -27,10 +27,12 @@
   import { UrlTracker } from '../core/url-tracker'
   import {
     getSessionTimestampOffsetByTitle,
+    saveSettings,
     setSessionTimestampOffsetByTitle,
     settings
   } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
+  import Icon from './Icon.svelte'
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
@@ -43,12 +45,99 @@
 
   let potplayerInstances: PotPlayerInstance[] = $state([])
   let showSettings = $state(false)
+  let showOffset = $state(false)
+  let playbackTime = $state<number | null>(null)
+  let settingsButton: HTMLButtonElement | null = $state(null)
+  let instanceTabs: HTMLDivElement | null = $state(null)
+  const canSearch = $derived(
+    Boolean(selectedPotplayerInfo?.startTime && selectedPotplayerInfo?.endTime)
+  )
+  const statusLabel = $derived(
+    !selectedPotplayerInfo
+      ? 'No player selected'
+      : loadingState.state === 'loading'
+        ? 'Loading chat'
+        : loadingState.state === 'error'
+          ? 'Chat unavailable'
+          : loadingState.state === 'chat-not-found'
+            ? 'Chat not found'
+            : loadingState.state === 'no-potplayer-info'
+              ? 'Recording unavailable'
+              : scrollToBottom
+                ? 'Following playback'
+                : 'Reading earlier messages'
+  )
+
+  function clockText(time: number | null): string {
+    if (time === null || !selectedPotplayerInfo) return '--:--:--'
+    const seconds = Math.max(0, Math.floor(time / 1000))
+    return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+      .map((part) => String(part).padStart(2, '0'))
+      .join(':')
+  }
+
+  function retainReadingPosition(): void {
+    if (!scrollToBottom && vlistRef) {
+      const target = calculateTargetElement(vlistRef, messages)
+      targetElement = target.targetElement
+      targetViewportOffset = target.targetViewportOffset
+    }
+  }
+
+  async function toggleSettings(): Promise<void> {
+    if (!showSettings) retainReadingPosition()
+    showSettings = !showSettings
+    await tick()
+    if (!showSettings) {
+      scrollToTarget()
+      settingsButton?.focus()
+    }
+  }
+
+  let previousLayout: string | undefined
+  $effect(() => {
+    // Capture the message anchor before the density change is measured by VList.
+    const layout = settings.interface.layout
+    if (layout === previousLayout) return
+    previousLayout = layout
+    untrack(() => {
+      retainReadingPosition()
+      void tick().then(() => scrollToTarget())
+    })
+  })
+
+  function adjustSessionOffset(delta: number): void {
+    if (!selectedPotplayerInfo?.title) return
+    settings.chat._sessionTimestampOffset += delta
+    setSessionTimestampOffsetByTitle(
+      selectedPotplayerInfo.title,
+      settings.chat._sessionTimestampOffset
+    )
+    void updateChatMessages()
+  }
+
+  function handleTabKey(event: KeyboardEvent): void {
+    const tabs = Array.from(instanceTabs?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [])
+    const index = tabs.indexOf(event.target as HTMLButtonElement)
+    if (index < 0) return
+    let next: number
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = tabs.length - 1
+    else return
+    event.preventDefault()
+    tabs[next]?.focus()
+    tabs[next]?.click()
+  }
   let changingPotPlayerPromise: Promise<SelectedPotplayerInfo | null> | null = $state(null)
   let potPlayerSelectionNonce = 0
   let lastPotplayerChangeTime: number = performance.now()
 
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
+  let viewingHistory = false
+  let navigationGeneration = 0
 
   let chatContainerRef: HTMLDivElement | null = $state(null)
   let vlistRef: VList<TwitchMessage> | null = $state(null)
@@ -118,12 +207,16 @@
   }
 
   function scrollChatToBottom(): void {
+    const generation = ++navigationGeneration
+    viewingHistory = false
     scrollToBottom = true
-    scrollToTarget(true)
-    setTimeout(() => {
-      scrollToBottom = true
-      scrollToTarget(true)
-    }, 100)
+    const resume = (): void => {
+      if (generation === navigationGeneration && scrollToBottom && !viewingHistory)
+        scrollToTarget(true)
+    }
+    void updateChatMessages().then(resume)
+    resume()
+    setTimeout(resume, 100)
   }
 
   function isEditableTarget(target: EventTarget | null): boolean {
@@ -135,7 +228,8 @@
 
   async function resetVideoTimeHistory(hwnd: HWND | null): Promise<void> {
     videoTimeHistory.clear()
-    if (hwnd) videoTimeHistory.addSample(await window.api.getCurrentVideoTime(hwnd))
+    playbackTime = hwnd ? await window.api.getCurrentVideoTime(hwnd) : null
+    if (playbackTime !== null) videoTimeHistory.addSample(playbackTime)
   }
 
   async function getSelectedPotplayerInstance(
@@ -154,6 +248,21 @@
     instances: (PotPlayerInstance & { selected?: boolean })[]
   ): Promise<void> {
     isPotplayerUpdated = true
+    if (instances.length === 0) {
+      potPlayerSelectionNonce++
+      navigationGeneration++
+      changingPotPlayerPromise = null
+      viewingHistory = false
+      scrollToBottom = true
+      potplayerInstances = []
+      selectedPotplayerInfo = null
+      messages = []
+      playbackTime = null
+      videoTimeHistory.clear()
+      clearTargetElement()
+      await chatService.updateVideoInfo(null)
+      return
+    }
 
     let newSelectedPotplayerInstanceInfo: SelectedPotplayerInfo | null = null
     if (changingPotPlayerPromise) newSelectedPotplayerInstanceInfo = await changingPotPlayerPromise
@@ -174,6 +283,16 @@
       )
     }
 
+    if (
+      selectedPotplayerInfo?.hwnd !== newSelectedPotplayerInstanceInfo?.hwnd ||
+      selectedPotplayerInfo?.title !== newSelectedPotplayerInstanceInfo?.title
+    ) {
+      viewingHistory = false
+      navigationGeneration++
+      potPlayerSelectionNonce++
+      scrollToBottom = true
+      clearTargetElement()
+    }
     selectedPotplayerInfo = newSelectedPotplayerInstanceInfo
     settings.chat._sessionTimestampOffset = getSessionTimestampOffsetByTitle(
       selectedPotplayerInfo?.title
@@ -195,17 +314,18 @@
 
   async function onSetOffset({ targetTimestamp }: { targetTimestamp: number }): Promise<void> {
     if (!selectedPotplayerInfo) return
-    const { hwnd, startTime } = selectedPotplayerInfo
+    const { hwnd, startTime, title } = selectedPotplayerInfo
+    const selectionNonce = potPlayerSelectionNonce
     if (!startTime) return
 
     const currentVideoTime = await window.api.getCurrentVideoTime(hwnd)
+    if (selectionNonce !== potPlayerSelectionNonce) return
     const currentOffset = settings.chat.timestampOffset
     const sessionTimestampOffset = targetTimestamp - (startTime + currentVideoTime) - currentOffset
-    setSessionTimestampOffsetByTitle(selectedPotplayerInfo.title, sessionTimestampOffset)
+    setSessionTimestampOffsetByTitle(title, sessionTimestampOffset)
 
-    updateChatMessages()
-    scrollToBottom = true
-    scrollToTarget()
+    settings.chat._sessionTimestampOffset = sessionTimestampOffset
+    scrollChatToBottom()
   }
 
   $effect(() => {
@@ -216,6 +336,7 @@
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
   async function updateChatMessages(potplayerInfo?: SelectedPotplayerInfo | null): Promise<void> {
+    const selectionNonce = potPlayerSelectionNonce
     if (chatIntervalId) clearTimeout(chatIntervalId)
     chatIntervalId = null
 
@@ -227,6 +348,7 @@
     const effectiveTime =
       predictedTime + settings.chat.timestampOffset + settings.chat._sessionTimestampOffset
     const newMessages = await chatService.getMessagesForTime(effectiveTime, true)
+    if (selectionNonce !== potPlayerSelectionNonce || viewingHistory) return
     if (!newMessages || newMessages.length === 0) {
       messages = []
       return
@@ -237,6 +359,7 @@
       lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
 
     if (!isEqual(selectedPotplayerInfo, potplayerInfo)) {
+      viewingHistory = false
       selectedPotplayerInfo = potplayerInfo ?? null
       messages = newMessages
       scrollToBottom = true
@@ -273,6 +396,7 @@
   })
 
   function onCurrentTime(time: number): void {
+    playbackTime = time
     videoTimeHistory.addSample(time)
     if (videoTimeHistory.wasLastSampleDiscontinuous()) {
       scrollToTargetDebounced(scrollToBottom)
@@ -320,6 +444,8 @@
   })
 
   function onFocusMessage(message: TwitchMessage): void {
+    showSettings = false
+    window.focus()
     if (!vlistRef) return
     const messageId = message.getId()
     const messageIndex = messages.findIndex((m) => m.getId() === messageId)
@@ -328,9 +454,12 @@
     targetViewportOffset = (vlistRef.getItemSize(messageIndex) - vlistRef.getViewportSize()) / 2
     scrollToBottom = false
     scrollToTarget()
+    void tick().then(() => scrollToTarget())
   }
 
   function setPotPlayerInstance(instanceInfo: PotPlayerInstance | PotPlayerInfo | null): void {
+    viewingHistory = false
+    navigationGeneration++
     const currentSelectionNonce = ++potPlayerSelectionNonce
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
       const instance = $state.snapshot(instanceInfo)
@@ -349,26 +478,19 @@
       await window.api.setSelectedPotPlayerHWND(hwnd)
       await resetVideoTimeHistory(hwnd)
 
-      let currentSelectedPotPlayerInfo: PotPlayerInfo | null = null
-
-      if (!('channel' in instance) || !('startTime' in instance)) {
-        currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
-        if (!currentSelectedPotPlayerInfo) return null
-      } else {
-        void (async () => {
-          try {
-            const info = await window.api.getPotplayerExtraInfo(instance)
-            if (info) selectedPotplayerInfo = info
-          } catch (error) {
-            console.error('Failed to refresh selected PotPlayer info:', error)
-          }
-        })()
-        currentSelectedPotPlayerInfo = instance
-      }
+      // A captured popup source may refer to an older recording in the same HWND.
+      const currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
+      if (!currentSelectedPotPlayerInfo) return null
 
       if (currentSelectionNonce !== potPlayerSelectionNonce) return null
+      selectedPotplayerInfo = currentSelectedPotPlayerInfo
+      settings.chat._sessionTimestampOffset = getSessionTimestampOffsetByTitle(
+        currentSelectedPotPlayerInfo.title
+      )
+      clearTargetElement()
       await resetVideoTimeHistory(hwnd)
       await chatService.updateVideoInfo(currentSelectedPotPlayerInfo)
+      if (currentSelectionNonce !== potPlayerSelectionNonce) return null
       await updateChatMessages(currentSelectedPotPlayerInfo)
       return currentSelectedPotPlayerInfo
     })()
@@ -377,7 +499,7 @@
       try {
         await changingPotPlayerPromise
       } finally {
-        if (changingPotPlayerPromise) changingPotPlayerPromise = null
+        if (currentSelectionNonce === potPlayerSelectionNonce) changingPotPlayerPromise = null
       }
       if (currentSelectionNonce === potPlayerSelectionNonce) {
         potplayerInstances = await window.api.getPotPlayers()
@@ -385,73 +507,105 @@
     })()
   }
 
+  type PopupSource = {
+    potplayerInfo: PotPlayerInfo
+    initialMessages: TwitchMessage[]
+    loadedMessages: TwitchMessage[]
+    searchRange?: { startTime: number; endTime: number }
+  }
+
+  function capturePopupSource(): PopupSource | null {
+    if (!selectedPotplayerInfo?.startTime || !selectedPotplayerInfo.endTime) return null
+    const player = $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo
+    return {
+      potplayerInfo: player,
+      initialMessages: messages,
+      loadedMessages: chatService.currentChatData,
+      searchRange: settings.search.showAllMessages
+        ? { startTime: player.startTime - 3600000, endTime: player.endTime! + 3600000 }
+        : undefined
+    }
+  }
+
   function openSearchWindow(
     info?: Partial<SearchOptions>,
-    extraData?: { message?: TwitchMessage }
+    extraData?: { message?: TwitchMessage },
+    source = capturePopupSource()
   ): void {
-    const searchRangeBuffer = 60 * 60 * 1000
-    if (!selectedPotplayerInfo) throw new Error('No selected PotPlayer info')
-    if (!selectedPotplayerInfo.startTime || !selectedPotplayerInfo.endTime)
-      throw new Error('No start or end time set for the selected PotPlayer instance')
-
+    if (!source) return
     openSearchPopup({
-      potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
+      ...source,
+      ...info,
       focusedMessage: extraData?.message,
-      initialMessages: messages,
-      loadedMessages: chatService.currentChatData,
-      focusMessage: onFocusMessage,
-      searchRange: settings.search.showAllMessages
-        ? {
-            startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,
-            endTime: selectedPotplayerInfo.endTime + searchRangeBuffer
-          }
-        : undefined,
-      ...(info ?? {})
+      focusMessage: (message) => focusSourceMessage(message, source),
+      onUsernameClick: (clicked) => handleUsernameClick(clicked, source)
     })
   }
 
-  function openUserWindow(info: UsernameClickInfo): void {
-    if (
-      !selectedPotplayerInfo ||
-      !selectedPotplayerInfo.startTime ||
-      !selectedPotplayerInfo.endTime
-    )
-      return
-
-    const searchRangeBuffer = 60 * 60 * 1000
+  function openUserWindow(info: UsernameClickInfo, source = capturePopupSource()): void {
+    if (!source) return
     openUserPopup({
+      ...source,
       username: info.username,
       clickedMessage: info.message,
-      potplayerInfo: $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo,
-      initialMessages: messages,
-      loadedMessages: chatService.currentChatData,
-      focusMessage: onFocusMessage,
-      searchRange: settings.search.showAllMessages
-        ? {
-            startTime: selectedPotplayerInfo.startTime - searchRangeBuffer,
-            endTime: selectedPotplayerInfo.endTime + searchRangeBuffer
-          }
-        : undefined
+      focusMessage: (message) => focusSourceMessage(message, source),
+      onUsernameClick: (clicked) => handleUsernameClick(clicked, source),
+      searchUsername: (username) =>
+        openSearchWindow({ initialSearch: username.trim().replace(/:$/, '') }, undefined, source)
     })
   }
 
-  function handleUsernameClick(info: UsernameClickInfo): void {
+  function handleUsernameClick(info: UsernameClickInfo, source = capturePopupSource()): void {
     const action = getUsernameClickAction(info.username, info.altKey)
-    if (action.kind === 'user') {
-      openUserWindow(info)
-      return
-    }
+    if (action.kind === 'user') openUserWindow(info, source)
+    else
+      openSearchWindow({ initialSearch: action.initialSearch }, { message: info.message }, source)
+  }
 
-    openSearchWindow(
-      {
-        initialSearch: action.initialSearch
-      },
-      { message: info.message }
-    )
+  async function focusSourceMessage(message: TwitchMessage, source: PopupSource): Promise<void> {
+    if (
+      selectedPotplayerInfo?.hwnd !== source.potplayerInfo.hwnd ||
+      selectedPotplayerInfo?.title !== source.potplayerInfo.title
+    ) {
+      setPotPlayerInstance(source.potplayerInfo)
+      const selectionNonce = potPlayerSelectionNonce
+      const selected = await changingPotPlayerPromise
+      if (
+        selectionNonce !== potPlayerSelectionNonce ||
+        selected?.hwnd !== source.potplayerInfo.hwnd ||
+        selected?.title !== source.potplayerInfo.title
+      )
+        return
+    }
+    // Search can expose messages outside the current playback window. Keep this
+    // bounded history slice visible until the user explicitly resumes playback.
+    if (!messages.some((item) => item.getId() === message.getId())) {
+      const history = new Map(
+        [...source.loadedMessages, ...source.initialMessages, message].map((item) => [
+          item.getId(),
+          item
+        ])
+      )
+      const ordered = [...history.values()].sort((a, b) => a.timestamp - b.timestamp)
+      const index = ordered.findIndex((item) => item.getId() === message.getId())
+      const limit = Math.max(1, settings.chat.chatMessageLimit)
+      const start = Math.max(0, index - Math.floor(limit / 2))
+      messages = ordered.slice(start, start + limit)
+    }
+    const generation = ++navigationGeneration
+    viewingHistory = true
+    showSettings = false
+    await tick()
+    if (generation === navigationGeneration) onFocusMessage(message)
   }
 
   // Handle keyboard shortcuts
   function handleKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && showSettings) {
+      event.preventDefault()
+      void toggleSettings()
+      return
+    }
     if (
       !event.ctrlKey &&
       !event.altKey &&
@@ -474,7 +628,7 @@
     if (!selectedPotplayerInfo) return
     if (event.ctrlKey && (event.key === 'f' || event.key === 'F')) {
       event.preventDefault()
-      openSearchWindow()
+      if (canSearch) openSearchWindow()
     } else if ((event.ctrlKey && event.key === 'r') || (event.altKey && event.key === 'r')) {
       event.preventDefault()
       chatService.clearInvalidCache()
@@ -530,264 +684,412 @@
 <LinkPreview />
 
 <div class="container" role="region" aria-label="Chat">
-  <div class="header">
-    <button
-      class:selected={autoSelectPotPlayer}
-      onclick={() => setPotPlayerInstance(null)}
-      aria-pressed={autoSelectPotPlayer}
+  <header class="chat-header" class:comfort={settings.interface.layout === 'comfort'}>
+    <div
+      class="instance-tabs"
+      role="tablist"
+      tabindex="-1"
+      aria-label="PotPlayer instances"
+      bind:this={instanceTabs}
+      onkeydown={handleTabKey}
     >
-      Main
-    </button>
-
-    {#each potplayerInstances as inst (inst.hwnd)}
       <button
-        class:selected={inst.hwnd === selectedPotplayerInfo?.hwnd}
-        onclick={() => setPotPlayerInstance(inst)}
-        aria-pressed={inst.hwnd === selectedPotplayerInfo?.hwnd}
+        role="tab"
+        aria-selected={autoSelectPotPlayer}
+        tabindex={autoSelectPotPlayer ? 0 : -1}
+        title="Automatically select the active PotPlayer"
+        onclick={() => setPotPlayerInstance(null)}>Main</button
       >
-        {inst.title}
-      </button>
-    {/each}
+      {#each potplayerInstances as inst (inst.hwnd)}
+        <button
+          role="tab"
+          aria-selected={!autoSelectPotPlayer && inst.hwnd === selectedPotplayerInfo?.hwnd}
+          tabindex={!autoSelectPotPlayer && inst.hwnd === selectedPotplayerInfo?.hwnd ? 0 : -1}
+          title={inst.title}
+          onclick={() => setPotPlayerInstance(inst)}>{inst.title}</button
+        >
+      {/each}
+    </div>
+    <div class="chat-tools">
+      {#if settings.interface.layout === 'comfort'}<span class="channel-name"
+          >{selectedPotplayerInfo?.channel ?? 'PotPlayerChat'}</span
+        >{/if}
+      <button
+        class="icon-button"
+        aria-label="Show timestamps"
+        title="Show timestamps"
+        aria-pressed={settings.interface.showTimestamps}
+        onclick={() => {
+          retainReadingPosition()
+          settings.interface.showTimestamps = !settings.interface.showTimestamps
+          saveSettings()
+          void tick().then(() => scrollToTarget())
+        }}><Icon name="clock" /></button
+      >
+      <button
+        class="icon-button"
+        aria-label="Search chat"
+        title="Search chat (Ctrl+F)"
+        disabled={!canSearch}
+        onclick={() => openSearchWindow()}><Icon name="search" /></button
+      >
+      <button
+        class="icon-button"
+        aria-label={showSettings ? 'Return to chat' : 'Settings'}
+        title={showSettings ? 'Return to chat' : 'Settings'}
+        aria-expanded={showSettings}
+        bind:this={settingsButton}
+        onclick={toggleSettings}><Icon name={showSettings ? 'back' : 'settings'} /></button
+      >
+    </div>
+    {#if settings.interface.layout === 'comfort' && !showSettings}
+      <div class="recording-row">
+        <span title={selectedPotplayerInfo?.title}
+          >{selectedPotplayerInfo?.title ?? 'Waiting for a recording'}</span
+        ><time>{clockText(playbackTime)}</time>
+      </div>
+    {/if}
+  </header>
 
-    <button
-      class="settings"
-      class:selected={showSettings}
-      aria-pressed={showSettings}
-      aria-label="Settings"
-      title="Settings"
-      onclick={() => {
-        showSettings = !showSettings
-
-        const currentScrollToBottom = scrollToBottom
+  {#if showSettings}<div class="settings-content">
+      <Settings
+        onSessionOffsetChange={(offset) => {
+          setSessionTimestampOffsetByTitle(selectedPotplayerInfo?.title, offset)
+          void updateChatMessages()
+        }}
+      />
+    </div>{/if}
+  <div
+    class="chat-container"
+    class:concealed={showSettings}
+    bind:this={chatContainerRef}
+    onresize={() => {
+      const lastScrollToBottom = scrollToBottom
+      requestAnimationFrame(() => {
+        scrollToBottom = lastScrollToBottom
         scrollToTarget()
-        requestAnimationFrame(() => {
-          scrollToBottom = currentScrollToBottom
-          scrollToTarget()
-        })
-      }}
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="50%"
-        height="50%"
-        viewBox="0 0 1024 1024"
-        aria-hidden="true"
-        focusable="false"
+      })
+    }}
+  >
+    {#if messages && messages.length > 0}
+      <VList
+        bind:this={vlistRef}
+        data={messages}
+        getKey={(msg, i) => msg?.getId() ?? i}
+        onscroll={() => {
+          if (!nextScrollKeepTarget) {
+            targetElement = null
+            vlistRef?.scrollBy(0) // Cancel any pending scroll
+          } else {
+            setNextScrollKeepTargetDebounced(false)
+          }
+
+          if (viewingHistory || performance.now() - lastPotplayerChangeTime < 3000) return
+          const currentIsAtBottom = isAtBottom()
+          if (currentIsAtBottom !== null && currentIsAtBottom !== scrollToBottom) {
+            scrollToBottom = currentIsAtBottom
+            targetElement = null
+          }
+        }}
       >
-        <path
-          fill="currentColor"
-          d="M600.704 64a32 32 0 0 1 30.464 22.208l35.2 109.376c14.784 7.232 28.928 15.36 42.432 24.512l112.384-24.192a32 32 0 0 1 34.432 15.36L944.32 364.8a32 32 0 0 1-4.032 37.504l-77.12 85.12a357.12 357.12 0 0 1 0 49.024l77.12 85.248a32 32 0 0 1 4.032 37.504l-88.704 153.6a32 32 0 0 1-34.432 15.296L708.8 803.904c-13.44 9.088-27.648 17.28-42.368 24.512l-35.264 109.376A32 32 0 0 1 600.704 960H423.296a32 32 0 0 1-30.464-22.208L357.696 828.48a351.616 351.616 0 0 1-42.56-24.64l-112.32 24.256a32 32 0 0 1-34.432-15.36L79.68 659.2a32 32 0 0 1 4.032-37.504l77.12-85.248a357.12 357.12 0 0 1 0-48.896l-77.12-85.248A32 32 0 0 1 79.68 364.8l88.704-153.6a32 32 0 0 1 34.432-15.296l112.32 24.256c13.568-9.152 27.776-17.408 42.56-24.64l35.2-109.312A32 32 0 0 1 423.232 64H600.64zm-23.424 64H446.72l-36.352 113.088-24.512 11.968a294.113 294.113 0 0 0-34.816 20.096l-22.656 15.36-116.224-25.088-65.28 113.152 79.68 88.192-1.92 27.136a293.12 293.12 0 0 0 0 40.192l1.92 27.136-79.808 88.192 65.344 113.152 116.224-25.024 22.656 15.296a294.113 294.113 0 0 0 34.816 20.096l24.512 11.968L446.72 896h130.688l36.48-113.152 24.448-11.904a288.282 288.282 0 0 0 34.752-20.096l22.592-15.296 116.288 25.024 65.28-113.152-79.744-88.192 1.92-27.136a293.12 293.12 0 0 0 0-40.256l-1.92-27.136 79.808-88.128-65.344-113.152-116.288 24.96-22.592-15.232a287.616 287.616 0 0 0-34.752-20.096l-24.448-11.904L577.344 128zM512 320a192 192 0 1 1 0 384 192 192 0 0 1 0-384zm0 64a128 128 0 1 0 0 256 128 128 0 0 0 0-256z"
-        />
-      </svg></button
-    >
+        {#snippet children(msg, i)}
+          <ChatMessage
+            message={msg}
+            videoStartTime={selectedPotplayerInfo?.startTime}
+            videoEndTime={selectedPotplayerInfo?.endTime}
+            elapsedTime={selectedPotplayerInfo?.startTime
+              ? Math.floor(
+                  msg.timestamp -
+                    selectedPotplayerInfo?.startTime -
+                    settings.chat.timestampOffset -
+                    settings.chat._sessionTimestampOffset
+                )
+              : undefined}
+            {urlTracker}
+            usernameColorTimelineMap={chatService.usernameColorTimelineMap}
+            onUsernameClick={handleUsernameClick}
+            onEmoteLoad={({ hash }) => {
+              if (loadedEmotes.has(hash)) return
+              loadedEmotes.add(hash)
+              scrollToTargetDebounced(scrollToBottom)
+            }}
+            onImageLoad={() => {
+              scrollToTargetDebounced(scrollToBottom)
+            }}
+            bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
+          />
+        {/snippet}
+      </VList>
+    {:else if loadingState?.state === 'loading'}
+      <div class="chat-message system center">Loading chat...</div>
+    {:else if loadingState?.state === 'error'}
+      <div class="chat-message error center">{loadingState.errorMessage}</div>
+    {:else if loadingState?.state === 'no-potplayer-info'}
+      <div class="chat-message system center">
+        No PotPlayer info available.<br />
+        Try to pause and unpause the video or reopen the video.
+      </div>
+    {:else if loadingState?.state === 'chat-not-found'}
+      <div class="chat-message system center">Chat data not found.</div>
+    {:else if !selectedPotplayerInfo?.hwnd}
+      <div class="chat-message system center">No PotPlayer instance selected.</div>
+    {:else if !selectedPotplayerInfo?.startTime}
+      <div class="chat-message system center">
+        No start time set for the selected PotPlayer instance.
+      </div>
+    {:else}
+      <div class="chat-message system">
+        Unknown error occurred.<br />
+        {#if (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV}
+          <span>Loading state: {JSON.stringify(loadingState)}</span><br />
+          <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
+        {/if}
+      </div>
+    {/if}
   </div>
 
-  {#if showSettings}
-    <Settings />
-  {:else}
-    <div
-      class="chat-container"
-      bind:this={chatContainerRef}
-      onresize={() => {
-        const lastScrollToBottom = scrollToBottom
-        requestAnimationFrame(() => {
-          scrollToBottom = lastScrollToBottom
-          scrollToTarget()
-        })
-      }}
-    >
-      {#if messages && messages.length > 0}
-        <VList
-          bind:this={vlistRef}
-          data={messages}
-          getKey={(msg, i) => msg?.getId() ?? i}
-          onscroll={() => {
-            if (!nextScrollKeepTarget) {
-              targetElement = null
-              vlistRef?.scrollBy(0) // Cancel any pending scroll
-            } else {
-              setNextScrollKeepTargetDebounced(false)
-            }
-
-            if (performance.now() - lastPotplayerChangeTime < 3000) return
-            const currentIsAtBottom = isAtBottom()
-            if (currentIsAtBottom !== null && currentIsAtBottom !== scrollToBottom) {
-              scrollToBottom = currentIsAtBottom
-              targetElement = null
-            }
-          }}
-        >
-          {#snippet children(msg, i)}
-            <ChatMessage
-              message={msg}
-              videoStartTime={selectedPotplayerInfo?.startTime}
-              videoEndTime={selectedPotplayerInfo?.endTime}
-              elapsedTime={selectedPotplayerInfo?.startTime
-                ? Math.floor(
-                    msg.timestamp -
-                      selectedPotplayerInfo?.startTime -
-                      settings.chat.timestampOffset -
-                      settings.chat._sessionTimestampOffset
-                  )
-                : undefined}
-              {urlTracker}
-              usernameColorTimelineMap={chatService.usernameColorTimelineMap}
-              onUsernameClick={handleUsernameClick}
-              onEmoteLoad={({ hash }) => {
-                if (loadedEmotes.has(hash)) return
-                loadedEmotes.add(hash)
-                scrollToTargetDebounced(scrollToBottom)
-              }}
-              onImageLoad={() => {
-                scrollToTargetDebounced(scrollToBottom)
-              }}
-              bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
-            />
-          {/snippet}
-        </VList>
-      {:else if loadingState?.state === 'loading'}
-        <div class="chat-message system center">Loading chat...</div>
-      {:else if loadingState?.state === 'error'}
-        <div class="chat-message error center">{loadingState.errorMessage}</div>
-      {:else if loadingState?.state === 'no-potplayer-info'}
-        <div class="chat-message system center">
-          No PotPlayer info available.<br />
-          Try to pause and unpause the video or reopen the video.
-        </div>
-      {:else if loadingState?.state === 'chat-not-found'}
-        <div class="chat-message system center">Chat data not found.</div>
-      {:else if !selectedPotplayerInfo?.hwnd}
-        <div class="chat-message system center">No PotPlayer instance selected.</div>
-      {:else if !selectedPotplayerInfo?.startTime}
-        <div class="chat-message system center">
-          No start time set for the selected PotPlayer instance.
-        </div>
-      {:else}
-        <div class="chat-message system">
-          Unknown error occurred.<br />
-          {#if (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV}
-            <span>Loading state: {JSON.stringify(loadingState)}</span><br />
-            <span>Selected PotPlayer Info: {JSON.stringify(selectedPotplayerInfo)}</span>
-          {/if}
+  {#if !showSettings}
+    <footer class="chat-footer">
+      {#if settings.interface.layout === 'streamlined'}
+        <div class="recording-row">
+          <span title={selectedPotplayerInfo?.title}
+            >{selectedPotplayerInfo?.channel
+              ? selectedPotplayerInfo.channel + ' · '
+              : ''}{selectedPotplayerInfo?.title ?? 'Waiting for a recording'}</span
+          ><time>{clockText(playbackTime)}</time>
         </div>
       {/if}
-    </div>
-
-    {#if !scrollToBottom}
-      <button class="scroll-to-bottom" onclick={scrollChatToBottom}> Scroll to bottom </button>
-    {/if}
+      <div class="status-row">
+        <span class="playback-status" title={statusLabel}>{statusLabel}</span>
+        {#if !scrollToBottom}<button class="return-button" onclick={scrollChatToBottom}
+            >Return to playback</button
+          >{/if}
+        <button
+          class="offset-button"
+          title="Adjust session timestamp offset"
+          aria-expanded={showOffset}
+          disabled={!selectedPotplayerInfo?.title}
+          onclick={() => {
+            retainReadingPosition()
+            showOffset = !showOffset
+            void tick().then(() => scrollToTarget())
+          }}
+          >Offset {settings.chat._sessionTimestampOffset > 0 ? '+' : ''}{settings.chat
+            ._sessionTimestampOffset / 1000} s</button
+        >
+      </div>
+      {#if showOffset}
+        <div class="offset-controls">
+          <span>Session offset</span>
+          <button
+            class="icon-button"
+            aria-label="Decrease session offset by 0.5 seconds"
+            onclick={() => adjustSessionOffset(-500)}><Icon name="minus" /></button
+          >
+          <output>{settings.chat._sessionTimestampOffset / 1000} s</output>
+          <button
+            class="icon-button"
+            aria-label="Increase session offset by 0.5 seconds"
+            onclick={() => adjustSessionOffset(500)}><Icon name="plus" /></button
+          >
+        </div>
+      {/if}
+    </footer>
   {/if}
 </div>
 
 <style>
   .container {
-    display: grid;
-    grid-template-rows: auto 1fr;
-    place-content: stretch;
-    min-width: 100%;
-    min-height: 100%;
-  }
-
-  .header {
-    max-width: 100%;
     display: flex;
-    justify-content: space-evenly;
-    align-items: stretch;
-    align-content: center;
-    gap: 1rem;
-    contain: content;
-    background: var(--color-black-soft);
-    color: var(--color-white);
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--color-gray-4);
-    font-size: 1rem;
-    overflow: auto;
-    scrollbar-color: var(--color-gray-4) var(--color-black-soft);
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--deck-bg);
+  }
+  .chat-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    flex: none;
+    background: var(--deck-bg);
+  }
+  .instance-tabs {
+    display: flex;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+    overflow-x: auto;
     scrollbar-width: thin;
-    user-select: text;
-    cursor: default;
   }
-  .header button {
-    min-width: 4.5rem;
-    max-height: 4rem;
-    flex: 1 1 content;
+  .instance-tabs button {
+    flex: 0 0 auto;
+    max-width: 150px;
+    min-width: 44px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--deck-muted);
+    padding: 5px 8px;
+    border-radius: 4px;
+  }
+  .instance-tabs button[aria-selected='true'] {
+    background: var(--deck-selection);
+    color: var(--deck-accent);
+  }
+  .chat-tools {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex: none;
+  }
+  .icon-button {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    text-align: center;
-    border: 1px solid var(--color-gray-5);
+    flex: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--deck-line);
     border-radius: 4px;
-    padding: 0.5rem;
-    overflow: auto;
-    scrollbar-width: inherit;
+    color: var(--deck-muted);
+    background: var(--deck-surface);
+  }
+  .icon-button[aria-pressed='true'] {
+    color: var(--deck-accent);
+    background: var(--deck-selection);
+  }
+  button {
     cursor: pointer;
-  }
-  .header button.settings {
-    width: 4rem;
-    display: flex;
-  }
-  .header button:hover {
-    background: none;
-    border-color: var(--color-accent-hover);
-  }
-  .header button.selected {
-    color: var(--color-accent);
-    font-weight: bold;
-    background: none;
-    border-color: var(--color-accent);
-  }
-
-  .chat-container {
-    flex: 1 1 auto;
-    background-color: var(--color-black-dark);
-    color: var(--color-text-light);
-    padding-bottom: 0.5rem;
-    overflow: auto;
-  }
-
-  .system {
-    color: var(--color-text-muted);
-    font-style: italic;
-    padding: 0.25rem 0.5rem;
-    line-height: 1.7;
-    font-size: 108%;
-    box-sizing: border-box;
-    user-select: text;
-  }
-
-  .error {
-    color: var(--color-error);
-    font-weight: bold;
-    padding: 0.25rem 0.5rem;
-    line-height: 1.7;
-    font-size: 108%;
-    box-sizing: border-box;
-    user-select: text;
-  }
-
-  .center {
-    display: flex;
-    text-align: center;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .scroll-to-bottom {
-    position: fixed;
-    width: calc(100% - 6px);
-    bottom: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--color-bg-main-alpha-97);
-    border: 1px solid var(--color-accent-faded);
-    border-radius: 4px;
-    color: var(--color-accent);
     font: inherit;
-    cursor: pointer;
-    transition: background-color 0.2s;
   }
-
-  .scroll-to-bottom:hover {
-    background: var(--color-bg-main-alpha-90);
-    border-color: var(--color-accent);
+  button:hover:not(:disabled) {
+    color: var(--deck-text);
+    background: var(--deck-hover);
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+  .comfort {
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    gap: 8px;
+    border-bottom: 1px solid var(--deck-line);
+  }
+  .comfort .instance-tabs,
+  .comfort .chat-tools {
+    flex: 1 0 100%;
+    width: 100%;
+  }
+  .channel-name {
+    min-width: 0;
+    flex: 1;
+    color: var(--deck-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .recording-row {
+    display: flex;
+    gap: 10px;
+    min-width: 0;
+    width: 100%;
+    color: var(--deck-muted);
+    font-size: 11px;
+    align-items: center;
+  }
+  .recording-row > span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  time,
+  output {
+    flex: none;
+    font-family: Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .settings-content,
+  .chat-container {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .chat-container {
+    position: relative;
+    color: var(--deck-text);
+  }
+  .concealed {
+    display: none;
+  }
+  .chat-footer {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 9px;
+    border-top: 1px solid var(--deck-line);
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--deck-muted);
+    font-size: 11px;
+  }
+  .playback-status {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .offset-button,
+  .return-button {
+    flex: none;
+    border: 0;
+    border-radius: 3px;
+    padding: 3px 5px;
+    color: var(--deck-accent);
+    background: transparent;
+  }
+  .return-button {
+    background: var(--deck-selection);
+  }
+  .offset-controls {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--deck-muted);
+  }
+  .offset-controls > span {
+    flex: 1;
+  }
+  .offset-controls output {
+    min-width: 50px;
+    text-align: center;
+  }
+  .system {
+    color: var(--deck-muted);
+    padding: 24px 18px;
+    line-height: 1.6;
+    user-select: text;
+  }
+  .error {
+    color: var(--color-error-soft);
+  }
+  .center {
+    text-align: center;
   }
 </style>

@@ -16,6 +16,7 @@
   import conf from '../state/config'
   import { settings } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
+  import LinkPreview from './LinkPreview.svelte'
 
   let { context }: { context: UserWindowContext } = $props()
 
@@ -26,6 +27,9 @@
 
   let profile: TwitchUserProfile | null = $state(null)
   let profileLoaded = $state(false)
+  let profileError = $state('')
+  let historyError = $state('')
+  let copyError = $state('')
   let avatarFailed = $state(false)
   let historyLoaded = $state(false)
   let messages: TwitchChatMessage[] = $state.raw([])
@@ -63,9 +67,17 @@
   async function loadProfile(): Promise<void> {
     profileLoaded = false
     avatarFailed = false
-    profile = await TwitchUserService.getUserProfileByName(context.username)
-    profileLoaded = true
-    if (profile) document.title = `${profile.displayName} - PotPlayer Chat`
+    profileError = ''
+    try {
+      profile = await TwitchUserService.getUserProfileByName(context.username)
+      if (profile) document.title = `${profile.displayName} - PotPlayer Chat`
+      else profileError = 'Profile details are unavailable.'
+    } catch (error) {
+      profileError = 'Unable to load profile details.'
+      console.warn(profileError, error)
+    } finally {
+      profileLoaded = true
+    }
   }
 
   function loadMessages(newMessages: TwitchChatMessage[]): void {
@@ -82,6 +94,7 @@
 
   async function loadHistory(): Promise<void> {
     historyLoaded = false
+    historyError = ''
     try {
       const potplayerInfo = context.potplayerInfo
       await chatService.updateVideoInfo(potplayerInfo, -1)
@@ -100,8 +113,12 @@
           loadMessages(getMessagesFromUser(loadedMessages, context.username))
         }
       } catch (error) {
+        historyError = 'Additional message history is unavailable.'
         console.warn('Failed to load additional user history:', error)
       }
+    } catch (error) {
+      historyError = 'Unable to load message history.'
+      console.warn(historyError, error)
     } finally {
       historyLoaded = true
       scrollToRelevantMessage()
@@ -121,6 +138,7 @@
   }
 
   async function copyText(value: string, field: 'username' | 'id'): Promise<void> {
+    copyError = ''
     try {
       await navigator.clipboard.writeText(value)
       copiedField = field
@@ -129,12 +147,23 @@
         copiedField = null
       }, 1500)
     } catch (error) {
+      copyError = `Unable to copy ${field}.`
       console.warn(`Failed to copy ${field}:`, error)
     }
   }
 
   function openUsercard(): void {
     window.api.openUrl(`https://www.twitch.tv/${encodeURIComponent(login)}`)
+  }
+
+  function activateMessage(event: MouseEvent, message: TwitchChatMessage): void {
+    if (
+      event.target instanceof Element &&
+      event.target.closest('button, a, input, [role="button"]')
+    )
+      return
+    if (window.getSelection()?.toString()) return
+    context.focusMessage(message)
   }
 
   function handleUrlClick(url: string): void {
@@ -160,9 +189,10 @@
 </script>
 
 <svelte:window onkeydown={(event) => event.key === 'Escape' && window.close()} />
+<LinkPreview />
 
 <div class="user-window">
-  <section class="profile-header">
+  <section class="profile-header" aria-label="User profile">
     <div class="avatar-frame">
       {#if profile?.profilePictureUrl && !avatarFailed}
         <img
@@ -176,96 +206,133 @@
         </div>
       {/if}
     </div>
-
     <div class="profile-details">
       <div class="profile-row primary-row">
-        <span class="display-name" style:color={usernameColor}>{displayName}</span>
-        {#if displayName.toLowerCase() !== login.toLowerCase()}
-          <span class="login">({login})</span>
-        {/if}
+        <span class="display-name" title={displayName} style:color={usernameColor}
+          >{displayName}</span
+        >
+      </div>
+      <div class="profile-row">
+        <span class="login" title={login}>{login}</span>
         <button
           type="button"
           class="icon-button"
           title={copiedField === 'username' ? 'Copied username' : 'Copy username'}
           aria-label="Copy username"
           onclick={() => copyText(login, 'username')}
+          >{copiedField === 'username' ? '✓' : '▣'}</button
         >
-          {copiedField === 'username' ? '✓' : '▣'}
-        </button>
       </div>
-
-      <div class="profile-row">
-        <span class="label">ID:</span>
-        <span class="profile-value">{userId ?? 'Unavailable'}</span>
-        {#if userId}
-          <button
+      <div class="profile-row metadata-row">
+        <span class="label">ID</span><span class="profile-value" title={userId ?? 'Unavailable'}
+          >{userId ?? 'Unavailable'}</span
+        >
+        {#if userId}<button
             type="button"
             class="icon-button"
             title={copiedField === 'id' ? 'Copied ID' : 'Copy ID'}
             aria-label="Copy Twitch user ID"
-            onclick={() => copyText(userId, 'id')}
-          >
-            {copiedField === 'id' ? '✓' : '▣'}
-          </button>
-        {/if}
+            onclick={() => copyText(userId, 'id')}>{copiedField === 'id' ? '✓' : '▣'}</button
+          >{/if}
       </div>
-
-      <div class="profile-row">
-        <span class="label">Created:</span>
-        <span class="profile-value">
-          {profile
+      <div class="profile-row metadata-row">
+        <span class="label">Created</span><span
+          >{profile
             ? formatCreatedAt(profile.createdAt)
             : profileLoaded
               ? 'Unavailable'
-              : 'Loading…'}
-        </span>
+              : 'Loading…'}</span
+        >
       </div>
     </div>
   </section>
-
-  <nav class="profile-actions" aria-label="User actions">
-    <button type="button" onclick={openUsercard}>Usercard</button>
-  </nav>
-
-  <section class="history-section">
-    <div class="history-header">
-      <span>Messages from {displayName}</span>
-      <span class="history-count">{messages.length}</span>
+  {#if profileError || copyError}
+    <div class="profile-notice" role="status">
+      <span>{copyError || profileError}</span>{#if profileError}<button
+          type="button"
+          onclick={() => loadProfile()}>Retry profile</button
+        >{/if}
     </div>
-
-    <div class="history-list">
+  {/if}
+  <span class="sr-only" role="status">{copiedField ? `Copied ${copiedField}.` : ''}</span>
+  <section class="history-section" aria-label="Message history">
+    <div class="history-header">
+      <div class="history-summary">
+        <span class="history-label" title={`Messages from ${login}`}>Messages from {login}</span
+        ><span class="history-count">{messages.length}</span>
+      </div>
+      <button type="button" onclick={openUsercard}>Usercard</button>
+      <button
+        class="search-user"
+        type="button"
+        title="Search username"
+        aria-label="Search username"
+        onclick={() => context.searchUsername(context.username)}
+        ><svg
+          width="14"
+          height="14"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="m12 12 5 5" /></svg
+        ></button
+      >
+    </div>
+    {#if historyError || loadingState.state === 'error'}
+      <div class="profile-notice" role="alert">
+        <span>{historyError || loadingState.errorMessage}</span><button
+          type="button"
+          disabled={!historyLoaded}
+          onclick={() => loadHistory()}>Retry history</button
+        >
+      </div>
+    {/if}
+    <div class="history-list" aria-busy={!historyLoaded}>
       {#if messages.length > 0}
         <VList
           bind:this={vlistRef}
           data={messages}
           getKey={(item, index) => item?.getId() ?? index}
-          itemSize={64}
+          itemSize={48}
         >
           {#snippet children(message, index)}
             {#if message}
-              <button
-                type="button"
+              <div
                 class="history-item"
-                onclick={() => context.focusMessage(message)}
+                role="group"
+                aria-label="History message"
+                onpointerup={(event) => {
+                  if (event.button === 0) activateMessage(event, message)
+                }}
               >
+                <button
+                  class="return-message"
+                  type="button"
+                  aria-label="Return to this message in chat"
+                  title="Return to message in chat"
+                  onclick={() => context.focusMessage(message)}>↩</button
+                >
                 <ChatMessage
                   {message}
                   videoStartTime={chatService.currentPotPlayerInfo?.startTime}
                   videoEndTime={chatService.currentPotPlayerInfo?.endTime}
                   {urlTracker}
                   usernameColorTimelineMap={chatService.usernameColorTimelineMap}
+                  onUsernameClick={context.onUsernameClick}
                   onUrlClick={handleUrlClick}
-                  enableLinkPreviews={false}
                   bind:reloadServicesFunction={reloadServicesFunctionMap[index]}
                 />
-              </button>
+              </div>
             {/if}
           {/snippet}
         </VList>
       {:else if !historyLoaded}
-        <div class="history-state">Loading message history…</div>
+        <div class="history-state" role="status">Loading message history…</div>
+      {:else if historyError}
+        <div class="history-state">Message history is unavailable.</div>
       {:else}
-        <div class="history-state">No messages from {displayName} in this range.</div>
+        <div class="history-state">No messages from {login} in this range.</div>
       {/if}
     </div>
   </section>
@@ -275,209 +342,218 @@
   .user-window {
     width: 100%;
     height: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    color: var(--color-text-light);
-    background: #0e0e10;
+    color: var(--deck-text);
+    background: var(--deck-bg);
     user-select: text;
   }
-
   .profile-header {
+    flex: none;
     display: grid;
-    grid-template-columns: 156px minmax(0, 1fr);
-    gap: 22px;
-    padding: 18px;
-    min-height: 192px;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+    background: var(--deck-surface);
   }
-
   .avatar-frame {
-    width: 156px;
-    height: 156px;
+    width: 64px;
+    height: 64px;
     overflow: hidden;
-    background: var(--color-black-deep);
+    background: var(--deck-bg);
+    border-radius: 4px;
   }
-
   .avatar-frame img,
   .avatar-fallback {
     width: 100%;
     height: 100%;
   }
-
   .avatar-frame img {
     display: block;
     object-fit: cover;
   }
-
   .avatar-fallback {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--color-text-muted);
-    font-size: 64px;
+    color: var(--deck-muted);
+    font-size: 28px;
     font-weight: 600;
   }
-
   .profile-details {
     min-width: 0;
-    padding-top: 2px;
   }
-
   .profile-row {
     display: flex;
     align-items: center;
     min-width: 0;
-    min-height: 32px;
-    gap: 7px;
-    font-size: 17px;
-    line-height: 1.3;
+    min-height: 23px;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
   }
-
   .primary-row {
-    min-height: 38px;
-    font-size: 20px;
-  }
-
-  .display-name {
-    overflow: hidden;
+    font-size: 16px;
     font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
-
+  .display-name,
   .login,
-  .label {
-    color: var(--color-text-muted);
-  }
-
-  .login {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .profile-value {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
+  .login,
+  .label {
+    color: var(--deck-muted);
+  }
+  .metadata-row {
+    font-size: 11px;
+  }
+  .label {
+    flex: none;
+  }
+  button {
+    flex: none;
+    min-height: 30px;
+    padding: 4px 9px;
+    border: 1px solid var(--deck-line);
+    border-radius: 4px;
+    color: var(--deck-text);
+    background: var(--deck-surface);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+  }
+  button:hover {
+    background: var(--deck-hover);
+  }
+  button:focus-visible {
+    outline: 2px solid var(--deck-accent);
+    outline-offset: 2px;
+  }
   .icon-button {
-    flex: 0 0 auto;
-    padding: 3px 6px;
+    flex: none;
+    min-height: 21px;
+    padding: 1px 4px;
     border: 0;
-    color: var(--color-text-muted);
     background: transparent;
-    cursor: pointer;
-    font-size: 15px;
+    color: var(--deck-muted);
   }
-
-  .icon-button:hover,
-  .icon-button:focus-visible {
-    color: var(--color-white);
-  }
-
-  .profile-actions {
+  .profile-notice {
+    flex: none;
     display: flex;
-    justify-content: center;
-    padding: 12px 16px;
-    border-top: 1px solid var(--color-gray-5);
-    border-bottom: 1px solid var(--color-gray-5);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--deck-muted);
+    border-bottom: 1px solid var(--deck-line);
   }
-
-  .profile-actions button {
-    padding: 4px 20px;
-    border: 0;
-    color: var(--color-text-light);
-    background: transparent;
-    cursor: pointer;
-    font-size: 17px;
+  .profile-notice span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
-
-  .profile-actions button:hover,
-  .profile-actions button:focus-visible {
-    color: var(--color-white);
-    text-decoration: underline;
-  }
-
   .history-section {
     min-height: 0;
     display: flex;
     flex: 1;
     flex-direction: column;
   }
-
   .history-header {
+    flex: none;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 14px;
-    color: var(--color-text-muted);
-    border-bottom: 1px solid var(--color-gray-4);
-    font-size: 13px;
+    gap: 8px;
+    padding: 8px 12px;
+    border-block: 1px solid var(--deck-line);
   }
-
+  .history-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin-right: auto;
+    color: var(--deck-muted);
+    font-size: 11px;
+  }
+  .history-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .history-count {
-    min-width: 28px;
-    padding: 0 7px;
-    border-radius: 10px;
-    color: var(--color-text-light);
-    background: var(--color-gray-3);
-    text-align: center;
+    flex: none;
+    font-variant-numeric: tabular-nums;
   }
-
+  .search-user {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    padding: 4px;
+  }
   .history-list {
     min-height: 0;
     flex: 1;
+    overflow: hidden;
   }
-
   .history-item {
-    min-width: 100%;
-    width: fit-content;
-    padding: 7px 12px;
-    border: 0;
-    border-bottom: 1px solid #1f1f23;
-    color: inherit;
-    background: transparent;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--deck-message-gap, 5px) 30px var(--deck-message-gap, 5px) 12px;
     cursor: pointer;
-    text-align: left;
+    overflow-wrap: anywhere;
+    font-size: var(--deck-message-size, 13px);
+    line-height: var(--deck-message-line-height, 1.45);
   }
-
   .history-item:hover,
-  .history-item:focus-visible {
-    background: var(--color-bg-hover);
-    outline: none;
+  .history-item:focus-within {
+    background: var(--deck-hover);
   }
-
+  .return-message {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--deck-muted);
+    opacity: 0;
+  }
+  .history-item:hover .return-message,
+  .history-item:focus-within .return-message {
+    opacity: 1;
+  }
+  .return-message:hover {
+    background: var(--deck-selection);
+    color: var(--deck-text);
+  }
   .history-state {
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
-    color: var(--color-text-muted);
+    color: var(--deck-muted);
     text-align: center;
+    font-size: 13px;
   }
-
-  @media (max-width: 500px) {
-    .profile-header {
-      grid-template-columns: 112px minmax(0, 1fr);
-      gap: 14px;
-      min-height: 148px;
-    }
-
-    .avatar-frame {
-      width: 112px;
-      height: 112px;
-    }
-
-    .profile-row {
-      min-height: 27px;
-      font-size: 14px;
-    }
-
-    .primary-row {
-      font-size: 17px;
-    }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 </style>

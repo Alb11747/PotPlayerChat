@@ -1,3 +1,4 @@
+import type { AppearancePreferences } from '@/types/appearance'
 import type { WindowApi } from '@/types/preload'
 import { electronAPI } from '@electron-toolkit/preload'
 import { exposeConf } from 'electron-conf/preload'
@@ -17,8 +18,28 @@ ipcRenderer.on('log', (_, { messages, level }) => {
 
 exposeConf()
 
+const appearanceListeners = new Map<
+  (preferences: AppearancePreferences) => void,
+  (_event: Electron.IpcRendererEvent, preferences: AppearancePreferences) => void
+>()
+
 // Custom APIs for renderer
 const api: WindowApi = {
+  getAppearancePreferences: () => ipcRenderer.invoke('getAppearancePreferences'),
+  onAppearanceChanged: (callback) => {
+    if (appearanceListeners.has(callback)) return
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      preferences: AppearancePreferences
+    ): void => callback(preferences)
+    appearanceListeners.set(callback, listener)
+    ipcRenderer.on('appearanceChanged', listener)
+  },
+  offAppearanceChanged: (callback) => {
+    const listener = appearanceListeners.get(callback)
+    if (listener) ipcRenderer.off('appearanceChanged', listener)
+    appearanceListeners.delete(callback)
+  },
   loadDataFile: (...args) => ipcRenderer.invoke('loadDataFile', ...args),
   saveDataFile: (...args) => ipcRenderer.invoke('saveDataFile', ...args),
   loadKeys: (...args) => ipcRenderer.invoke('loadKeys', ...args),

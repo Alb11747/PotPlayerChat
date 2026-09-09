@@ -1,157 +1,65 @@
-import type { ChatSettings } from '@/core/chat/twitch-chat'
-import type { PollingIntervals } from '@/types/preload'
-import { SvelteSet } from 'svelte/reactivity'
+import type { AppearancePreferences } from '@/types/appearance'
+import { normalizeAppearancePreferences } from '@/types/appearance'
 import conf from './config'
+import {
+  createDefaultSettings,
+  defaultSettings,
+  hydrateSettings,
+  normalizeSettingsValue,
+  MAX_VIDEO_TIMESTAMP_OFFSETS,
+  type Settings
+} from './settings-model'
+export {
+  defaultSettings,
+  createDefaultSettings,
+  MAX_VIDEO_TIMESTAMP_OFFSETS
+} from './settings-model'
+export type {
+  Settings,
+  InterfaceSettings,
+  SearchSettings,
+  GeneralSettings,
+  VideoTimestampOffset
+} from './settings-model'
 
-export interface InterfaceSettings {
-  enableEmotes: boolean
-  enableLinkPreviews: boolean
-  enableInlineImagePreviews: boolean
-  openInlineImagePreviewsOnClick: boolean
-  enableEmotePreviews: boolean
-  defaultPreviewPosition: 'top' | 'bottom'
-  stickyPreviews: boolean
-  keepScrollPosition: boolean
-  showTimestamps: boolean
-  absoluteTimestamps: boolean
-  enableBadges: boolean
-  showName: 'username' | 'displayName' | 'usernameFirst' | 'displayFirst'
-  requireHttpInUrl: boolean
-}
-
-export interface SearchSettings {
-  showAllMessages: boolean
-}
-
-export interface GeneralSettings {
-  prerelease: boolean
-}
-
-export interface VideoTimestampOffset {
-  title: string
-  offset: number
-}
-
-export const MAX_VIDEO_TIMESTAMP_OFFSETS = 100
-
-export interface Settings {
-  chat: ChatSettings & {
-    timestampOffset: number
-    chatterinoBaseUrl: string
-    _sessionTimestampOffset: number
-    videoTimestampOffsets: VideoTimestampOffset[]
-  }
-  interface: InterfaceSettings
-  search: SearchSettings
-  intervals: PollingIntervals
-  general: GeneralSettings
-}
-
-export const defaultSettings: Settings = {
-  chat: {
-    chatMessageLimit: 200,
-    timestampOffset: 0,
-    _sessionTimestampOffset: 0,
-    videoTimestampOffsets: [],
-    justlogUrl: 'https://justlog.alb11747.com',
-    chatterinoBaseUrl: 'https://chatterino.alb11747.com/link_resolver'
-  },
-  interface: {
-    enableEmotes: true,
-    enableLinkPreviews: true,
-    enableInlineImagePreviews: false,
-    openInlineImagePreviewsOnClick: true,
-    enableEmotePreviews: true,
-    defaultPreviewPosition: 'top',
-    stickyPreviews: true,
-    keepScrollPosition: true,
-    showTimestamps: true,
-    absoluteTimestamps: false,
-    enableBadges: true,
-    showName: 'displayFirst',
-    requireHttpInUrl: true
-  },
-  search: {
-    showAllMessages: false
-  },
-  intervals: {
-    videoTime: 0,
-    potplayerInstances: 0,
-    activeWindow: 0
-  },
-  general: {
-    prerelease: false
-  }
-}
-
-export const settings: Settings = $state(defaultSettings)
+export const settings: Settings = $state(createDefaultSettings())
+export const settingsStatus = $state({ ready: false, error: '' })
 export const settingsConfigKey = 'settings'
 
-export function saveSettings(): void {
-  const settingsSnapshot = $state.snapshot(settings)
-  console.debug('Saving settings:', settingsSnapshot)
-  conf.set(settingsConfigKey, settingsSnapshot)
-}
-
-export function* iterSettingsKeys(): Generator<
-  [string, Record<string, unknown>, Record<string, unknown>]
-> {
-  for (const key in defaultSettings) {
-    const key2 = key as keyof Settings
-    for (const subkey in defaultSettings[key2]) {
-      yield [
-        subkey,
-        settings[key2] as Record<string, unknown>,
-        defaultSettings[key2] as Record<string, unknown>
-      ]
-    }
-  }
+export function applyAppearance(): void {
+  const appearance = normalizeAppearancePreferences(settings.interface)
+  document.documentElement.dataset['layout'] = appearance.layout
+  document.documentElement.dataset['palette'] = appearance.palette
+  document.documentElement.dataset['previewMode'] = appearance.previewMode
 }
 
 export function normalizeSettings(): void {
-  for (const [subkey, subSettings, defaultSubSettings] of iterSettingsKeys()) {
-    if (subSettings[subkey] === undefined || subSettings[subkey] === '')
-      subSettings[subkey] = defaultSubSettings[subkey]
-  }
+  normalizeSettingsValue(settings)
+}
 
-  // Normalize the Base URLs
-  while ((settings.chat.justlogUrl ?? '').endsWith('/'))
-    settings.chat.justlogUrl = settings.chat.justlogUrl.slice(0, -1)
-  while ((settings.chat.chatterinoBaseUrl ?? '').endsWith('/'))
-    settings.chat.chatterinoBaseUrl = settings.chat.chatterinoBaseUrl.slice(0, -1)
+export function saveSettings(): void {
+  if (!settingsStatus.ready) return
+  normalizeSettings()
+  applyAppearance()
+  const snapshot = $state.snapshot(settings)
+  // Session offsets are derived from the selected video, never restored as a global offset.
+  const chat: Partial<Settings['chat']> = snapshot.chat
+  delete chat._sessionTimestampOffset
+  void conf
+    .set(settingsConfigKey, { ...snapshot, chat })
+    .then(() => {
+      settingsStatus.error = ''
+    })
+    .catch((error: unknown) => {
+      settingsStatus.error = 'Could not save settings. Try changing the setting again.'
+      console.error('Failed to save settings:', error)
+    })
+}
 
-  const rawVideoTimestampOffsets = Array.isArray(settings.chat.videoTimestampOffsets)
-    ? settings.chat.videoTimestampOffsets
-    : []
-  const seenTitles: Set<string> = new SvelteSet()
-  const normalizedVideoTimestampOffsets: VideoTimestampOffset[] = []
-  for (let i = rawVideoTimestampOffsets.length - 1; i >= 0; i -= 1) {
-    const entry = rawVideoTimestampOffsets[i]
-    if (!entry || typeof entry !== 'object') continue
-
-    const title = String(entry.title ?? '').trim()
-    const offset = Number(entry.offset)
-    if (!title || seenTitles.has(title) || !Number.isFinite(offset)) continue
-
-    seenTitles.add(title)
-    normalizedVideoTimestampOffsets.push({ title, offset })
-  }
-
-  const nextVideoTimestampOffsets = [...normalizedVideoTimestampOffsets]
-    .reverse()
-    .slice(-MAX_VIDEO_TIMESTAMP_OFFSETS)
-  const currentVideoTimestampOffsets = settings.chat.videoTimestampOffsets
-  const hasSameVideoTimestampOffsets =
-    currentVideoTimestampOffsets.length === nextVideoTimestampOffsets.length &&
-    currentVideoTimestampOffsets.every(
-      (entry, index) =>
-        entry.title === nextVideoTimestampOffsets[index]?.title &&
-        entry.offset === nextVideoTimestampOffsets[index]?.offset
-    )
-
-  if (!hasSameVideoTimestampOffsets) {
-    settings.chat.videoTimestampOffsets = nextVideoTimestampOffsets
-  }
+export function resetSettings(): void {
+  if (!settingsStatus.ready) return
+  Object.assign(settings, createDefaultSettings())
+  saveSettings()
 }
 
 export function getSessionTimestampOffsetByTitle(title: string | null | undefined): number {
@@ -184,31 +92,30 @@ export function setSessionTimestampOffsetByTitle(
   saveSettings()
 }
 
-export function removeTemporarySettings(): void {
-  // Remove settings that are prefixed with _
-  for (const [subkey, subSettings] of iterSettingsKeys()) {
-    if (subkey.startsWith('_')) delete subSettings[subkey]
-  }
+let latestAppearance: AppearancePreferences | undefined
+function receiveAppearance(preferences: AppearancePreferences): void {
+  latestAppearance = normalizeAppearancePreferences(preferences)
+  Object.assign(settings.interface, latestAppearance)
+  applyAppearance()
 }
+window.api.onAppearanceChanged(receiveAppearance)
+window.addEventListener('beforeunload', () => window.api.offAppearanceChanged(receiveAppearance), {
+  once: true
+})
+applyAppearance()
 
-void (async () => {
+export const settingsReady = (async (): Promise<void> => {
   try {
-    const defaultIntervals = await window.api.getDefaultPollingIntervals()
-    defaultSettings.intervals = defaultIntervals
-    const entries = Object.entries(settings.intervals) as [keyof PollingIntervals, number][]
-    for (const [key, value] of entries) if (!value) settings.intervals[key] = defaultIntervals[key]
-
+    defaultSettings.intervals = await window.api.getDefaultPollingIntervals()
     const data = await conf.get(settingsConfigKey)
-    Object.assign(settings, data)
-    removeTemporarySettings()
-    normalizeSettings()
-
-    if (Object.entries(settings.intervals).some(([, value]) => value === undefined)) {
-      settings.intervals = await window.api.getPollingIntervals()
-    } else {
-      await window.api.setPollingIntervals($state.snapshot(settings.intervals))
-    }
+    Object.assign(settings, hydrateSettings(data))
+    // A notification arriving during config hydration takes precedence over that older snapshot.
+    const storedAppearance = await window.api.getAppearancePreferences()
+    receiveAppearance(latestAppearance ?? storedAppearance)
+    await window.api.setPollingIntervals($state.snapshot(settings.intervals))
+    settingsStatus.ready = true
   } catch (error) {
+    settingsStatus.error = 'Could not load settings. Restart the app to try again.'
     console.error('Failed to initialize settings:', error)
   }
 })()
