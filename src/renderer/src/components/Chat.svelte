@@ -209,6 +209,7 @@
   function scrollChatToBottom(): void {
     const generation = ++navigationGeneration
     viewingHistory = false
+    showOffset = false
     scrollToBottom = true
     const resume = (): void => {
       if (generation === navigationGeneration && scrollToBottom && !viewingHistory)
@@ -745,32 +746,22 @@
     </div>
   </header>
 
-  {#if !showSettings}
+  {#if !showSettings && !scrollToBottom}
     <section class="playback-context" aria-label="Playback context">
-      <div class="recording-row">
-        <span title={selectedPotplayerInfo?.title}
-          >{selectedPotplayerInfo?.channel
-            ? selectedPotplayerInfo.channel + ' · '
-            : ''}{selectedPotplayerInfo?.title ?? 'Waiting for a recording'}</span
-        ><time>{clockText(playbackTime)}</time>
-      </div>
       <div class="status-row">
         <span class="playback-status" title={statusLabel}>{statusLabel}</span>
-        {#if !scrollToBottom}<button class="return-button" onclick={scrollChatToBottom}
-            >Return to playback</button
-          >{/if}
+        <button class="return-button" onclick={scrollChatToBottom}>Return to playback</button>
         <button
-          class="offset-button"
-          title="Adjust session timestamp offset"
+          class="playback-time"
+          title="Playback time — click to adjust session offset"
+          aria-label={`Playback time ${clockText(playbackTime)}, adjust session offset`}
           aria-expanded={showOffset}
           disabled={!selectedPotplayerInfo?.title}
           onclick={() => {
             retainReadingPosition()
             showOffset = !showOffset
             void tick().then(() => scrollToTarget())
-          }}
-          >Offset {settings.chat._sessionTimestampOffset > 0 ? '+' : ''}{settings.chat
-            ._sessionTimestampOffset / 1000} s</button
+          }}><time>{clockText(playbackTime)}</time></button
         >
       </div>
       {#if showOffset}
@@ -991,22 +982,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .recording-row {
-    display: flex;
-    gap: 10px;
-    min-width: 0;
-    width: 100%;
-    color: var(--deck-muted);
-    font-size: 11px;
-    align-items: center;
-  }
-  .recording-row > span {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
   time,
   output {
     flex: none;
@@ -1049,7 +1024,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .offset-button,
+  .playback-time,
   .return-button {
     flex: none;
     border: 0;
