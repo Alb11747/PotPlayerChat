@@ -871,6 +871,7 @@
   }
   .chat-container {
     position: relative;
+    margin-bottom: 8px;
     color: var(--deck-text);
   }
   .concealed {
