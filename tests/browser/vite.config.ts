@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 export default defineConfig({
   root: resolve('tests/browser'),
   cacheDir: resolve(tmpdir(), 'potplayerchat-browser-vite'),
+  build: { outDir: resolve(tmpdir(), 'potplayerchat-browser-build'), emptyOutDir: true },
   plugins: [svelte(), tailwindcss()],
   resolve: {
     alias: {
@@ -15,5 +16,6 @@ export default defineConfig({
       '@': resolve('src')
     }
   },
-  server: { host: '127.0.0.1', port: 5198, strictPort: true, fs: { allow: [resolve('.')] } }
+  server: { host: '127.0.0.1', port: 5198, strictPort: true, fs: { allow: [resolve('.')] } },
+  preview: { host: '127.0.0.1', port: 5198, strictPort: true }
 })

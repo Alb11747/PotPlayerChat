@@ -39,6 +39,10 @@ export class TranscriptGeometry {
     return Math.min(nonnegative(offset), Math.max(0, this.total - nonnegative(viewport)))
   }
 
+  indexOf(key: string): number {
+    return this.indices.get(key) ?? -1
+  }
+
   indexAt(offset: number): number {
     if (this.keys.length === 0) return -1
     const position = nonnegative(offset)

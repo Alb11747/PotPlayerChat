@@ -8,23 +8,31 @@
     data,
     getKey,
     estimateHeight,
+    estimateChanges,
+    getMeasurementVersion,
+    initialPosition,
     layoutVersion = '',
     follow = false,
     preserveOnReplace = true,
     onfollowchange,
     onuserinteraction,
     onviewportchange,
+    onrangechange,
     children
   }: {
     data: T[]
     getKey: (item: T) => string
     estimateHeight: (item: T) => number
+    estimateChanges?: readonly string[]
+    getMeasurementVersion?: (item: T) => unknown
+    initialPosition?: { index: number; options?: TranscriptScrollOptions }
     layoutVersion?: string
     follow?: boolean
     preserveOnReplace?: boolean
     onfollowchange?: (following: boolean) => void
     onuserinteraction?: () => void
     onviewportchange?: (width: number, height: number) => void
+    onrangechange?: (start: number, end: number) => void
     children: Snippet<[T, number]>
   } = $props()
 
@@ -32,10 +40,13 @@
   let geometry = $state.raw(new TranscriptGeometry([], []))
   let scrollTop = $state(0)
   let viewportHeight = $state(0)
+  let overscanReady = $state(false)
   let following = false
   let observer: ResizeObserver | undefined
   let frame = 0
   let disposed = false
+  let settling = false
+  let settleAgain = false
   let generation = 0
   let programmaticTop: number | null = null
   let inputActive = false
@@ -44,11 +55,19 @@
   let anchor: TranscriptAnchor | null = null
   let navigation: { key: string; options: TranscriptScrollOptions } | null = null
   let lastVersion = ''
+  let initialized = false
   const { measurements, estimates, elements } = createTranscriptCaches()
   let fragment: { key: string; part: string; text: string; offset: number; top: number } | null =
     null
-  const range = $derived(geometry.visibleRange(scrollTop, viewportHeight))
+  const range = $derived(
+    geometry.visibleRange(scrollTop, viewportHeight, overscanReady ? viewportHeight : 0)
+  )
   const visible = $derived(data.slice(range.start, range.end))
+
+  $effect(() => {
+    const { start, end } = range
+    untrack(() => onrangechange?.(start, end))
+  })
 
   $effect(() => {
     following = follow
@@ -63,7 +82,13 @@
     const version = layoutVersion
     const keys = data.map(getKey)
     const nextEstimates = data.map(estimateHeight)
+    const measurementVersions = getMeasurementVersion ? data.map(getMeasurementVersion) : null
     untrack(() => {
+      if (!initialized && keys.length) {
+        initialized = true
+        const key = initialPosition && keys[initialPosition.index]
+        if (key) navigation = { key, options: initialPosition!.options ?? {} }
+      }
       const invalidated = version !== lastVersion
       if (invalidated) measurements.clear()
       lastVersion = version
@@ -73,7 +98,10 @@
       keys.forEach((key, index) => estimates.set(key, nextEstimates[index]!))
       const heights = keys.map((key, index) => {
         const measured = measurements.get(key)
-        return measured && measured.estimate === nextEstimates[index]
+        return measured &&
+          (measurementVersions
+            ? measured.version === measurementVersions[index]
+            : measured.estimate === nextEstimates[index])
           ? measured.height
           : nextEstimates[index]!
       })
@@ -89,7 +117,41 @@
       }
       geometry = new TranscriptGeometry(keys, heights)
       scrollTop = layoutTarget()
-      queueLayout()
+      // Spacer updates may not cause a ResizeObserver callback. Settle after
+      // this DOM update rather than leaving the old native offset for a frame.
+      void tick().then(settleLayout)
+    })
+  })
+
+  $effect.pre(() => {
+    const changes = estimateChanges
+    if (!changes?.length) return
+    untrack(() => {
+      const heights = [...geometry.heights]
+      let changed = false
+      for (const key of changes) {
+        const index = geometry.indexOf(key)
+        if (index < 0) continue
+        const item = data[index]!
+        const estimate = estimateHeight(item)
+        estimates.set(key, estimate)
+        const measured = measurements.get(key)
+        const height =
+          measured &&
+          (getMeasurementVersion
+            ? measured.version === getMeasurementVersion(item)
+            : measured.estimate === estimate)
+            ? measured.height
+            : estimate
+        if (height !== heights[index]) {
+          heights[index] = height
+          changed = true
+        }
+      }
+      if (!changed) return
+      geometry = new TranscriptGeometry(geometry.keys, heights)
+      scrollTop = layoutTarget()
+      void tick().then(settleLayout)
     })
   })
 
@@ -171,7 +233,7 @@
       const rect = element.getBoundingClientRect()
       if (rect.bottom <= top || rect.top >= top + viewport.clientHeight || rect.top >= firstTop)
         continue
-      const index = geometry.keys.indexOf(key)
+      const index = geometry.indexOf(key)
       if (index < 0) continue
       firstTop = rect.top
       anchor = {
@@ -189,7 +251,7 @@
     const height = viewport?.clientHeight ?? viewportHeight
     if (following) return Math.max(0, geometry.total - height)
     if (navigation) {
-      const index = geometry.keys.indexOf(navigation.key)
+      const index = geometry.indexOf(navigation.key)
       if (index >= 0) return geometry.scrollOffset(index, navigation.options, height)
       navigation = null
     }
@@ -202,11 +264,15 @@
     let changed = false
     const heights = [...geometry.heights]
     for (const [key, element] of elements) {
-      const index = geometry.keys.indexOf(key)
+      const index = geometry.indexOf(key)
       if (index < 0) continue
       const height = element.getBoundingClientRect().height
       if (height <= 0) continue
-      measurements.set(key, { height, estimate: estimates.get(key) ?? 1 })
+      measurements.set(key, {
+        height,
+        estimate: estimates.get(key) ?? 1,
+        version: getMeasurementVersion?.(data[index]!)
+      })
       if (Math.abs(height - heights[index]!) <= 0.01) continue
       heights[index] = height
       changed = true
@@ -225,31 +291,46 @@
 
   async function settleLayout(): Promise<void> {
     if (disposed || !viewport || viewport.clientHeight === 0) return
-    const currentGeneration = generation
-    const savedFragment = fragment
-    // Read current DOM, not sizes queued by an older layout revision. A second
-    // pass also measures newly mounted rows after a distant navigation.
-    for (let pass = 0; pass < 2; pass++) {
-      measureMountedRows()
-      scrollTop = layoutTarget()
-      await tick()
-      if (disposed || generation !== currentGeneration) return
+    if (settling) {
+      settleAgain = true
+      return
     }
-    setScroll(following ? viewport.scrollHeight : layoutTarget())
-    if (!following && !navigation && savedFragment) {
-      const element = elements.get(savedFragment.key)
-      const part = element?.querySelector<HTMLElement>(
-        `[data-message-part="${CSS.escape(savedFragment.part)}"]`
-      )
-      const rect =
-        part?.textContent === savedFragment.text &&
-        textRange(part, savedFragment.offset)?.getBoundingClientRect()
-      if (rect && rect.height > 0)
-        setScroll(
-          viewport.scrollTop + rect.top - viewport.getBoundingClientRect().top - savedFragment.top
+    settling = true
+    try {
+      const currentGeneration = generation
+      const savedFragment = fragment
+      // Read current DOM, not sizes queued by an older layout revision. A second
+      // pass also measures newly mounted rows after a distant navigation.
+      for (let pass = 0; pass < 2; pass++) {
+        measureMountedRows()
+        scrollTop = layoutTarget()
+        await tick()
+        if (disposed || generation !== currentGeneration) return
+      }
+      setScroll(following ? viewport.scrollHeight : layoutTarget())
+      if (!following && !navigation && savedFragment) {
+        const element = elements.get(savedFragment.key)
+        const part = element?.querySelector<HTMLElement>(
+          `[data-message-part="${CSS.escape(savedFragment.part)}"]`
         )
+        const rect =
+          part?.textContent === savedFragment.text &&
+          textRange(part, savedFragment.offset)?.getBoundingClientRect()
+        if (rect && rect.height > 0)
+          setScroll(
+            viewport.scrollTop + rect.top - viewport.getBoundingClientRect().top - savedFragment.top
+          )
+      }
+      preservePosition()
+    } finally {
+      settling = false
+      if (settleAgain) {
+        settleAgain = false
+        // A concurrent estimate or ResizeObserver callback still belongs to
+        // this paint. Coalesce it without postponing the final bottom correction.
+        queueMicrotask(() => void settleLayout())
+      }
     }
-    preservePosition()
   }
 
   function observeRow(node: HTMLElement, key: string): { destroy: () => void } {
@@ -330,6 +411,14 @@
   }
 
   onMount(() => {
+    // Mount the viewport before its two extra viewports of overscan. Cold message
+    // components are substantial work even when no offscreen text is measured.
+    let overscanTask: ReturnType<typeof setTimeout> | undefined
+    const overscanFrame = requestAnimationFrame(() => {
+      overscanTask = setTimeout(() => {
+        overscanReady = true
+      }, 0)
+    })
     observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target === viewport) {
@@ -358,6 +447,8 @@
     return () => {
       disposed = true
       generation++
+      cancelAnimationFrame(overscanFrame)
+      clearTimeout(overscanTask)
       observer?.disconnect()
       cancelAnimationFrame(frame)
       window.removeEventListener('pointerup', pointerEnd)

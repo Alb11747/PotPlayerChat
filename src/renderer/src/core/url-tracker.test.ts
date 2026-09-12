@@ -4,6 +4,87 @@ import { UrlTracker } from './url-tracker'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('URL tracker retry', () => {
+  it('scopes layout notifications to changed dimensions and failures, excluding URL history', async () => {
+    vi.stubGlobal('window', {
+      api: { addUrlSeen: vi.fn(), addUrlClicked: vi.fn() }
+    })
+    const tracker = new UrlTracker({ chatterinoBaseUrl: 'https://resolver.example/' })
+    const listener = vi.fn()
+    const unsubscribe = tracker.subscribeLayout(listener)
+    const image = { naturalWidth: 320, naturalHeight: 180 } as HTMLImageElement
+    tracker.recordImageDimensions('image', image)
+    tracker.recordImageDimensions('image', image)
+    tracker.recordImageDimensions('image', {
+      naturalWidth: 0,
+      naturalHeight: 0
+    } as HTMLImageElement)
+    tracker.markFailedUrl('failed')
+    tracker.markFailedUrl('failed')
+    await tracker.markSeenUrl('image')
+    await tracker.markVisitedUrl('image')
+    tracker.clearSeenUrls()
+    tracker.clearVisitedUrls()
+    expect(listener.mock.calls).toEqual([['image'], ['failed']])
+    tracker.clearCache()
+    expect(listener).toHaveBeenLastCalledWith(undefined)
+    unsubscribe()
+    listener.mockClear()
+    tracker.markFailedUrl('other')
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('captures the URLs consulted by measurements and restores collectors after nested reads and errors', () => {
+    const tracker = new UrlTracker({ chatterinoBaseUrl: 'https://resolver.example/' })
+    const result = tracker.collectLayoutUrls(() => {
+      tracker.getCachedPreview('preview')
+      const nested = tracker.collectLayoutUrls(() => tracker.getImageDimensions('thumbnail'))
+      expect(nested.urls).toEqual(new Set(['thumbnail']))
+      expect(() =>
+        tracker.collectLayoutUrls(() => {
+          tracker.isFailedUrl('failed')
+          throw new Error('measurement failed')
+        })
+      ).toThrow('measurement failed')
+      tracker.isFailedUrl('image')
+      return 48
+    })
+    expect(result).toEqual({
+      value: 48,
+      urls: new Set(['preview', 'thumbnail', 'failed', 'image'])
+    })
+    tracker.getCachedPreview('outside')
+    expect(result.urls.has('outside')).toBe(false)
+    expect(tracker.collectLayoutUrls(() => 1).urls.size).toBe(0)
+  })
+
+  it('notifies preview completion and refresh resets without notifying cache hits or stale completions', async () => {
+    let finish!: (value: { status: number; link: string; thumbnail: string }) => void
+    const preview = { status: 200, link: 'page', thumbnail: 'image' }
+    const getLinkPreview = vi
+      .fn()
+      .mockResolvedValueOnce(preview)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          })
+      )
+    vi.stubGlobal('window', { api: { getLinkPreview } })
+    const tracker = new UrlTracker({ chatterinoBaseUrl: 'https://resolver.example/' })
+    const listener = vi.fn()
+    tracker.subscribeLayout(listener)
+    await tracker.getPreview('page')
+    await tracker.getPreview('page')
+    expect(listener.mock.calls).toEqual([['page']])
+    const pending = tracker.getPreview('page', true)
+    expect(listener.mock.calls).toEqual([['page'], ['page']])
+    tracker.clearCache()
+    listener.mockClear()
+    finish(preview)
+    await pending
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('does not restore a preview cache cleared while a request was pending', async () => {
     let finish!: (value: { status: number; link: string }) => void
     vi.stubGlobal('window', {

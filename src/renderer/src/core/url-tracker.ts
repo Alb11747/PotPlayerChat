@@ -19,6 +19,37 @@ export class UrlTracker {
   private imageDimensions = new SvelteMap<string, { width: number; height: number }>()
   private generation = 0
   private cacheState = new SvelteMap([['version', 0]])
+  private layoutListeners = new Set<(url: string | undefined) => void>()
+  private layoutUrls: Set<string> | undefined
+
+  subscribeLayout(listener: (url: string | undefined) => void): () => void {
+    this.layoutListeners.add(listener)
+    return () => this.layoutListeners.delete(listener)
+  }
+
+  private notifyLayout(url?: string): void {
+    for (const listener of this.layoutListeners) listener(url)
+  }
+
+  /** Capture only media consulted by a synchronous row measurement. */
+  collectLayoutUrls<T>(read: () => T): { value: T; urls: Set<string> } {
+    const previous = this.layoutUrls
+    const urls = new Set<string>()
+    this.layoutUrls = urls
+    try {
+      return { value: read(), urls }
+    } finally {
+      this.layoutUrls = previous
+      if (previous) for (const url of urls) previous.add(url)
+    }
+  }
+
+  private cachePreview(url: string, preview: LinkPreview): void {
+    const previous = this.cache.get(url)
+    this.cache.set(url, preview)
+    if (previous?.status !== preview.status || previous?.thumbnail !== preview.thumbnail)
+      this.notifyLayout(url)
+  }
 
   get cacheVersion(): number {
     return this.cacheState.get('version') ?? 0
@@ -39,8 +70,9 @@ export class UrlTracker {
       if (!refresh && this.isFailedUrl(url)) return this.cache.get(url) ?? { status: 0, link: url }
 
       if (refresh) {
-        this.cache.delete(url)
-        this.failedUrls.delete(url)
+        const hadPreview = this.cache.delete(url)
+        const hadFailure = this.failedUrls.delete(url)
+        if (hadPreview || hadFailure) this.notifyLayout(url)
       }
       this.loadingUrls.add(url)
       try {
@@ -53,12 +85,12 @@ export class UrlTracker {
         if (!data) {
           const errorResult: LinkPreview = { status: 0, link: url }
           this.markFailedUrl(url)
-          this.cache.set(url, errorResult)
+          this.cachePreview(url, errorResult)
           return errorResult
         }
 
         // Cache the result
-        this.cache.set(url, data)
+        this.cachePreview(url, data)
 
         return data
       } catch (error) {
@@ -67,7 +99,7 @@ export class UrlTracker {
         // Cache null result to avoid repeated failed requests
         const errorResult: LinkPreview = { status: 0, link: url }
         this.markFailedUrl(url)
-        this.cache.set(url, errorResult)
+        this.cachePreview(url, errorResult)
         return errorResult
       } finally {
         if (generation === this.generation) this.loadingUrls.delete(url)
@@ -100,6 +132,7 @@ export class UrlTracker {
    * Get cached preview without making a request
    */
   getCachedPreview(url: string): LinkPreview | null {
+    this.layoutUrls?.add(url)
     return this.cache.get(url) || null
   }
 
@@ -113,9 +146,11 @@ export class UrlTracker {
     this.failedUrls.clear()
     this.loadingUrls.clear()
     this.imageDimensions.clear()
+    this.notifyLayout()
   }
 
   getImageDimensions(url: string): { width: number; height: number } | undefined {
+    this.layoutUrls?.add(url)
     return this.imageDimensions.get(url)
   }
 
@@ -124,12 +159,14 @@ export class UrlTracker {
     const previous = this.imageDimensions.get(url)
     if (previous?.width === image.naturalWidth && previous.height === image.naturalHeight) return
     this.imageDimensions.set(url, { width: image.naturalWidth, height: image.naturalHeight })
+    this.notifyLayout(url)
   }
 
   /**
    * Check if a URL has failed to load
    */
   isFailedUrl(url: string): boolean {
+    this.layoutUrls?.add(url)
     return this.failedUrls.has(url)
   }
 
@@ -138,7 +175,9 @@ export class UrlTracker {
    * This prevents repeated attempts to fetch previews for known bad URLs
    */
   markFailedUrl(url: string): void {
+    if (this.failedUrls.has(url)) return
     this.failedUrls.add(url)
+    this.notifyLayout(url)
   }
 
   /**

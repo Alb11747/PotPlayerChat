@@ -27,6 +27,8 @@ declare global {
     resolveFixtureHistory?: () => void
     fixtureDisplay?: (layout: 'streamlined' | 'comfort', timestamps: boolean) => void
     fixtureClearCache?: () => void
+    fixtureHeartbeat?: { ticks: number; maxGap: number; last: number; timer: number }
+    fixtureShowSearch?: () => void
   }
 }
 
@@ -85,10 +87,11 @@ Object.defineProperty(window, 'electron', {
 const mediaReady = new Promise<void>((resolve) => {
   window.resolveFixtureMedia = resolve
 })
-window.open = (url) => {
-  window.fixturePopup = String(url)
-  return null
-}
+if (!new URLSearchParams(location.search).has('opener'))
+  window.open = (url) => {
+    window.fixturePopup = String(url)
+    return null
+  }
 const { mount } = await import('svelte')
 const { TwitchUserService, TwitchEmoteService, TwitchBadgeService, TwitchCheerEmoteService } =
   await import('@/core/chat/twitch-api')

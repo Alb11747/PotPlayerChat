@@ -105,17 +105,14 @@
       if (context.initialMessages.length > 0) {
         console.debug('Initial messages:', context.initialMessages.length)
         initialMessages = context.initialMessages
-        loadMessages(context.initialMessages)
-        scrollToTargetMessages()
       }
+
+      // Both snapshots are already available. Publish them together so opening
+      // does not mount and reposition an intermediate transcript first.
+      loadMessages([...context.initialMessages, ...context.loadedMessages])
+      scrollToTargetMessages()
 
       await new Promise((resolve) => setTimeout(resolve, 0))
-
-      if (context.loadedMessages.length > 0) {
-        console.debug('Preloaded messages:', context.loadedMessages.length)
-        loadMessages(context.loadedMessages)
-        scrollToTargetMessages()
-      }
 
       if (!potplayerInfo?.hwnd) {
         const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
@@ -158,10 +155,11 @@
   function loadMessages(msgs: TwitchMessage[]): void {
     const additions: TwitchMessageFormatted[] = []
     for (const msg of msgs) {
-      const formattedMsg = formattedTwitchMessageFactory(msg)
-      if (seenMessages.has(formattedMsg.getId())) continue // Skip duplicates
-      seenMessages.add(formattedMsg.getId())
-      additions.push(formattedMsg)
+      const id = msg.getId()
+      if (seenMessages.has(id)) continue
+      const formatted = formattedTwitchMessageFactory(msg)
+      seenMessages.add(id)
+      additions.push(formatted)
     }
     if (additions.length === 0) return
 
@@ -181,39 +179,49 @@
       if (scrolled || generation !== navigationGeneration) return
       if (!vlistRef || !filteredMessages || filteredMessages.length === 0) return
 
-      let targetElementIndex = null
-
-      if (focusedMessage) {
-        targetElementIndex = findMessageIndex(
-          filteredMessages,
-          focusedMessage.getId(),
-          focusedMessage.timestamp
-        )
-
-        if (targetElementIndex === null) {
-          targetElementIndex = getClosestMessageIndex(filteredMessages, focusedMessage.timestamp)
-        }
-      } else if (initialMessages && initialMessages.length > 0) {
-        targetElementIndex = findIntersectingMessageIndex(
-          filteredMessages,
-          initialMessages,
-          initialMessageMinTimestamp,
-          initialMessageMaxTimestamp,
-          true
-        )
-
-        if (targetElementIndex === null) {
-          targetElementIndex = getClosestMessageIndex(
-            filteredMessages,
-            initialMessages[initialMessages.length - 1]!.timestamp
-          )
-        }
-      }
-
+      const targetElementIndex = targetMessageIndex()
       if (targetElementIndex === null) return
       vlistRef.scrollToIndex(targetElementIndex, { align: 'center' })
     }, 0)
   }
+
+  function targetMessageIndex(): number | null {
+    let targetElementIndex: number | null = null
+
+    if (focusedMessage) {
+      targetElementIndex = findMessageIndex(
+        filteredMessages,
+        focusedMessage.getId(),
+        focusedMessage.timestamp
+      )
+
+      if (targetElementIndex === null) {
+        targetElementIndex = getClosestMessageIndex(filteredMessages, focusedMessage.timestamp)
+      }
+    } else if (initialMessages && initialMessages.length > 0) {
+      targetElementIndex = findIntersectingMessageIndex(
+        filteredMessages,
+        initialMessages,
+        initialMessageMinTimestamp,
+        initialMessageMaxTimestamp,
+        true
+      )
+
+      if (targetElementIndex === null) {
+        targetElementIndex = getClosestMessageIndex(
+          filteredMessages,
+          initialMessages[initialMessages.length - 1]!.timestamp
+        )
+      }
+    }
+
+    return targetElementIndex
+  }
+
+  const initialPosition = $derived.by(() => {
+    const index = targetMessageIndex()
+    return index === null ? undefined : { index, options: { align: 'center' as const } }
+  })
 
   const searchPattern = $derived(getSearchPattern(searchQuery, caseSensitive, useRegex))
 
@@ -301,6 +309,7 @@
         videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
         videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
         searchQuery={searchPattern}
+        {initialPosition}
         gutter
         onuserinteraction={() => {
           scrolled = true

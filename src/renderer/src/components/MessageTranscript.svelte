@@ -14,6 +14,8 @@
   } from '../core/message-layout'
   import type { UrlTracker } from '../core/url-tracker'
   import type { TranscriptHandle, TranscriptScrollOptions } from '../core/transcript-handle'
+  import { TranscriptEstimator } from '../core/transcript-estimator'
+  import { createMessageLayoutDependencies } from '../core/transcript-cache'
   import { settings } from '../state/settings.svelte'
   import VirtualTranscript from './VirtualTranscript.svelte'
 
@@ -24,6 +26,7 @@
     videoEndTime,
     getElapsedTime,
     searchQuery,
+    initialPosition,
     gutter = false,
     follow = false,
     preserveOnReplace = true,
@@ -37,6 +40,7 @@
     videoEndTime?: number
     getElapsedTime?: (message: T) => number | undefined
     searchQuery?: string | RegExp
+    initialPosition?: { index: number; options?: TranscriptScrollOptions }
     gutter?: boolean
     follow?: boolean
     preserveOnReplace?: boolean
@@ -56,17 +60,74 @@
   let metrics = $state.raw<MessageMetrics | null>(null)
   let width = $state(0)
   let fontVersion = $state(0)
+  let cacheVersion = $state(0)
+  let estimateChanges = $state.raw<readonly string[]>([])
+  const dependencies = createMessageLayoutDependencies()
   const options = $derived(presentationOptions({ videoStartTime, videoEndTime, searchQuery }))
-  const layoutVersion = $derived(JSON.stringify([metrics, width, options, gutter, fontVersion]))
+  const inlinePreviews = $derived(settings.interface.enableInlineImagePreviews)
+  const layoutVersion = $derived(
+    JSON.stringify([
+      metrics,
+      width,
+      options,
+      searchQuery?.toString(),
+      gutter,
+      fontVersion,
+      cacheVersion,
+      inlinePreviews
+    ])
+  )
+  const estimator = new TranscriptEstimator<T>({
+    getKey: (message) => message.getId(),
+    measure: (message) => {
+      const result = urlTracker.collectLayoutUrls(() => measureHeight(message))
+      dependencies.record(message.getId(), result.urls)
+      return result.value
+    },
+    publish: (keys) => {
+      estimateChanges = keys
+    }
+  })
 
-  $effect(() => {
+  $effect.pre(() => {
+    const rows = data
     const ids = data.map((message) => message.getId())
     untrack(() => {
       store.retain(ids)
+      dependencies.retain(rows)
       const keep = new Set(ids)
       for (const key of Object.keys(elapsedOptions)) if (!keep.has(key)) delete elapsedOptions[key]
     })
   })
+
+  $effect.pre(() => {
+    const rows = data
+    const version = layoutVersion
+    if (!metrics || width <= 0) return
+    untrack(() => estimator.replace(rows, version))
+  })
+
+  function invalidateRows(keys: Iterable<string>): void {
+    // These are DOM-content revisions, separate from improving an estimate.
+    const ids = Array.from(keys)
+    for (const key of ids) dependencies.versions.set(key, (dependencies.versions.get(key) ?? 0) + 1)
+    estimator.invalidate(ids)
+  }
+
+  $effect(() =>
+    store.subscribeLayout((change) => {
+      if (change.kind === 'all') cacheVersion++
+      else if (change.kind === 'message') invalidateRows([change.id])
+      else invalidateRows(dependencies.channels.get(change.channel) ?? [])
+    })
+  )
+
+  $effect(() =>
+    urlTracker.subscribeLayout((url) => {
+      if (url === undefined) cacheVersion++
+      else invalidateRows(dependencies.urls.get(url) ?? [])
+    })
+  )
 
   $effect(() => {
     if (!list || !queuedNavigation) return
@@ -77,7 +138,7 @@
     untrack(() => list?.scrollToIndex(index, request.options))
   })
 
-  function estimateHeight(message: T): number {
+  function measureHeight(message: T): number {
     if (!metrics) return 48
     let messageOptions = options
     if (getElapsedTime) {
@@ -97,12 +158,13 @@
         Math.max(1, width - (gutter ? 42 : 0)),
         metrics,
         urlTracker,
-        settings.interface.enableInlineImagePreviews
+        inlinePreviews
       ) + (gutter ? metrics.padding * 2 : 0)
     )
   }
 
   export function scrollToIndex(index: number, options?: TranscriptScrollOptions): void {
+    estimator.prioritize(Math.max(0, index - 16), Math.min(data.length, index + 17))
     if (list) list.scrollToIndex(index, options)
     else if (data[index]) queuedNavigation = { key: data[index].getId(), options }
   }
@@ -132,7 +194,6 @@
     const refresh = (): void => {
       const next = readMessageMetrics(container)
       if (JSON.stringify(next) !== JSON.stringify(metrics)) metrics = next
-      if (!width) width = container.clientWidth
     }
     const fontsChanged = (): void => {
       clearMessageLayoutCache()
@@ -149,6 +210,7 @@
     return () => {
       observer.disconnect()
       document.fonts.removeEventListener('loadingdone', fontsChanged)
+      estimator.dispose()
       store.clear()
     }
   })
@@ -160,12 +222,16 @@
       bind:this={list}
       {data}
       getKey={(message) => message.getId()}
-      {estimateHeight}
+      estimateHeight={(message) => estimator.get(message.getId())}
+      {estimateChanges}
+      getMeasurementVersion={(message) => dependencies.versions.get(message.getId()) ?? 0}
       {layoutVersion}
+      {initialPosition}
       {follow}
       {preserveOnReplace}
       {onfollowchange}
       {onuserinteraction}
+      onrangechange={(start, end) => estimator.prioritize(start, end)}
       onviewportchange={(nextWidth) => {
         if (nextWidth > 0) width = nextWidth
       }}

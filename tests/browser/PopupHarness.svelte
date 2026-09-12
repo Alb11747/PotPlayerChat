@@ -9,8 +9,11 @@
   import { onMount } from 'svelte'
 
   const start = 1700000000000
+  const count = Number(new URLSearchParams(location.search).get('count') ?? 1000)
+  const focusedIndex = Math.floor(count * 0.6)
+  let showSearch = $state(count <= 1000)
   const messages = Array.from(
-    { length: 1000 },
+    { length: count },
     (_, i) =>
       new TwitchChatMessage(
         '',
@@ -19,21 +22,24 @@
         start + i * 1000,
         'fixture',
         'viewer',
-        `Message ${i} ${i % 2 ? 'odd' : 'even'} ${'ordinary text '.repeat(i % 5)}`
+        `Message ${i} ${i % 2 ? 'odd' : 'even'} ${'ordinary text '.repeat(i % 5)} ${i % 7 === 0 ? 'FixtureBase' : ''}`
       )
   )
   const history = new Promise<void>((resolve) => {
     window.resolveFixtureHistory = resolve
   })
-  ChatService.prototype.updateVideoInfo = async () => true
+  ChatService.prototype.updateVideoInfo = async function (info) {
+    this.currentPotPlayerInfo = info
+    return true
+  }
   ChatService.prototype.getMessagesBetweenTimes = async () => {
     await history
     return messages
   }
   const context: SearchContext & UserWindowContext = {
     username: 'viewer',
-    clickedMessage: messages[600]!,
-    focusedMessage: messages[600]!,
+    clickedMessage: messages[focusedIndex]!,
+    focusedMessage: messages[focusedIndex]!,
     potplayerInfo: {
       hwnd: {} as HWND,
       pid: 1,
@@ -41,9 +47,9 @@
       channel: 'fixture',
       startTime: start
     },
-    initialMessages: messages.slice(500, 700),
-    loadedMessages: [],
-    searchRange: { startTime: start, endTime: start + 999000 },
+    initialMessages: messages.slice(focusedIndex - 100, focusedIndex + 100),
+    loadedMessages: count > 1000 ? messages : [],
+    searchRange: { startTime: start, endTime: start + (count - 1) * 1000 },
     focusMessage: (message) => {
       window.fixtureUrl = message.getId()
     },
@@ -55,13 +61,16 @@
     }
   }
   onMount(() => {
+    window.fixtureShowSearch = () => {
+      showSearch = true
+    }
     window.fixtureReady = true
   })
 </script>
 
 <div style="height:800px;width:600px;margin:auto">
   {#if new URLSearchParams(location.search).get('popup') === 'search'}
-    <Search {context} />
+    {#if showSearch}<Search {context} />{/if}
   {:else}
     <UserWindow {context} />
   {/if}

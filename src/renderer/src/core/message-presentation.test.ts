@@ -35,6 +35,45 @@ beforeEach(() => {
 })
 
 describe('shared message presentation', () => {
+  it('notifies only the resolved row and changed channel collection, with unsubscribe support', async () => {
+    const store = new MessagePresentationStore()
+    const listener = vi.fn()
+    const unsubscribe = store.subscribeLayout(listener)
+    const options = presentationOptions()
+    await store.load(message(), options)
+    await store.load(message('another', 'two'), options)
+    await store.load(message(), options)
+    expect(listener.mock.calls).toEqual([
+      [{ kind: 'channel', channel: 'channel' }],
+      [{ kind: 'message', id: 'one' }],
+      [{ kind: 'message', id: 'two' }]
+    ])
+    store.clear()
+    expect(listener).toHaveBeenLastCalledWith({ kind: 'all' })
+    unsubscribe()
+    listener.mockClear()
+    await store.load(message(), options)
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('does not notify layout when a cleared generation resolves', async () => {
+    let finish!: (id: string) => void
+    vi.mocked(TwitchUserService.getUserIdByName).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    const store = new MessagePresentationStore()
+    const listener = vi.fn()
+    store.subscribeLayout(listener)
+    const pending = store.load(message(), presentationOptions())
+    store.clear()
+    listener.mockClear()
+    finish('12')
+    await pending
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('retains text and emote parsing when only badges or an empty channel collection resolve', async () => {
     const store = new MessagePresentationStore()
     const options = presentationOptions({ enableEmotes: true, enableBadges: true })

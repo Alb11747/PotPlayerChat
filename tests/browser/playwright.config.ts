@@ -22,9 +22,12 @@ export default defineConfig({
     channel: process.env['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] ? undefined : 'chrome'
   },
   webServer: {
+    timeout: 120000,
     cwd: resolve(__dirname, '../..'),
-    command: 'pnpm exec vite --config tests/browser/vite.config.ts',
+    // Measure the production renderer, excluding Svelte dev instrumentation and HMR startup.
+    command:
+      'pnpm exec vite build --config tests/browser/vite.config.ts && pnpm exec vite preview --config tests/browser/vite.config.ts',
     url: 'http://127.0.0.1:5198',
-    reuseExistingServer: !process.env['CI']
+    reuseExistingServer: false
   }
 })

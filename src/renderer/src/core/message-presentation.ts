@@ -55,6 +55,11 @@ interface Assets {
   badges?: [string, HelixChatBadgeVersion | null][]
 }
 
+export type MessageLayoutChange =
+  | { kind: 'message'; id: string }
+  | { kind: 'channel'; channel: string }
+  | { kind: 'all' }
+
 /** Transcript-owned parsing survives row recycling without starting offscreen requests. */
 export class MessagePresentationStore {
   private assets = new SvelteMap<string, Assets>()
@@ -78,6 +83,16 @@ export class MessagePresentationStore {
   private cacheState = new SvelteMap([['generation', 0]])
   private timestampSecond = -1
   private timestampDay = ''
+  private layoutListeners = new Set<(change: MessageLayoutChange) => void>()
+
+  subscribeLayout(listener: (change: MessageLayoutChange) => void): () => void {
+    this.layoutListeners.add(listener)
+    return () => this.layoutListeners.delete(listener)
+  }
+
+  private notifyLayout(change: MessageLayoutChange): void {
+    for (const listener of this.layoutListeners) listener(change)
+  }
 
   private getTimestampDay(): string {
     const now = Date.now()
@@ -222,7 +237,13 @@ export class MessagePresentationStore {
           (await TwitchEmoteService.getEmotes(channel ? Number(channel) : undefined))
         let collection = (base ?? new Collection()) as Collection<string, Emote | CheerEmote>
         // Resolving one mounted row updates estimates for every row in its channel.
-        if (generation === this.generation) this.channelEmotes.set(message.channel!, collection)
+        if (
+          generation === this.generation &&
+          this.channelEmotes.get(message.channel!) !== collection
+        ) {
+          this.channelEmotes.set(message.channel!, collection)
+          this.notifyLayout({ kind: 'channel', channel: message.channel! })
+        }
         if (message.bits && message.message) {
           // Most rows can share the service's channel collection. Only cheers add per-message entries.
           collection = new Collection(collection)
@@ -243,8 +264,10 @@ export class MessagePresentationStore {
         generation === this.generation &&
         revision === (this.revisions.get(id) ?? 0) &&
         (!this.retainedIds || this.retainedIds.has(id))
-      )
+      ) {
         this.assets.set(id, next)
+        this.notifyLayout({ kind: 'message', id })
+      }
     })()
     this.pending.set(id, task)
     try {
@@ -275,5 +298,6 @@ export class MessagePresentationStore {
     this.pending.clear()
     this.revisions.clear()
     this.retainedIds = null
+    this.notifyLayout({ kind: 'all' })
   }
 }
