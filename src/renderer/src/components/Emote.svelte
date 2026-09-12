@@ -135,7 +135,12 @@
     if (enableEmotePreviews) onMouseLeavePreviewElement()
   }}
 >
-  <span class="emote-frame" style:width={frameWidth} style:height={frameHeight}>
+  <span
+    class="emote-frame"
+    class:loading={!dimensions}
+    style:width={frameWidth}
+    style:height={frameHeight}
+  >
     {#if !dimensions}
       <span class="chat-emote" aria-hidden="true">
         <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -191,13 +196,21 @@
 
   .emote-frame {
     display: inline-grid;
+    /* Intrinsic image sizes must not enlarge the explicitly sized frame's tracks. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     position: relative;
     margin-right: 0.125rem;
   }
   .emote-frame img {
     width: 100%;
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     object-fit: contain;
+  }
+  .emote-frame.loading img {
+    visibility: hidden;
   }
   .emote-frame > span {
     position: absolute;

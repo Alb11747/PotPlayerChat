@@ -604,7 +604,7 @@
 
 <LinkPreview />
 
-<div class="container" role="region" aria-label="Chat">
+<div class="chat-shell" role="region" aria-label="Chat">
   <header class="chat-header" class:comfort={settings.interface.layout === 'comfort'}>
     <div
       class="instance-tabs"
@@ -776,7 +776,7 @@
 </div>
 
 <style>
-  .container {
+  .chat-shell {
     display: flex;
     flex-direction: column;
     width: 100%;

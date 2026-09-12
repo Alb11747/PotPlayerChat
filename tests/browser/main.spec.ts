@@ -1,6 +1,38 @@
 import { expect, test } from '@playwright/test'
 import type {} from './fixture'
 
+test('chat fills the window across responsive breakpoints and layouts', async ({ page }) => {
+  await page.goto('/?main')
+  await page.waitForFunction(() => window.fixtureReady)
+  const chat = page.getByRole('region', { name: 'Chat', exact: true })
+  for (const layout of ['streamlined', 'comfort'] as const) {
+    await page.evaluate((layout) => window.fixtureDisplay!(layout, false), layout)
+    for (const size of [
+      { width: 360, height: 640 },
+      { width: 420, height: 800 },
+      { width: 600, height: 900 },
+      { width: 900, height: 850 },
+      { width: 2556, height: 1336 }
+    ]) {
+      await page.setViewportSize(size)
+      await expect.poll(() => chat.boundingBox()).toEqual({ x: 0, y: 0, ...size })
+      const geometry = await page.locator('.chat-container').evaluate((node) => {
+        const rect = node.getBoundingClientRect()
+        const header = document.querySelector('.chat-header')!.getBoundingClientRect()
+        return {
+          width: rect.width,
+          top: rect.top,
+          headerBottom: header.bottom,
+          bottomGap: innerHeight - rect.bottom
+        }
+      })
+      expect(geometry.width).toBe(size.width)
+      expect(geometry.top).toBe(geometry.headerBottom)
+      expect(geometry.bottomGap).toBe(8)
+    }
+  }
+})
+
 test('main chat keeps reading mode across media and settings and returns to playback', async ({
   page
 }) => {

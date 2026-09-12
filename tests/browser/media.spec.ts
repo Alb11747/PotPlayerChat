@@ -8,6 +8,119 @@ async function frames(page: Page, count = 4): Promise<void> {
   }, count)
 }
 
+for (const asset of [
+  { name: 'square', width: 2048, height: 2048 },
+  { name: 'wide', width: 4096, height: 256 },
+  { name: 'tall', width: 256, height: 4096 }
+]) {
+  test(`${asset.name} emotes stay inside their frames during decoding, cache clearing, and recycling`, async ({
+    page
+  }) => {
+    let releaseImages = (): void => {}
+    const imagesReady = new Promise<void>((resolve) => {
+      releaseImages = resolve
+    })
+    await page.addInitScript(() => {
+      const decode = HTMLImageElement.prototype.decode
+      const ready = new Promise<void>((resolve) => {
+        window.addEventListener('release-emote-decode', () => resolve(), { once: true })
+      })
+      HTMLImageElement.prototype.decode = async function () {
+        await decode.call(this)
+        if (this.classList.contains('chat-emote')) await ready
+      }
+    })
+    await page.route('https://**/*', async (route) => {
+      await imagesReady
+      await route.fulfill({
+        contentType: 'image/svg+xml',
+        body: `<svg xmlns="http://www.w3.org/2000/svg" width="${asset.width}" height="${asset.height}"><rect width="100%" height="100%" fill="purple"/></svg>`
+      })
+    })
+    await page.goto('/?media', { waitUntil: 'domcontentloaded' })
+    await page.waitForFunction(() => window.fixtureReady)
+    await page.evaluate(() => {
+      window.resolveFixtureMedia!()
+      window.transcriptTest.list().scrollToIndex(106)
+    })
+    const row = page.locator('[data-message-id="message-106"]')
+    const images = row.locator('.emote-frame img')
+    await expect(row.locator('.zero-width-emote')).toHaveCount(1)
+    await expect(row.locator('.bits')).toHaveText('100')
+    const checkFrames = async (): Promise<void> => {
+      const violations = await page.evaluate(async () => {
+        const failures: string[] = []
+        for (let i = 0; i < 8; i++) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          for (const image of document.querySelectorAll<HTMLImageElement>('.emote-frame img')) {
+            const frame = image.closest('.emote-frame')!
+            const box = frame.getBoundingClientRect()
+            const rect = image.getBoundingClientRect()
+            if (
+              rect.left < box.left - 1 ||
+              rect.right > box.right + 1 ||
+              rect.top < box.top - 1 ||
+              rect.bottom > box.bottom + 1
+            ) {
+              failures.push(
+                `${image.alt}: image ${rect.width}x${rect.height}, frame ${box.width}x${box.height}`
+              )
+            }
+            if (frame.querySelector('span') && getComputedStyle(image).visibility !== 'hidden') {
+              failures.push(`${image.alt}: visible before dimensions are ready`)
+            }
+          }
+        }
+        return failures
+      })
+      expect(violations).toEqual([])
+    }
+    await checkFrames()
+    releaseImages()
+    await expect
+      .poll(() =>
+        images.evaluateAll((nodes) =>
+          nodes.every(
+            (node) =>
+              (node as HTMLImageElement).complete && (node as HTMLImageElement).naturalWidth > 0
+          )
+        )
+      )
+      .toBe(true)
+    // The browser has intrinsic dimensions, but the application's decode step is still pending.
+    await checkFrames()
+    await page.evaluate(() => window.dispatchEvent(new Event('release-emote-decode')))
+    await expect(row.locator('.emote-frame > span')).toHaveCount(0)
+    await expect(images.first()).toBeVisible()
+    for (const layout of ['streamlined', 'comfort'] as const) {
+      for (const rem of [16, 20]) {
+        await page.evaluate(
+          ({ layout, rem }) => {
+            document.documentElement.style.fontSize = `${rem}px`
+            window.fixtureDisplay!(layout, true)
+          },
+          { layout, rem }
+        )
+        await checkFrames()
+        const size = await row.locator('.emote-frame').first().boundingBox()
+        const ratio = asset.width / asset.height
+        expect(size!.width).toBeCloseTo(Math.min(rem * 2.5 * ratio, rem * 9), 1)
+        expect(size!.height).toBeCloseTo(Math.min(rem * 2.5, (rem * 9) / ratio), 1)
+      }
+    }
+    await page.evaluate(() => window.fixtureClearCache!())
+    await checkFrames()
+    await expect(row.locator('.emote-frame > span')).toHaveCount(0)
+    await page.evaluate(() => window.transcriptTest.list().scrollToIndex(800))
+    await expect(row).toHaveCount(0)
+    await page.evaluate(() => window.transcriptTest.list().scrollToIndex(106))
+    await expect(row.locator('.zero-width-emote')).toHaveCount(1)
+    await checkFrames()
+    await expect(row.locator('.emote-frame > span')).toHaveCount(0)
+    await expect(row.locator('.bits')).toHaveText('100')
+  })
+}
+
 test('small cheer assets fill the emote size across layouts and text scaling', async ({ page }) => {
   await page.route('https://**/*', async (route) =>
     route.fulfill({

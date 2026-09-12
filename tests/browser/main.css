@@ -1,0 +1,4 @@
+@import '../../src/renderer/src/assets/main.css';
+
+/* Match the production renderer's Tailwind scan, including utility-name collisions. */
+@source '../../src/renderer';

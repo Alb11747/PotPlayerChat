@@ -2,7 +2,7 @@
   import Chat from '@/renderer/src/components/Chat.svelte'
   import { ChatService } from '@/core/chat/twitch-chat'
   import { TwitchChatMessage } from '@/core/chat/twitch-msg'
-  import { settings, settingsReady } from '@/renderer/src/state/settings.svelte'
+  import { settings, settingsReady, applyAppearance } from '@/renderer/src/state/settings.svelte'
   import { onMount } from 'svelte'
 
   const messages = Array.from(
@@ -23,9 +23,14 @@
   onMount(() => {
     void settingsReady.then(() => {
       settings.interface.enableInlineImagePreviews = true
+      window.fixtureDisplay = (layout, timestamps) => {
+        settings.interface.layout = layout
+        settings.interface.showTimestamps = timestamps
+        applyAppearance()
+      }
       window.fixtureReady = true
     })
   })
 </script>
 
-<div style="height:800px;width:600px;margin:auto"><Chat /></div>
+<Chat />

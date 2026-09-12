@@ -197,5 +197,5 @@ const { default: Harness } =
         : params.has('media')
           ? await import('./MediaHarness.svelte')
           : await import('./Harness.svelte')
-await import('@/renderer/src/assets/main.css')
+await import('./main.css')
 mount(Harness, { target: document.getElementById('app')! })
