@@ -94,6 +94,33 @@ test('bottom following survives delayed media compaction and append', async ({ p
   }
 })
 
+test('navigation waits for a large replacement and user input can cancel it', async ({ page }) => {
+  await page.goto('/?media')
+  await page.waitForFunction(() => window.fixtureReady)
+  await page.evaluate(async () => {
+    const fixture = window.transcriptTest
+    window.fixtureAppendMessages!(100000)
+    // Flush props and effects, without waiting for cooperative preparation timers.
+    await fixture.settleUpdates()
+    fixture.list().scrollToIndex(90000, { align: 'center' })
+  })
+  await expect(page.locator('[data-message-id="message-90000"]')).toBeVisible()
+  await page.locator('.virtual-transcript').dispatchEvent('pointerdown')
+  const saved = await anchor(page)
+  await page.evaluate(async () => {
+    const fixture = window.transcriptTest
+    window.fixtureAppendMessages!(200000)
+    await fixture.settleUpdates()
+    fixture.list().scrollToIndex(199000)
+    document.querySelector('.virtual-transcript')!.dispatchEvent(new WheelEvent('wheel'))
+  })
+  await expect
+    .poll(() => page.evaluate(() => window.transcriptTest.list().getItemSize(199999)))
+    .toBeGreaterThan(0)
+  await assertAnchor(page, saved)
+  await expect(page.locator('[data-message-id="message-199000"]')).toHaveCount(0)
+})
+
 test('keyboard scrolling cancels pending navigation and bottom following', async ({ page }) => {
   await page.evaluate(() => window.transcriptTest.follow(true))
   await frame(page)

@@ -1,4 +1,6 @@
 import type { TranscriptHandle } from '@/renderer/src/core/transcript-handle'
+import type { SearchContext } from '@/renderer/src/core/search-window'
+import type { TwitchMessage } from '@/core/chat/twitch-msg'
 
 export interface FixtureRow {
   id: string
@@ -9,6 +11,7 @@ export interface TranscriptFixture {
   list(): TranscriptHandle
   rows(): FixtureRow[]
   replace(rows: FixtureRow[]): void
+  settleUpdates(): Promise<void>
   resize(id: string, height: number): void
   follow(value: boolean): void
   state(): { following: boolean; interactions: number }
@@ -29,6 +32,14 @@ declare global {
     fixtureClearCache?: () => void
     fixtureHeartbeat?: { ticks: number; maxGap: number; last: number; timer: number }
     fixtureShowSearch?: () => void
+    fixtureOpenSharedSearch?: () => void
+    fixtureSwitchRecording?: () => void
+    fixtureAppendMessages?: (count: number) => void
+    fixtureSearchContext?: SearchContext
+    fixtureSharedMessages?: TwitchMessage[]
+    fixtureSharedSearchWindows?: Window[]
+    fixtureSharedInitialMessages?: TwitchMessage[]
+    fixtureSharedCallback?: { id: string; original: boolean; recording: string }
   }
 }
 
@@ -135,12 +146,15 @@ TwitchCheerEmoteService.getCheerEmoteInfo = async (name, bits) => {
   return new CheerEmote({ '1': info, '1.5': info, '2': info, '3': info, '4': info }, name, bits)
 }
 const params = new URLSearchParams(location.search)
-const { default: Harness } = params.has('main')
-  ? await import('./MainHarness.svelte')
-  : params.has('popup')
-    ? await import('./PopupHarness.svelte')
-    : params.has('media')
-      ? await import('./MediaHarness.svelte')
-      : await import('./Harness.svelte')
+const { default: Harness } =
+  params.has('sharedSource') || location.pathname.endsWith('/search.html')
+    ? await import('./SharedSearchHarness.svelte')
+    : params.has('main')
+      ? await import('./MainHarness.svelte')
+      : params.has('popup')
+        ? await import('./PopupHarness.svelte')
+        : params.has('media')
+          ? await import('./MediaHarness.svelte')
+          : await import('./Harness.svelte')
 await import('@/renderer/src/assets/main.css')
 mount(Harness, { target: document.getElementById('app')! })

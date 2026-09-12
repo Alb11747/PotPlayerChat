@@ -1,22 +1,23 @@
 import { regExpEscape } from '@/utils/strings'
-import { TwitchChatMessage, TwitchSystemMessage, type TwitchMessage } from '@/core/chat/twitch-msg'
+import type { TwitchMessage } from '@/core/chat/twitch-msg'
+import { CooperativeWork } from '@/utils/cooperative-work'
 
-export type TwitchMessageFormatted = TwitchMessage & { formattedMessage: string }
+export class SearchTextCache {
+  private readonly texts = new WeakMap<TwitchMessage, { original: string; lowercase?: string }>()
 
-export function formattedTwitchMessageFactory(msg: TwitchMessage): TwitchMessageFormatted {
-  if (msg.type === 'chat') {
-    const newObj = Object.create(TwitchChatMessage.prototype)
-    Object.assign(newObj, msg)
-    newObj.formattedMessage = `${msg.username}: ${msg.message}`
-    return newObj
+  get(message: TwitchMessage, lowercase = false): string {
+    let text = this.texts.get(message)
+    if (!text) {
+      text = {
+        original:
+          message.type === 'chat'
+            ? `${message.username}: ${message.message}`
+            : message.getSystemText()
+      }
+      this.texts.set(message, text)
+    }
+    return lowercase ? (text.lowercase ??= text.original.toLowerCase()) : text.original
   }
-  if (msg.type === 'system') {
-    const newObj = Object.create(TwitchSystemMessage.prototype)
-    Object.assign(newObj, msg)
-    newObj.formattedMessage = newObj.getSystemText()
-    return newObj
-  }
-  throw new Error('Invalid message type')
 }
 
 export function getSearchPattern(
@@ -36,24 +37,38 @@ export function getSearchPattern(
   return query
 }
 
-export function filterSearchMessages(
-  messages: TwitchMessageFormatted[],
+export async function filterSearchMessages(
+  messages: readonly TwitchMessage[],
   query: string,
   caseSensitive: boolean,
   useRegex: boolean,
-  pattern: string | RegExp | undefined = getSearchPattern(query, caseSensitive, useRegex)
-): TwitchMessageFormatted[] {
+  pattern: string | RegExp | undefined = getSearchPattern(query, caseSensitive, useRegex),
+  cache = new SearchTextCache(),
+  signal?: AbortSignal
+): Promise<readonly TwitchMessage[]> {
+  const work = new CooperativeWork(signal)
+  work.throwIfAborted()
   if (!query) return messages
+  // Patterns can come from the opener's realm; avoid instanceof here.
   const regex =
-    useRegex && pattern instanceof RegExp ? new RegExp(pattern.source, pattern.flags) : null
-  return messages.filter((message) => {
+    useRegex && pattern !== undefined && typeof pattern !== 'string'
+      ? new RegExp(pattern.source, pattern.flags)
+      : null
+  const normalizedQuery = caseSensitive ? query : query.toLowerCase()
+  const results: TwitchMessage[] = []
+  for (const message of messages) {
+    let matches: boolean
     if (regex) {
       // Highlight patterns are global; each transcript row must start a fresh match.
       regex.lastIndex = 0
-      return regex.test(message.formattedMessage)
+      matches = regex.test(cache.get(message))
+    } else {
+      matches = cache.get(message, !caseSensitive).includes(normalizedQuery)
     }
-    return caseSensitive
-      ? message.formattedMessage.includes(query)
-      : message.formattedMessage.toLowerCase().includes(query.toLowerCase())
-  })
+    if (matches) results.push(message)
+    const pause = work.checkpoint()
+    if (pause) await pause
+  }
+  work.throwIfAborted()
+  return results
 }

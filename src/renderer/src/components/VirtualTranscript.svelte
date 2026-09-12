@@ -1,11 +1,13 @@
-<script lang="ts" generics="T">
+<script lang="ts" generics="T, C = undefined">
   import { onMount, tick, untrack, type Snippet } from 'svelte'
+  import { CooperativeWork } from '@/utils/cooperative-work'
   import { createTranscriptCaches } from '../core/transcript-cache'
   import { TranscriptGeometry, type TranscriptAnchor } from '../core/transcript-geometry'
   import type { TranscriptScrollOptions } from '../core/transcript-handle'
 
   let {
     data,
+    renderContext,
     getKey,
     estimateHeight,
     estimateChanges,
@@ -18,9 +20,11 @@
     onuserinteraction,
     onviewportchange,
     onrangechange,
+    onpublish,
     children
   }: {
-    data: T[]
+    data: readonly T[]
+    renderContext?: C
     getKey: (item: T) => string
     estimateHeight: (item: T) => number
     estimateChanges?: readonly string[]
@@ -33,7 +37,8 @@
     onuserinteraction?: () => void
     onviewportchange?: (width: number, height: number) => void
     onrangechange?: (start: number, end: number) => void
-    children: Snippet<[T, number]>
+    onpublish?: (rows: readonly T[]) => void
+    children: Snippet<[T, number, C | undefined]>
   } = $props()
 
   let viewport: HTMLDivElement
@@ -55,14 +60,21 @@
   let anchor: TranscriptAnchor | null = null
   let navigation: { key: string; options: TranscriptScrollOptions } | null = null
   let lastVersion = ''
+  let anchoredVersion = ''
   let initialized = false
-  const { measurements, estimates, elements } = createTranscriptCaches()
+  const caches = createTranscriptCaches()
+  let measurements = caches.measurements
+  let estimates = caches.estimates
+  const elements = caches.elements
+  let renderedData = $state.raw<readonly T[]>([])
+  let renderedContext = $state.raw<C | undefined>()
+  let preparation: { controller: AbortController; dirty: Set<string> } | null = null
   let fragment: { key: string; part: string; text: string; offset: number; top: number } | null =
     null
   const range = $derived(
     geometry.visibleRange(scrollTop, viewportHeight, overscanReady ? viewportHeight : 0)
   )
-  const visible = $derived(data.slice(range.start, range.end))
+  const visible = $derived(renderedData.slice(range.start, range.end))
 
   $effect(() => {
     const { start, end } = range
@@ -77,49 +89,107 @@
     }
   })
 
-  // The model is keyed by message identity, including equal-length rolling windows.
+  // Publish rows and geometry together, so a pending large replacement cannot
+  // render new messages against the old dataset's offsets or measurements.
   $effect.pre(() => {
+    const rows = data
+    const context = renderContext
     const version = layoutVersion
-    const keys = data.map(getKey)
-    const nextEstimates = data.map(estimateHeight)
-    const measurementVersions = getMeasurementVersion ? data.map(getMeasurementVersion) : null
-    untrack(() => {
-      if (!initialized && keys.length) {
-        initialized = true
-        const key = initialPosition && keys[initialPosition.index]
-        if (key) navigation = { key, options: initialPosition!.options ?? {} }
-      }
+    const keyFor = getKey
+    const heightFor = estimateHeight
+    const versionFor = getMeasurementVersion
+    const position = untrack(() => initialPosition)
+    return untrack(() => {
+      const pending = { controller: new AbortController(), dirty: new Set<string>() }
+      preparation?.controller.abort()
+      preparation = pending
       const invalidated = version !== lastVersion
-      if (invalidated) measurements.clear()
-      lastVersion = version
-      const retained = new Set(keys)
-      for (const key of measurements.keys()) if (!retained.has(key)) measurements.delete(key)
-      estimates.clear()
-      keys.forEach((key, index) => estimates.set(key, nextEstimates[index]!))
-      const heights = keys.map((key, index) => {
-        const measured = measurements.get(key)
-        return measured &&
-          (measurementVersions
-            ? measured.version === measurementVersions[index]
-            : measured.estimate === nextEstimates[index])
-          ? measured.height
-          : nextEstimates[index]!
-      })
-      const changed =
-        keys.length !== geometry.keys.length ||
-        keys.some(
-          (key, index) => key !== geometry.keys[index] || heights[index] !== geometry.heights[index]
-        )
-      if (!changed && !invalidated) return
-      if (!preserveOnReplace && keys.some((key, index) => key !== geometry.keys[index])) {
-        anchor = null
-        fragment = null
+      const startedGeneration = generation
+      const { estimates: nextEstimates, measurements: nextMeasurements } = createTranscriptCaches()
+      let replaced = rows.length !== geometry.keys.length
+      const keyAt = (item: T, index: number): string => {
+        const key = keyFor(item)
+        if (key !== geometry.keys[index]) replaced = true
+        return key
       }
-      geometry = new TranscriptGeometry(keys, heights)
-      scrollTop = layoutTarget()
-      // Spacer updates may not cause a ResizeObserver callback. Settle after
-      // this DOM update rather than leaving the old native offset for a frame.
-      void tick().then(settleLayout)
+      const heightAt = (item: T): number => {
+        const key = keyFor(item)
+        const estimate = heightFor(item)
+        nextEstimates.set(key, estimate)
+        const measured = invalidated ? undefined : measurements.get(key)
+        if (
+          measured &&
+          (versionFor ? measured.version === versionFor(item) : measured.estimate === estimate)
+        ) {
+          nextMeasurements.set(key, measured)
+          return measured.height
+        }
+        nextMeasurements.delete(key)
+        return estimate
+      }
+      const publish = (nextGeometry: TranscriptGeometry): void => {
+        if (disposed || pending.controller.signal.aborted) return
+        if (!initialized && rows.length) {
+          initialized = true
+          const key = position && nextGeometry.keys[position.index]
+          if (key && !navigation && generation === startedGeneration)
+            navigation = { key, options: position!.options ?? {} }
+        }
+        if (!preserveOnReplace && replaced) {
+          anchor = null
+          fragment = null
+        }
+        measurements = nextMeasurements
+        estimates = nextEstimates
+        lastVersion = version
+        renderedData = rows
+        renderedContext = context
+        geometry = nextGeometry
+        onpublish?.(rows)
+        preparation = null
+        scrollTop = layoutTarget()
+        void tick().then(settleLayout)
+      }
+      if (rows.length <= 1000) {
+        const keys: string[] = []
+        const heights: number[] = []
+        rows.forEach((item, index) => {
+          keys.push(keyAt(item, index))
+          heights.push(heightAt(item))
+        })
+        publish(new TranscriptGeometry(keys, heights))
+      } else {
+        void (async () => {
+          try {
+            let nextGeometry = await TranscriptGeometry.create(
+              rows,
+              keyAt,
+              heightAt,
+              pending.controller.signal
+            )
+            const work = new CooperativeWork(pending.controller.signal)
+            // Measurements and estimates may improve while building. Replay them
+            // before publication without losing DOM-authoritative row heights.
+            const changedHeights: [number, number][] = []
+            for (const key of pending.dirty) {
+              pending.dirty.delete(key)
+              const index = nextGeometry.indexOf(key)
+              if (index >= 0) changedHeights.push([index, heightAt(rows[index]!)])
+              const pause = work.checkpoint()
+              if (pause) await pause
+            }
+            work.throwIfAborted()
+            nextGeometry = nextGeometry.withHeights(changedHeights)
+            publish(nextGeometry)
+          } catch (error) {
+            if (!pending.controller.signal.aborted) throw error
+          }
+        })()
+      }
+      return () => {
+        pending.controller.abort()
+        if (preparation === pending) preparation = null
+      }
     })
   })
 
@@ -127,12 +197,12 @@
     const changes = estimateChanges
     if (!changes?.length) return
     untrack(() => {
-      const heights = [...geometry.heights]
-      let changed = false
+      const heights: [number, number][] = []
       for (const key of changes) {
+        preparation?.dirty.add(key)
         const index = geometry.indexOf(key)
         if (index < 0) continue
-        const item = data[index]!
+        const item = renderedData[index]!
         const estimate = estimateHeight(item)
         estimates.set(key, estimate)
         const measured = measurements.get(key)
@@ -143,18 +213,15 @@
             : measured.estimate === estimate)
             ? measured.height
             : estimate
-        if (height !== heights[index]) {
-          heights[index] = height
-          changed = true
-        }
+        heights.push([index, height])
       }
-      if (!changed) return
-      geometry = new TranscriptGeometry(geometry.keys, heights)
+      const nextGeometry = geometry.withHeights(heights)
+      if (nextGeometry === geometry) return
+      geometry = nextGeometry
       scrollTop = layoutTarget()
       void tick().then(settleLayout)
     })
   })
-
   function setScroll(top: number): void {
     if (!viewport || viewport.clientHeight === 0) return
     viewport.scrollTop = Math.max(0, Math.min(top, viewport.scrollHeight - viewport.clientHeight))
@@ -240,8 +307,7 @@
         key,
         index,
         offset: top - rect.top,
-        previousKeys: geometry.keys,
-        previousOffsets: geometry.offsets
+        previousGeometry: geometry
       }
     }
     captureFragment()
@@ -253,7 +319,7 @@
     if (navigation) {
       const index = geometry.indexOf(navigation.key)
       if (index >= 0) return geometry.scrollOffset(index, navigation.options, height)
-      navigation = null
+      if (!preparation) navigation = null
     }
     return anchor
       ? geometry.restore(anchor, height)
@@ -261,8 +327,7 @@
   }
 
   function measureMountedRows(): boolean {
-    let changed = false
-    const heights = [...geometry.heights]
+    const heights: [number, number][] = []
     for (const [key, element] of elements) {
       const index = geometry.indexOf(key)
       if (index < 0) continue
@@ -271,16 +336,17 @@
       measurements.set(key, {
         height,
         estimate: estimates.get(key) ?? 1,
-        version: getMeasurementVersion?.(data[index]!)
+        version: getMeasurementVersion?.(renderedData[index]!)
       })
-      if (Math.abs(height - heights[index]!) <= 0.01) continue
-      heights[index] = height
-      changed = true
+      preparation?.dirty.add(key)
+      if (Math.abs(height - geometry.heightAt(index)) <= 0.01) continue
+      heights.push([index, height])
     }
-    if (changed) geometry = new TranscriptGeometry(geometry.keys, heights)
-    return changed
+    const nextGeometry = geometry.withHeights(heights)
+    if (nextGeometry === geometry) return false
+    geometry = nextGeometry
+    return true
   }
-
   function queueLayout(): void {
     if (!frame && !disposed)
       frame = requestAnimationFrame(() => {
@@ -321,7 +387,14 @@
             viewport.scrollTop + rect.top - viewport.getBoundingClientRect().top - savedFragment.top
           )
       }
-      preservePosition()
+      // Native scroll offsets lose subpixel precision far into large transcripts.
+      // Recapturing each programmatic correction would accumulate that rounding
+      // into the reading anchor. Reflow does change the first visible text fragment,
+      // so capture it once after each actual layout-version change.
+      if (following || navigation || !anchor || anchoredVersion !== lastVersion) {
+        preservePosition()
+        anchoredVersion = lastVersion
+      }
     } finally {
       settling = false
       if (settleAgain) {
@@ -345,6 +418,7 @@
   }
 
   function userIntent(): void {
+    preservePosition()
     generation++
     navigation = null
     programmaticTop = null
@@ -395,10 +469,10 @@
     queueLayout()
   }
   export function getItemOffset(index: number): number {
-    return geometry.offsets[index] ?? 0
+    return geometry.offsetAt(index)
   }
   export function getItemSize(index: number): number {
-    return geometry.heights[index] ?? 0
+    return geometry.heightAt(index)
   }
   export function getScrollOffset(): number {
     return viewport?.scrollTop ?? 0
@@ -446,6 +520,7 @@
     window.addEventListener('pointercancel', pointerEnd)
     return () => {
       disposed = true
+      preparation?.controller.abort()
       generation++
       cancelAnimationFrame(overscanFrame)
       clearTimeout(overscanTask)
@@ -494,15 +569,15 @@
     }
   }}
 >
-  <div aria-hidden="true" style:height={`${geometry.offsets[range.start] ?? 0}px`}></div>
+  <div aria-hidden="true" style:height={`${geometry.offsetAt(range.start)}px`}></div>
   {#each visible as item, index (getKey(item))}
     <div class="transcript-row" data-transcript-key={getKey(item)} use:observeRow={getKey(item)}>
-      {@render children(item, range.start + index)}
+      {@render children(item, range.start + index, renderedContext)}
     </div>
   {/each}
   <div
     aria-hidden="true"
-    style:height={`${Math.max(0, geometry.total - (geometry.offsets[range.end] ?? 0))}px`}
+    style:height={`${Math.max(0, geometry.total - geometry.offsetAt(range.end))}px`}
   ></div>
 </div>
 

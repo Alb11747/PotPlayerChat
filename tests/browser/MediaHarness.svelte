@@ -53,6 +53,7 @@
         replace() {
           throw new Error('Use the geometry fixture to replace synthetic rows')
         },
+        settleUpdates: tick,
         resize() {
           throw new Error('Use the geometry fixture to resize synthetic rows')
         },
@@ -76,6 +77,22 @@
         for (const reload of Object.values(reloadServices)) reload?.()
       }
       window.fixtureReady = true
+      window.fixtureAppendMessages = (count) => {
+        messages = Array.from(
+          { length: count },
+          (_, i) =>
+            messages[i] ??
+            new TwitchChatMessage(
+              '',
+              {},
+              `message-${i}`,
+              start + i * 1000,
+              'fixture',
+              'viewer',
+              `Message ${i}`
+            )
+        )
+      }
     })
   })
 </script>

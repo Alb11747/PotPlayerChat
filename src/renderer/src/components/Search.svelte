@@ -1,21 +1,13 @@
 <script lang="ts">
   import { ChatService, type LoadingState } from '@/core/chat/twitch-chat'
   import type { TwitchMessage } from '@/core/chat/twitch-msg'
-  import {
-    formattedTwitchMessageFactory,
-    getSearchPattern,
-    filterSearchMessages,
-    type TwitchMessageFormatted
-  } from '@/renderer/src/core/search-messages'
+  import { getSearchPattern, filterSearchMessages } from '@/renderer/src/core/search-messages'
+  import { SharedSearchDataCache, mergeSearchMessages } from '@/renderer/src/core/search-data'
   import type { SearchContext } from '@/renderer/src/core/search-window'
-  import {
-    findIntersectingMessageIndex,
-    findMessageIndex,
-    getClosestMessageIndex,
-    isRangeInMessages
-  } from '@/utils/chat'
+  import { findMessageIndex, getClosestMessageIndex, isRangeInMessages } from '@/utils/chat'
+  import { CooperativeWork } from '@/utils/cooperative-work'
   import { deleteNullishKeysInPlace } from '@/utils/objects'
-  import { onMount } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import MessageTranscript from './MessageTranscript.svelte'
   import type { TranscriptHandle } from '../core/transcript-handle'
   import LinkPreview from '../components/LinkPreview.svelte'
@@ -28,48 +20,40 @@
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
-
   const urlTracker = new UrlTracker(settings.chat)
+  // The context captures one recording and its source-owned caches for this popup's lifetime.
+  const sharedData = untrack(() => context.sharedData ?? new SharedSearchDataCache())
+  const lifetime = new AbortController()
 
   let searchQuery = $state('')
   let caseSensitive = $state(false)
   let useRegex = $state(false)
-
-  let scrolled = $state(false)
+  let scrolled = false
   let isLoading = $state(false)
+  let isFiltering = $state(false)
   let loadError = $state('')
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const seenMessages = new Set<string>()
   const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
-  let focusedMessage = $state<TwitchMessage | null>(null)
-  let initialMessages = $state.raw<TwitchMessage[] | null>(null)
-  let messages: TwitchMessageFormatted[] = $state.raw([])
-  let filteredMessages: TwitchMessageFormatted[] = $state.raw([])
-
-  const initialMessageMinTimestamp = $derived(
-    initialMessages && initialMessages.length > 0
-      ? Math.min(...initialMessages.map((msg) => msg.timestamp))
-      : 0
-  )
-  const initialMessageMaxTimestamp = $derived(
-    initialMessages && initialMessages.length > 0
-      ? Math.max(...initialMessages.map((msg) => msg.timestamp))
-      : 0
-  )
-
+  let messages: readonly TwitchMessage[] = $state.raw([])
+  let filteredMessages: readonly TwitchMessage[] = $state.raw([])
+  let searchPattern: string | RegExp | undefined = $state.raw(undefined)
+  let messageTimeline = $state.raw(chatService.usernameColorTimelineMap)
+  let filteredTimeline = $state.raw(chatService.usernameColorTimelineMap)
+  const renderContext = $derived({ pattern: searchPattern, timeline: filteredTimeline })
+  let initialPosition: { index: number; options: { align: 'center' } } | undefined = $state.raw()
   let searchInputRef: HTMLInputElement | null = $state(null)
   let vlistRef: TranscriptHandle | null = $state(null)
   let navigationGeneration = 0
   let previousSearchSignature: string | undefined
 
-  // Focus search input when component mounts
   onMount(() => {
-    if (searchInputRef) searchInputRef.focus()
+    searchInputRef?.focus()
     searchQuery = context.initialSearch ?? ''
     void loadAllMessages()
     window.api.onAppCacheCleared(handleAppCacheCleared)
     window.api.onSavedUrlsCleared(handleSavedUrlsCleared)
     return () => {
+      lifetime.abort()
+      navigationGeneration++
       window.api.offAppCacheCleared(handleAppCacheCleared)
       window.api.offSavedUrlsCleared(handleSavedUrlsCleared)
     }
@@ -90,39 +74,43 @@
     clearRendererSavedUrls(urlTracker)
   }
 
+  async function publishMessages(next: readonly TwitchMessage[]): Promise<void> {
+    await chatService.updateMessageDataCooperatively(next, lifetime.signal)
+    lifetime.signal.throwIfAborted()
+    messageTimeline = chatService.usernameColorTimelineMap
+    messages = next
+  }
+
   async function loadAllMessages(): Promise<void> {
-    if (isLoading) return
+    if (isLoading || lifetime.signal.aborted) return
     isLoading = true
     loadError = ''
-
     try {
       let potplayerInfo = context.potplayerInfo
-      focusedMessage = context.focusedMessage ?? null
       await chatService.updateVideoInfo(potplayerInfo, -1)
+      lifetime.signal.throwIfAborted()
 
-      if (focusedMessage) console.debug('Focused message:', focusedMessage)
-
-      if (context.initialMessages.length > 0) {
-        console.debug('Initial messages:', context.initialMessages.length)
-        initialMessages = context.initialMessages
-      }
-
-      // Both snapshots are already available. Publish them together so opening
-      // does not mount and reposition an intermediate transcript first.
-      loadMessages([...context.initialMessages, ...context.loadedMessages])
-      scrollToTargetMessages()
-
+      // Keep the source's objects and ordered snapshot shared across Search windows.
+      const prepared = await sharedData.prepare(
+        context.initialMessages,
+        context.loadedMessages,
+        lifetime.signal
+      )
+      await publishMessages(prepared)
       await new Promise((resolve) => setTimeout(resolve, 0))
+      lifetime.signal.throwIfAborted()
 
       if (!potplayerInfo?.hwnd) {
         const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
         const instances = await window.api.getPotPlayers()
+        lifetime.signal.throwIfAborted()
         const potplayerInstance = instances.find((p) => p.hwnd === selectedHwnd)
         if (!potplayerInstance?.hwnd) {
           loadError = 'No PotPlayer instance is connected.'
           return
         }
         const resolvedPotplayerInfo = await window.api.getPotplayerExtraInfo(potplayerInstance)
+        lifetime.signal.throwIfAborted()
         if (!resolvedPotplayerInfo) {
           loadError = 'Recording information is unavailable.'
           return
@@ -132,119 +120,110 @@
 
       const videoStartTime = potplayerInfo.startTime
       const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
-      const defaultStartTime = videoStartTime + currentTime - 60 * 60 * 1000 // 1 hour before
+      lifetime.signal.throwIfAborted()
+      const defaultStartTime = videoStartTime + currentTime - 60 * 60 * 1000
       const defaultEndTime = videoStartTime + currentTime
       const { startTime = defaultStartTime, endTime = defaultEndTime } = context.searchRange || {}
-
-      if (!initialMessages || !isRangeInMessages(initialMessages, startTime, endTime)) {
+      if (!isRangeInMessages(context.initialMessages, startTime, endTime)) {
         await chatService.updateVideoInfo(potplayerInfo, 0)
-        const loadedMsgs = await chatService.getMessagesBetweenTimes(startTime, endTime)
-
-        console.debug('Loaded messages:', loadedMsgs.length)
-        loadMessages(loadedMsgs)
-        scrollToTargetMessages()
+        lifetime.signal.throwIfAborted()
+        const loaded = await chatService.getMessagesBetweenTimes(startTime, endTime)
+        lifetime.signal.throwIfAborted()
+        const merged = await mergeSearchMessages(messages, loaded, lifetime.signal)
+        await publishMessages(merged)
       }
     } catch (error) {
+      if (lifetime.signal.aborted) return
       loadError = error instanceof Error ? error.message : 'Unable to load chat messages.'
       console.error('Failed to load messages for search:', error)
     } finally {
-      isLoading = false
+      if (!lifetime.signal.aborted) isLoading = false
     }
   }
 
-  function loadMessages(msgs: TwitchMessage[]): void {
-    const additions: TwitchMessageFormatted[] = []
-    for (const msg of msgs) {
-      const id = msg.getId()
-      if (seenMessages.has(id)) continue
-      const formatted = formattedTwitchMessageFactory(msg)
-      seenMessages.add(id)
-      additions.push(formatted)
-    }
-    if (additions.length === 0) return
-
-    // Raw state and the virtual transcript observe array identity, including an empty query.
-    messages = [...messages, ...additions].sort((a, b) => a.timestamp - b.timestamp)
-
-    // Update message data
-    chatService.updateMessageData(messages)
-
-    // Update filtered messages
-    updateFilteredMessages()
-  }
-
-  function scrollToTargetMessages(): void {
-    const generation = navigationGeneration
-    setTimeout(() => {
-      if (scrolled || generation !== navigationGeneration) return
-      if (!vlistRef || !filteredMessages || filteredMessages.length === 0) return
-
-      const targetElementIndex = targetMessageIndex()
-      if (targetElementIndex === null) return
-      vlistRef.scrollToIndex(targetElementIndex, { align: 'center' })
-    }, 0)
-  }
-
-  function targetMessageIndex(): number | null {
-    let targetElementIndex: number | null = null
-
-    if (focusedMessage) {
-      targetElementIndex = findMessageIndex(
-        filteredMessages,
-        focusedMessage.getId(),
-        focusedMessage.timestamp
+  async function targetMessageIndex(
+    results: readonly TwitchMessage[],
+    signal: AbortSignal
+  ): Promise<number | null> {
+    if (results.length === 0) return null
+    const focused = context.focusedMessage
+    if (focused) {
+      return (
+        findMessageIndex(results, focused.getId(), focused.timestamp) ??
+        getClosestMessageIndex(results, focused.timestamp)
       )
-
-      if (targetElementIndex === null) {
-        targetElementIndex = getClosestMessageIndex(filteredMessages, focusedMessage.timestamp)
-      }
-    } else if (initialMessages && initialMessages.length > 0) {
-      targetElementIndex = findIntersectingMessageIndex(
-        filteredMessages,
-        initialMessages,
-        initialMessageMinTimestamp,
-        initialMessageMaxTimestamp,
-        true
-      )
-
-      if (targetElementIndex === null) {
-        targetElementIndex = getClosestMessageIndex(
-          filteredMessages,
-          initialMessages[initialMessages.length - 1]!.timestamp
-        )
-      }
     }
-
-    return targetElementIndex
+    const initial = context.initialMessages
+    if (initial.length === 0) return null
+    // Walk backward without a reversed array or a full timestamp allocation.
+    const work = new CooperativeWork(signal)
+    for (let i = initial.length - 1; i >= 0; i--) {
+      const message = initial[i]!
+      const index = findMessageIndex(results, message.getId(), message.timestamp)
+      if (index !== null) return index
+      const pause = work.checkpoint()
+      if (pause) await pause
+    }
+    return getClosestMessageIndex(results, initial[initial.length - 1]!.timestamp)
   }
 
-  const initialPosition = $derived.by(() => {
-    const index = targetMessageIndex()
-    return index === null ? undefined : { index, options: { align: 'center' as const } }
-  })
-
-  const searchPattern = $derived(getSearchPattern(searchQuery, caseSensitive, useRegex))
-
+  // One pipeline owns filtering, highlight publication, and subsequent navigation.
   $effect(() => {
-    updateFilteredMessages()
-  })
-
-  function updateFilteredMessages(): void {
-    const signature = JSON.stringify([searchQuery, caseSensitive, useRegex])
+    const dataset = messages
+    const timeline = messageTimeline
+    const query = searchQuery
+    const sensitive = caseSensitive
+    const regex = useRegex
+    const controller = new AbortController()
+    const signature = JSON.stringify([query, sensitive, regex])
     if (signature !== previousSearchSignature) {
       previousSearchSignature = signature
       navigationGeneration++
       scrolled = false
     }
-    filteredMessages = filterSearchMessages(
-      messages,
-      searchQuery,
-      caseSensitive,
-      useRegex,
-      searchPattern
-    )
-    scrollToTargetMessages()
-  }
+    const generation = navigationGeneration
+    const pattern = getSearchPattern(query, sensitive, regex)
+    isFiltering = true
+    void (async () => {
+      try {
+        const results = await filterSearchMessages(
+          dataset,
+          query,
+          sensitive,
+          regex,
+          pattern,
+          sharedData.textCache,
+          controller.signal
+        )
+        const target = scrolled ? null : await targetMessageIndex(results, controller.signal)
+        controller.signal.throwIfAborted()
+        lifetime.signal.throwIfAborted()
+        // Results and their highlighting/color data always describe the same completed query.
+        filteredMessages = results
+        searchPattern = pattern
+        filteredTimeline = timeline
+        const canPosition = !scrolled && generation === navigationGeneration && target !== null
+        initialPosition = canPosition ? { index: target, options: { align: 'center' } } : undefined
+        isFiltering = false
+        await tick()
+        if (
+          !controller.signal.aborted &&
+          !lifetime.signal.aborted &&
+          !scrolled &&
+          generation === navigationGeneration &&
+          target !== null
+        ) {
+          vlistRef?.scrollToIndex(target, { align: 'center' })
+        }
+      } catch (error) {
+        if (controller.signal.aborted || lifetime.signal.aborted) return
+        isFiltering = false
+        loadError = error instanceof Error ? error.message : 'Unable to search chat messages.'
+        console.error('Failed to filter search messages:', error)
+      }
+    })()
+    return () => controller.abort()
+  })
 
   function activateResult(event: MouseEvent, message: TwitchMessage): void {
     if (
@@ -260,7 +239,6 @@
     if (event.key === 'Escape') window.close()
   }
 
-  // Handle URL click
   function handleUrlClick(url: string): void {
     urlTracker.markVisitedUrl(url)
     window.api.openUrl(url)
@@ -300,7 +278,7 @@
     </div>
   {/if}
 
-  <div class="search-results" aria-busy={isLoading}>
+  <div class="search-results" aria-busy={isLoading || isFiltering}>
     {#if filteredMessages.length > 0}
       <MessageTranscript
         bind:this={vlistRef}
@@ -309,6 +287,7 @@
         videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
         videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
         searchQuery={searchPattern}
+        {renderContext}
         {initialPosition}
         gutter
         onuserinteraction={() => {
@@ -316,7 +295,7 @@
           navigationGeneration++
         }}
       >
-        {#snippet children(msg, i, presentationStore)}
+        {#snippet children(msg, i, presentationStore, renderedContext)}
           {#if msg}
             <div
               class="search-result-item"
@@ -339,8 +318,8 @@
                 videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
                 videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
                 {urlTracker}
-                usernameColorTimelineMap={chatService.usernameColorTimelineMap ?? undefined}
-                searchQuery={searchPattern}
+                usernameColorTimelineMap={renderedContext?.timeline ?? undefined}
+                searchQuery={renderedContext?.pattern}
                 onUsernameClick={context.onUsernameClick}
                 onUrlClick={handleUrlClick}
                 bind:reloadServicesFunction={reloadServicesFunctionMap[i]}
@@ -351,7 +330,7 @@
       </MessageTranscript>
     {:else}
       <div class="search-state" role="status">
-        {#if isLoading}
+        {#if isLoading || isFiltering}
           <strong>Loading chat messages…</strong>
         {:else if loadError || loadingState.state === 'error'}
           <strong>Messages are unavailable</strong>

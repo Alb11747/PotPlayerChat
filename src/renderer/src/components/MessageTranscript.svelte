@@ -1,4 +1,4 @@
-<script lang="ts" generics="T extends TwitchMessage">
+<script lang="ts" generics="T extends TwitchMessage, C = undefined">
   import { onMount, untrack, type Snippet } from 'svelte'
   import type { TwitchMessage } from '@/core/chat/twitch-msg'
   import {
@@ -16,6 +16,7 @@
   import type { TranscriptHandle, TranscriptScrollOptions } from '../core/transcript-handle'
   import { TranscriptEstimator } from '../core/transcript-estimator'
   import { createMessageLayoutDependencies } from '../core/transcript-cache'
+  import { CooperativeWork } from '@/utils/cooperative-work'
   import { settings } from '../state/settings.svelte'
   import VirtualTranscript from './VirtualTranscript.svelte'
 
@@ -32,9 +33,10 @@
     preserveOnReplace = true,
     onfollowchange,
     onuserinteraction,
+    renderContext,
     children: renderMessage
   }: {
-    data: T[]
+    data: readonly T[]
     urlTracker: UrlTracker
     videoStartTime?: number
     videoEndTime?: number
@@ -46,7 +48,8 @@
     preserveOnReplace?: boolean
     onfollowchange?: (following: boolean) => void
     onuserinteraction?: () => void
-    children: Snippet<[T, number, MessagePresentationStore]>
+    renderContext?: C
+    children: Snippet<[T, number, MessagePresentationStore, C | undefined]>
   } = $props()
 
   const store = new MessagePresentationStore()
@@ -62,7 +65,12 @@
   let fontVersion = $state(0)
   let cacheVersion = $state(0)
   let estimateChanges = $state.raw<readonly string[]>([])
-  const dependencies = createMessageLayoutDependencies()
+  let dependencies = createMessageLayoutDependencies()
+  let preparedData = $state.raw<readonly T[]>([])
+  let preparedLayoutVersion = $state('')
+  let preparedContext = $state.raw<C | undefined>(undefined)
+  let preparationRevision = 0
+  let cleanupController: AbortController | undefined
   const options = $derived(presentationOptions({ videoStartTime, videoEndTime, searchQuery }))
   const inlinePreviews = $derived(settings.interface.enableInlineImagePreviews)
   const layoutVersion = $derived(
@@ -91,26 +99,80 @@
 
   $effect.pre(() => {
     const rows = data
-    const ids = data.map((message) => message.getId())
+    const version = layoutVersion
+    const context = renderContext
+    if (!metrics || width <= 0) return
+    const controller = new AbortController()
+    const revision = ++preparationRevision
     untrack(() => {
-      store.retain(ids)
-      dependencies.retain(rows)
-      const keep = new Set(ids)
-      for (const key of Object.keys(elapsedOptions)) if (!keep.has(key)) delete elapsedOptions[key]
+      if (rows.length <= 1000 && preparedData.length <= 1000) {
+        const ids = rows.map((message) => message.getId())
+        dependencies.retain(rows)
+        const keep = new Set(ids)
+        for (const key of Object.keys(elapsedOptions))
+          if (!keep.has(key)) delete elapsedOptions[key]
+        estimator.replace(rows, version)
+        preparedData = rows
+        preparedLayoutVersion = version
+        preparedContext = context
+      } else {
+        void prepareRows(rows, version, context, controller.signal, revision).catch(
+          (error: unknown) => {
+            if (!controller.signal.aborted) console.error('Failed to prepare transcript:', error)
+          }
+        )
+      }
     })
+    return () => controller.abort()
   })
 
-  $effect.pre(() => {
-    const rows = data
-    const version = layoutVersion
-    if (!metrics || width <= 0) return
-    untrack(() => estimator.replace(rows, version))
-  })
+  async function prepareRows(
+    rows: readonly T[],
+    version: string,
+    context: C | undefined,
+    signal: AbortSignal,
+    revision: number
+  ): Promise<void> {
+    if (preparedData === rows) {
+      await estimator.replaceCooperatively(rows, version, signal)
+      signal.throwIfAborted()
+      preparedLayoutVersion = version
+      preparedContext = context
+      return
+    }
+    const work = new CooperativeWork(signal)
+    const nextDependencies = await dependencies.fork(rows, signal)
+    const keep = nextDependencies
+    for (const key in elapsedOptions) {
+      if (!keep.has(key)) delete elapsedOptions[key]
+      const pause = work.checkpoint()
+      if (pause) await pause
+    }
+    await estimator.replaceCooperatively(rows, version, signal)
+    await nextDependencies.completeFork()
+    work.throwIfAborted()
+    if (revision !== preparationRevision) return
+    dependencies = nextDependencies
+    preparedData = rows
+    preparedLayoutVersion = version
+    preparedContext = context
+  }
+
+  function releaseOldPresentations(rows: readonly T[]): void {
+    if (rows !== preparedData) return
+    cleanupController?.abort()
+    const controller = new AbortController()
+    cleanupController = controller
+    // Retention follows actual rendered rows, not an abandoned preparation.
+    void store.retainCooperatively(dependencies, controller.signal).catch((error: unknown) => {
+      if (!controller.signal.aborted) console.error('Failed to release transcript cache:', error)
+    })
+  }
 
   function invalidateRows(keys: Iterable<string>): void {
     // These are DOM-content revisions, separate from improving an estimate.
     const ids = Array.from(keys)
-    for (const key of ids) dependencies.versions.set(key, (dependencies.versions.get(key) ?? 0) + 1)
+    for (const key of ids) dependencies.invalidate(key)
     estimator.invalidate(ids)
   }
 
@@ -130,10 +192,10 @@
   )
 
   $effect(() => {
-    if (!list || !queuedNavigation) return
+    if (!list || !queuedNavigation || preparedData !== data) return
     const request = queuedNavigation
     queuedNavigation = null
-    const index = data.findIndex((message) => message.getId() === request.key)
+    const index = preparedData.findIndex((message) => message.getId() === request.key)
     if (index < 0) return
     untrack(() => list?.scrollToIndex(index, request.options))
   })
@@ -165,7 +227,7 @@
 
   export function scrollToIndex(index: number, options?: TranscriptScrollOptions): void {
     estimator.prioritize(Math.max(0, index - 16), Math.min(data.length, index + 17))
-    if (list) list.scrollToIndex(index, options)
+    if (list && preparedData === data) list.scrollToIndex(index, options)
     else if (data[index]) queuedNavigation = { key: data[index].getId(), options }
   }
   export function getItemOffset(index: number): number {
@@ -211,6 +273,7 @@
       observer.disconnect()
       document.fonts.removeEventListener('loadingdone', fontsChanged)
       estimator.dispose()
+      cleanupController?.abort()
       store.clear()
     }
   })
@@ -220,24 +283,29 @@
   {#if metrics}
     <VirtualTranscript
       bind:this={list}
-      {data}
+      data={preparedData}
+      renderContext={preparedContext}
       getKey={(message) => message.getId()}
       estimateHeight={(message) => estimator.get(message.getId())}
       {estimateChanges}
       getMeasurementVersion={(message) => dependencies.versions.get(message.getId()) ?? 0}
-      {layoutVersion}
+      layoutVersion={preparedLayoutVersion}
       {initialPosition}
       {follow}
       {preserveOnReplace}
       {onfollowchange}
-      {onuserinteraction}
+      onuserinteraction={() => {
+        queuedNavigation = null
+        onuserinteraction?.()
+      }}
       onrangechange={(start, end) => estimator.prioritize(start, end)}
+      onpublish={releaseOldPresentations}
       onviewportchange={(nextWidth) => {
         if (nextWidth > 0) width = nextWidth
       }}
     >
-      {#snippet children(message, index)}
-        {@render renderMessage(message, index, store)}
+      {#snippet children(message, index, context)}
+        {@render renderMessage(message, index, store, context)}
       {/snippet}
     </VirtualTranscript>
   {/if}

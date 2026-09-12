@@ -15,6 +15,7 @@ import { parseFullMessage, type Segment } from './chat-dom'
 import type { InterfaceSettings } from '../state/settings-model'
 import conf from '../state/config'
 import { settings } from '../state/settings.svelte'
+import { CooperativeWork } from '@/utils/cooperative-work'
 
 export interface MessagePresentationOptions {
   showName: InterfaceSettings['showName']
@@ -77,7 +78,7 @@ export class MessagePresentationStore {
     }
   >()
   private pending = new Map<string, Promise<void>>()
-  private retainedIds: Set<string> | null = null
+  private retainedIds: Pick<ReadonlySet<string>, 'has'> | null = null
   private revisions = new Map<string, number>()
   private generation = 0
   private cacheState = new SvelteMap([['generation', 0]])
@@ -288,6 +289,26 @@ export class MessagePresentationStore {
     this.retainedIds = keep
     for (const id of this.parsed.keys()) if (!keep.has(id)) this.parsed.delete(id)
     for (const id of this.assets.keys()) if (!keep.has(id)) this.assets.delete(id)
+  }
+  async retainCooperatively(
+    keep: Pick<ReadonlySet<string>, 'has'>,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const work = new CooperativeWork(signal)
+    work.throwIfAborted()
+    this.retainedIds = keep
+    for (const id of this.pending.keys()) {
+      if (!keep.has(id)) this.revisions.set(id, (this.revisions.get(id) ?? 0) + 1)
+      const pause = work.checkpoint()
+      if (pause) await pause
+    }
+    for (const entries of [this.parsed, this.assets]) {
+      for (const id of entries.keys()) {
+        if (!keep.has(id)) entries.delete(id)
+        const pause = work.checkpoint()
+        if (pause) await pause
+      }
+    }
   }
   clear(): void {
     this.generation++

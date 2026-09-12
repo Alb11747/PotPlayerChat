@@ -1,3 +1,5 @@
+import { CooperativeWork } from '@/utils/cooperative-work'
+
 interface TranscriptEstimatorOptions<T> {
   getKey: (item: T) => string
   measure: (item: T) => number
@@ -33,6 +35,8 @@ export class TranscriptEstimator<T> {
   private frame: number | undefined
   private postFrameTask: ReturnType<typeof setTimeout> | undefined
   private disposed = false
+  private replacement = 0
+  private replacementDirty: Set<string> | undefined
 
   constructor(options: TranscriptEstimatorOptions<T>) {
     this.options = options
@@ -43,7 +47,18 @@ export class TranscriptEstimator<T> {
   }
 
   replace(data: readonly T[], version: unknown): void {
-    if (this.disposed || (this.data === data && Object.is(this.version, version))) return
+    if (this.disposed) return
+    this.replacement++
+    const wasPreparing = this.replacementDirty !== undefined
+    this.replacementDirty = undefined
+    if (this.data === data && Object.is(this.version, version)) {
+      // Returning to the published dataset also supersedes an in-flight replacement.
+      if (wasPreparing) {
+        this.cancel()
+        this.schedule()
+      }
+      return
+    }
     this.cancel()
     const sameVersion = Object.is(this.version, version)
     const estimates = new Map<string, Estimate<T>>()
@@ -70,11 +85,76 @@ export class TranscriptEstimator<T> {
     this.schedule()
   }
 
+  async replaceCooperatively(
+    data: readonly T[],
+    version: unknown,
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (this.disposed) return
+    signal?.throwIfAborted()
+    if (this.data === data && Object.is(this.version, version)) {
+      this.replace(data, version)
+      return
+    }
+    const replacement = ++this.replacement
+    const invalidated = new Set<string>()
+    this.replacementDirty = invalidated
+    this.cancel()
+    try {
+      const work = new CooperativeWork(signal)
+      const sameVersion = Object.is(this.version, version)
+      const estimates = new Map<string, Estimate<T>>()
+      const dirty = new Set<string>()
+      const keys: string[] = []
+      for (const item of data) {
+        const key = this.options.getKey(item)
+        const previous = this.estimates.get(key)
+        const estimate =
+          previous && sameVersion && previous.item === item
+            ? previous
+            : { item, height: previous?.height ?? 48, valid: false }
+        estimates.set(key, estimate)
+        keys.push(key)
+        if (!estimate.valid) dirty.add(key)
+        const pause = work.checkpoint()
+        if (pause) await pause
+        if (replacement !== this.replacement || this.disposed) return
+      }
+      for (const key of invalidated) {
+        const estimate = estimates.get(key)
+        if (estimate) {
+          estimate.valid = false
+          dirty.add(key)
+        }
+        const pause = work.checkpoint()
+        if (pause) await pause
+        if (replacement !== this.replacement || this.disposed) return
+      }
+      work.throwIfAborted()
+      if (replacement !== this.replacement || this.disposed) return
+      this.cancel()
+      this.data = data
+      this.version = version
+      this.keys = keys
+      this.estimates = estimates
+      this.dirty = dirty
+      this.dirtyIterator = dirty.values()
+      this.priorityCursor = this.priorityStart
+    } finally {
+      // Abort/failure keeps the published dataset usable and resumes its pending
+      // measurements. An obsolete preparation must never resume a newer one's work.
+      if (replacement === this.replacement) {
+        this.replacementDirty = undefined
+        this.schedule()
+      }
+    }
+  }
   /** Retain the last height until its replacement is ready, avoiding a fallback-height jump. */
   invalidate(keys?: Iterable<string>): void {
     if (this.disposed) return
     this.cancel()
     for (const key of keys ?? this.estimates.keys()) {
+      this.replacementDirty?.add(key)
       const estimate = this.estimates.get(key)
       if (!estimate) continue
       estimate.valid = false
@@ -98,7 +178,9 @@ export class TranscriptEstimator<T> {
   }
 
   dispose(): void {
+    this.replacement++
     this.disposed = true
+    this.replacementDirty = undefined
     this.cancel()
     this.data = undefined
     this.keys = []
@@ -115,7 +197,9 @@ export class TranscriptEstimator<T> {
   }
 
   private schedule(): void {
-    if (this.disposed || this.frame !== undefined || !this.dirty.size) return
+    // Keep shared estimate validity stable until the replacement journal is replayed.
+    if (this.disposed || this.replacementDirty || this.frame !== undefined || !this.dirty.size)
+      return
     const generation = this.generation
     const measure = (): void => {
       // A cancelled callback may already have been dispatched; it must not touch a newer frame.

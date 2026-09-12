@@ -1,11 +1,26 @@
-import bounds from 'binary-searching'
+import mutableBounds from 'binary-searching'
+
+// The library only reads its input, but its bundled declarations require mutable arrays.
+type ReadonlyBound = <T>(
+  array: readonly T[],
+  value: T,
+  compare: (a: T, b: T) => number,
+  low?: number,
+  high?: number
+) => number
+const bounds: { ge: ReadonlyBound; le: ReadonlyBound } = {
+  ge: (array, value, compare, low, high) =>
+    mutableBounds.ge(array as (typeof value)[], value, compare, low, high),
+  le: (array, value, compare, low, high) =>
+    mutableBounds.le(array as (typeof value)[], value, compare, low, high)
+}
 
 // Assumes messages are sorted by timestamp ascending
 const cmp = <T extends { timestamp: number }>(a: T, b: T): number => a.timestamp - b.timestamp
 
 export function deduplicateMessages<
   T extends { getId: () => string; username?: string; message?: string }
->(messages: T[]): T[] {
+>(messages: readonly T[]): T[] {
   const seenIds = new Set<string>()
   return messages.filter((message) => {
     const id = message.getId()
@@ -23,7 +38,7 @@ export function deduplicateMessages<
 }
 
 export function findMessageIndex<T extends { timestamp: number; getId: () => string }>(
-  messages: T[],
+  messages: readonly T[],
   message: T | string,
   timestamp?: number
 ): number | null {
@@ -48,7 +63,7 @@ export function findMessageIndex<T extends { timestamp: number; getId: () => str
 }
 
 export function findMessage<T extends { timestamp: number; getId: () => string }>(
-  messages: T[],
+  messages: readonly T[],
   message: T | string,
   timestamp?: number
 ): T | null {
@@ -70,7 +85,7 @@ export function findMessage<T extends { timestamp: number; getId: () => string }
  * @returns The index of the closest message
  */
 export function getClosestMessageIndex<T extends { timestamp: number }>(
-  messages: T[],
+  messages: readonly T[],
   currentTime: number
 ): number {
   if (messages.length === 0) throw new Error('No messages available to find closest message')
@@ -95,7 +110,7 @@ export function getClosestMessageIndex<T extends { timestamp: number }>(
  * @returns The closest message
  */
 export function getClosestMessage<T extends { timestamp: number }>(
-  messages: T[],
+  messages: readonly T[],
   currentTime: number
 ): T {
   const idx = getClosestMessageIndex(messages, currentTime)
@@ -104,7 +119,7 @@ export function getClosestMessage<T extends { timestamp: number }>(
 }
 
 export function getMessagesBetween<T extends { timestamp: number }>(
-  messages: T[],
+  messages: readonly T[],
   startTime: number,
   endTime: number
 ): T[] {
@@ -117,7 +132,7 @@ export function getMessagesBetween<T extends { timestamp: number }>(
 }
 
 export function getMessagesForTime<T extends { timestamp: number }>(
-  messages: T[],
+  messages: readonly T[],
   currentTime: number,
   limit: number,
   next: boolean = false
@@ -138,7 +153,7 @@ export function getMessagesForTime<T extends { timestamp: number }>(
  * @returns True if the range is in the messages, false otherwise
  */
 export function isRangeInMessages<T extends { timestamp: number }>(
-  messages: T[],
+  messages: readonly T[],
   startTime: number,
   endTime: number
 ): boolean {
@@ -149,7 +164,7 @@ export function isRangeInMessages<T extends { timestamp: number }>(
 }
 
 export function isMessageInMessages<T extends { timestamp: number; getId: () => string }>(
-  messages: T[],
+  messages: readonly T[],
   message: T
 ): boolean {
   const startIdx = bounds.ge(messages, { timestamp: message.timestamp } as T, cmp)
@@ -161,15 +176,16 @@ export function isMessageInMessages<T extends { timestamp: number; getId: () => 
 }
 
 export function findIntersectingMessageIndex<T extends { timestamp: number; getId: () => string }>(
-  messages: T[],
-  targetMessages: T[],
+  messages: readonly T[],
+  targetMessages: readonly T[],
   minTimestamp: number = -Infinity,
   maxTimestamp: number = Infinity,
   findLast: boolean = false
 ): number | null {
   const low = bounds.ge(messages, { timestamp: minTimestamp } as T, cmp)
   const high = bounds.le(messages, { timestamp: maxTimestamp } as T, cmp)
-  for (const target of findLast ? targetMessages.toReversed() : targetMessages) {
+  for (let step = 0; step < targetMessages.length; step++) {
+    const target = targetMessages[findLast ? targetMessages.length - 1 - step : step]!
     if (target.timestamp < minTimestamp || target.timestamp > maxTimestamp)
       throw new Error('Target message out of bounds')
 

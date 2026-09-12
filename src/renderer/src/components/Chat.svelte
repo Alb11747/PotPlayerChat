@@ -9,6 +9,7 @@
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
   import { isEqualMessageBoundary } from '@/renderer/src/core/chat-view'
   import { openSearchPopup, type SearchOptions } from '@/renderer/src/core/search-window'
+  import { SharedSearchDataCache } from '@/renderer/src/core/search-data'
   import { getUsernameClickAction, type UsernameClickInfo } from '../core/username-click'
   import { openUserPopup } from '../core/user-window'
   import type { PotPlayerInstance } from '@/types/potplayer'
@@ -31,6 +32,7 @@
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
+  const sharedSearchData = new SharedSearchDataCache()
   const videoTimeHistory = new CurrentVideoTimeHistory()
   const urlTracker = new UrlTracker(settings.chat)
 
@@ -440,6 +442,7 @@
     openSearchPopup({
       ...source,
       ...info,
+      sharedData: sharedSearchData,
       focusedMessage: extraData?.message,
       focusMessage: (message) => focusSourceMessage(message, source),
       onUsernameClick: (clicked) => handleUsernameClick(clicked, source)

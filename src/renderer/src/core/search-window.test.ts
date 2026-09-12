@@ -1,6 +1,7 @@
 import type { SearchContext } from '@/renderer/src/core/search-window'
 import { openSearchPopup, SearchContextRegistry } from '@/renderer/src/core/search-window'
 import type { HWND } from '@/types/globals'
+import { TwitchChatMessage } from '@/core/chat/twitch-msg'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function createContext(): SearchContext {
@@ -25,6 +26,38 @@ afterEach(() => {
 })
 
 describe('SearchContextRegistry', () => {
+  it('shares prepared rows and search text through real popup context registration', async () => {
+    const registry = new SearchContextRegistry()
+    const original = new TwitchChatMessage('raw', {}, 'message', 1000, 'channel', 'Alice', 'hello')
+    const source = [original]
+    const loaded: TwitchChatMessage[] = []
+    const tokens: string[] = []
+    const hostWindow = {
+      location: { href: 'https://potplayerchat.test/index.html' },
+      open: (url?: string | URL): Window => {
+        tokens.push(new URL(String(url)).hash.slice(1))
+        return {} as Window
+      }
+    }
+    for (let i = 0; i < 2; i++) {
+      openSearchPopup(
+        { ...createContext(), initialMessages: source, loadedMessages: loaded },
+        hostWindow as never,
+        registry
+      )
+    }
+    const first = registry.take(tokens[0]!)!
+    const second = registry.take(tokens[1]!)!
+    expect(first.initialMessages).toBe(source)
+    expect(second.sharedData).toBe(first.sharedData)
+    const snapshot = await first.sharedData!.prepare(first.initialMessages, first.loadedMessages)
+    expect(snapshot).toBe(
+      await second.sharedData!.prepare(second.initialMessages, second.loadedMessages)
+    )
+    expect(snapshot[0]).toBe(original)
+    expect(first.sharedData!.textCache).toBe(second.sharedData!.textCache)
+  })
+
   it('returns the same context and message array references once', () => {
     const registry = new SearchContextRegistry()
     const context = createContext()

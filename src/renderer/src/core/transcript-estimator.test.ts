@@ -7,6 +7,7 @@ interface Row {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
@@ -62,6 +63,115 @@ function fixture(count: number, duration = 0): Fixture {
 }
 
 describe('transcript estimator', () => {
+  it('resumes the published dataset after a cooperative replacement is aborted', async () => {
+    vi.useFakeTimers()
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => (now += 2))
+    const f = fixture(5)
+    f.estimator.replace(f.data, 'published')
+    const controller = new AbortController()
+    const pending = f.estimator.replaceCooperatively(
+      Array.from({ length: 20 }, (_, index) => ({ key: `new-${index}`, height: 300 })),
+      'replacement',
+      controller.signal
+    )
+    expect(f.frames.size).toBe(0)
+    f.estimator.prioritize(3, 4)
+    expect(f.frames.size).toBe(0)
+    const reason = new Error('superseded')
+    const rejected = expect(pending).rejects.toBe(reason)
+    controller.abort(reason)
+    await vi.runAllTimersAsync()
+    await rejected
+    f.drain()
+    expect(f.measure.mock.calls.map(([row]) => row.key)).toEqual(['3', '0', '1', '2', '4'])
+    expect(f.estimator.get('new-0')).toBe(48)
+    f.data[0]!.height = 150
+    f.estimator.invalidate(['0'])
+    f.drain()
+    expect(f.estimator.get('0')).toBe(150)
+  })
+
+  it.each(['synchronous', 'cooperative'] as const)(
+    'supersedes pending work when a %s replacement returns to the published dataset',
+    async (mode) => {
+      vi.useFakeTimers()
+      let now = 0
+      vi.spyOn(performance, 'now').mockImplementation(() => (now += 2))
+      const f = fixture(5)
+      f.estimator.replace(f.data, 'published')
+      const pending = f.estimator.replaceCooperatively(
+        Array.from({ length: 20 }, (_, index) => ({ key: `new-${index}`, height: 300 })),
+        'replacement'
+      )
+      if (mode === 'synchronous') f.estimator.replace(f.data, 'published')
+      else await f.estimator.replaceCooperatively(f.data, 'published')
+      expect(f.frames.size).toBe(1)
+      await vi.runAllTimersAsync()
+      await pending
+      f.drain()
+      expect(f.measure.mock.calls.map(([row]) => row.key)).toEqual(['0', '1', '2', '3', '4'])
+      expect(f.estimator.get('new-0')).toBe(48)
+    }
+  )
+
+  it('does not let an aborted predecessor cancel a newer replacement or its invalidations', async () => {
+    vi.useFakeTimers()
+    const f = fixture(20)
+    f.estimator.replace(f.data, 'published')
+    f.drain()
+    f.measure.mockClear()
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => (now += 2))
+    const controller = new AbortController()
+    const old = f.estimator.replaceCooperatively([...f.data], 'published', controller.signal)
+    const reason = new Error('old preparation cancelled')
+    const rejected = expect(old).rejects.toBe(reason)
+    const current = f.estimator.replaceCooperatively([...f.data], 'published')
+    controller.abort(reason)
+    f.data[0]!.height = 500
+    f.estimator.invalidate(['0'])
+    expect(f.frames.size).toBe(0)
+    await vi.runAllTimersAsync()
+    await rejected
+    await current
+    f.drain()
+    expect(f.estimator.get('0')).toBe(500)
+    expect(f.measure.mock.calls.map(([row]) => row.key)).toEqual(['0'])
+  })
+  it('does not lose an invalidation after a row has been copied into a pending replacement', async () => {
+    vi.useFakeTimers()
+    const f = fixture(100)
+    f.estimator.replace(f.data, 'same')
+    f.drain()
+    f.measure.mockClear()
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => (now += 2))
+    const pending = f.estimator.replaceCooperatively([...f.data], 'same')
+    f.data[0]!.height = 999
+    f.estimator.invalidate(['0'])
+    await vi.runAllTimersAsync()
+    await pending
+    f.drain()
+    expect(f.estimator.get('0')).toBe(999)
+    expect(f.measure.mock.calls.map(([item]) => item.key)).toEqual(['0'])
+  })
+  it('publishes cooperative replacements only after preparation and ignores superseded work', async () => {
+    vi.useFakeTimers()
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => (now += 2))
+    const f = fixture(100)
+    const pending = f.estimator.replaceCooperatively(f.data, 'old')
+    expect(f.estimator.get('0')).toBe(48)
+    expect(f.frames.size).toBe(0)
+    f.estimator.replace([{ key: 'new', height: 75 }], 'new')
+    await vi.runAllTimersAsync()
+    await pending
+    f.drain()
+    expect(f.estimator.get('new')).toBe(75)
+    expect(f.measure.mock.calls.map(([item]) => item.key)).toEqual(['new'])
+    vi.restoreAllMocks()
+  })
   it('yields beyond the browser frame before measuring and keeps subsequent batches frame-limited', () => {
     vi.useFakeTimers()
     let frame!: FrameRequestCallback

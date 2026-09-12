@@ -6,6 +6,34 @@ function row(id: string, channel?: string): { getId(): string; channel?: string 
 }
 
 describe('transcript layout dependencies', () => {
+  it('prepares replacement dependencies without mutating the published index', async () => {
+    const original = createMessageLayoutDependencies()
+    const first = row('one', 'channel')
+    const removed = row('two', 'channel')
+    original.retain([first, removed])
+    original.record('one', new Set(['preview']))
+    const next = await original.fork([first, row('three', 'other')])
+    await next.completeFork()
+    expect(next.channels.get('channel')).toEqual(new Set(['one']))
+    expect(original.channels.get('channel')).toEqual(new Set(['one', 'two']))
+    expect(next.urls.get('preview')).toEqual(new Set(['one']))
+    expect(next.versions.get('one')).toBe(original.versions.get('one'))
+    next.record('one', new Set(['new-preview']))
+    expect(original.urls.get('preview')).toEqual(new Set(['one']))
+  })
+  it('replays asset and version changes arriving after a replacement was copied', async () => {
+    const original = createMessageLayoutDependencies()
+    const message = row('one', 'channel')
+    original.retain([message])
+    original.record('one', new Set(['old-thumbnail']))
+    const next = await original.fork([message])
+    original.record('one', new Set(['new-thumbnail']))
+    original.invalidate('one')
+    await next.completeFork()
+    expect(next.urls.has('old-thumbnail')).toBe(false)
+    expect(next.urls.get('new-thumbnail')).toEqual(new Set(['one']))
+    expect(next.versions.get('one')).toBe(original.versions.get('one'))
+  })
   it('indexes channel members before measurement and shares media dependencies across rows', () => {
     const dependencies = createMessageLayoutDependencies()
     dependencies.retain([row('one', 'channel'), row('two', 'channel'), row('three', 'other')])

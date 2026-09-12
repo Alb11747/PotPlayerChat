@@ -7,7 +7,16 @@ import { tmpdir } from 'node:os'
 export default defineConfig({
   root: resolve('tests/browser'),
   cacheDir: resolve(tmpdir(), 'potplayerchat-browser-vite'),
-  build: { outDir: resolve(tmpdir(), 'potplayerchat-browser-build'), emptyOutDir: true },
+  build: {
+    outDir: resolve(tmpdir(), 'potplayerchat-browser-build'),
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve('tests/browser/index.html'),
+        search: resolve('tests/browser/search.html')
+      }
+    }
+  },
   plugins: [svelte(), tailwindcss()],
   resolve: {
     alias: {

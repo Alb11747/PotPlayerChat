@@ -10,6 +10,7 @@ import { TimelineMap } from '@/utils/datastructs'
 import { logTime } from '@/utils/debug'
 import { isSorted } from '@/utils/objects'
 import { normalizeStrings } from '@/utils/strings'
+import { CooperativeWork } from '@/utils/cooperative-work'
 import TTLCache from '@isaacs/ttlcache'
 import AsyncLock from 'async-lock'
 import { JustLogAPI } from './justlog'
@@ -358,6 +359,40 @@ export class ChatService {
       if (!channel || !roomId) continue
       TwitchUserService.userIdCache.set(channel, roomId)
     }
+  }
+
+  /** Search owns a complete sorted snapshot, including any backfilled color boundaries. */
+  public async updateMessageDataCooperatively(
+    messages: readonly TwitchMessage[],
+    signal?: AbortSignal
+  ): Promise<void> {
+    const work = new CooperativeWork(signal)
+    const colors = new TimelineMap<string, string>()
+    const previousColors = new Map<string, string>()
+    const roomIds = new Map<string, string>()
+    work.throwIfAborted()
+    for (const msg of messages) {
+      if (msg.type === 'chat' && msg.username && msg.color) {
+        for (const name of normalizeStrings([msg.username, msg.displayName])) {
+          // Sorted input lets us condense while building, without losing boundaries
+          // from the previously loaded snapshot when older history is added.
+          if (previousColors.get(name) !== msg.color) {
+            colors.set(name, msg.color, msg.timestamp)
+            previousColors.set(name, msg.color)
+          }
+        }
+      }
+      if (msg.channel && msg.roomId) roomIds.set(msg.channel, msg.roomId)
+      const pause = work.checkpoint()
+      if (pause) await pause
+    }
+    for (const [channel, id] of roomIds) {
+      TwitchUserService.userIdCache.set(channel, id)
+      const pause = work.checkpoint()
+      if (pause) await pause
+    }
+    work.throwIfAborted()
+    this.usernameColorTimelineMap = colors
   }
 
   private mergeMessageArrays(

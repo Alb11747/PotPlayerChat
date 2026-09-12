@@ -23,6 +23,7 @@
       replace: (value) => {
         rows = value
       },
+      settleUpdates: tick,
       resize: (id, height) => {
         const row = rows.find((row) => row.id === id)
         if (row) row.height = height
