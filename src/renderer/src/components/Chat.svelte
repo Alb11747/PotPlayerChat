@@ -769,6 +769,9 @@
         {/if}
       </div>
     {/if}
+    {#if !showSettings && !scrollToBottom}
+      <button class="scroll-to-bottom" onclick={scrollChatToBottom}>Scroll to bottom</button>
+    {/if}
   </div>
 </div>
 
@@ -893,6 +896,24 @@
   }
   .concealed {
     display: none;
+  }
+  .scroll-to-bottom {
+    position: absolute;
+    inset-inline: 8px;
+    bottom: 4px;
+    z-index: 5;
+    min-height: 32px;
+    padding: 6px 12px;
+    border: 1px solid color-mix(in srgb, var(--deck-accent) 45%, transparent);
+    border-radius: 4px;
+    color: var(--deck-accent);
+    background: color-mix(in srgb, var(--deck-bg) 85%, transparent);
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .scroll-to-bottom:hover:not(:disabled) {
+    border-color: var(--deck-accent);
+    background: color-mix(in srgb, var(--deck-hover) 90%, transparent);
   }
   .playback-context {
     flex: none;
