@@ -1,3 +1,7 @@
+import type { TwitchMessage } from '@/core/chat/twitch-msg'
+import type { TimelineMap } from '@/utils/datastructs'
+import type { MessagePresentationSeed } from './message-presentation'
+
 export interface TranscriptScrollOptions {
   align?: 'start' | 'center' | 'end'
   offset?: number
@@ -13,4 +17,8 @@ export interface TranscriptHandle {
   getViewportSize(): number
   preservePosition(): void
   clearCache?(): void
+  capturePresentation?(
+    messages: readonly TwitchMessage[],
+    timeline?: Pick<TimelineMap<string, string>, 'get'>
+  ): MessagePresentationSeed
 }

@@ -33,9 +33,20 @@ The shared Search cases pass 10,000 and 100,000 source-owned message instances
 through the actual `openSearchPopup` / `takeSearchContext` handoff. They assert
 array, object, text-cache, and prepared-snapshot identity across three windows,
 exercise rapid query replacement and callbacks after the source changes recording,
-and verify that closing a sibling leaves Search usable. Attachments include first
-usable results, filter and media timings, opener heartbeat gaps, and source V8
+and verify that closing a sibling leaves Search usable. Attachments distinguish first
+visible chat after mounting from complete results, filter and media timings, opener heartbeat gaps, and source V8
 isolate heap usage after garbage collection with zero, one, and three windows.
 Heap usage is diagnostic evidence, not process RSS or a brittle numeric assertion.
 The 10,000-row heartbeat requirement remains below 100 ms; a missed 100,000-row
 target is explicitly annotated in the report.
+
+Preview regressions hold full snapshot preparation for more than one second while
+checking readable, interactive rows with warm source colors, badges, and emotes.
+The source captures assets through the production presentation store and the child
+receives them through the real popup context. Separate cold-asset, no-match, retry,
+and cache-clear cases ensure missing assets and preparation failures do not prevent
+reading or leave misleading final counts. Warm previews also exercise query
+replacement and preservation of a user-selected reading position during expansion.
+First-chat attachments report opening action and mount latency separately at 10,000
+and 100,000 messages; a missed 300 ms target is explicitly annotated. Fixture asset
+warming and source-message creation finish before the opening action is timed.

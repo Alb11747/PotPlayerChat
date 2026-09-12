@@ -34,6 +34,8 @@ Initial mounting renders the viewport before adding overscan after a paint. Larg
 
 Search receives original message references through the opener context. Source-owned weak caches share ordered snapshots and lazy searchable text across popups; result arrays refer to those same objects. Merging, filtering, and complete color-timeline reconstruction yield in four-millisecond batches. The previous results keep their matching highlight pattern and colors until replacement rows are ready. Each popup retains its captured recording and its own loading and UI state; history requests are still local to that popup.
 
+Search first renders a bounded neighborhood of up to 200 messages around its opening target. Ready badges, emotes, and captured mention colors accompany those original message references; missing assets never delay readable chat. Full-history preparation begins after the preview has a paint opportunity and expands the same transcript without resetting the reading anchor. Result counts remain secondary and appear when complete filtered rows are ready.
+
 Unresolved inline previews reserve 20rem of height. Unresolved emotes reserve the existing 2.5rem height and a conservative width within the 9rem cap; badge IDs reserve their boxes before metadata arrives. Loaded media compacts to its actual bounded size. Cheers scale to the full emote height even when their decoded asset is smaller, preserving aspect ratio and the 9rem width cap. A single scroll owner preserves the first visible message and, when available, its visible text fragment during reflow. Following playback pins the bottom; user navigation cancels outstanding positioning. Media callbacks must update asset state without issuing scroll commands.
 
 ## Verification and delivery

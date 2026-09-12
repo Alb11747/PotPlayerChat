@@ -3,6 +3,7 @@
   import type { TwitchMessage } from '@/core/chat/twitch-msg'
   import { getSearchPattern, filterSearchMessages } from '@/renderer/src/core/search-messages'
   import { SharedSearchDataCache, mergeSearchMessages } from '@/renderer/src/core/search-data'
+  import { selectSearchPreview } from '@/renderer/src/core/search-preview'
   import type { SearchContext } from '@/renderer/src/core/search-window'
   import { findMessageIndex, getClosestMessageIndex, isRangeInMessages } from '@/utils/chat'
   import { CooperativeWork } from '@/utils/cooperative-work'
@@ -24,8 +25,22 @@
   // The context captures one recording and its source-owned caches for this popup's lifetime.
   const sharedData = untrack(() => context.sharedData ?? new SharedSearchDataCache())
   const lifetime = new AbortController()
+  const preview = untrack(() => ({
+    ...context.preview,
+    // A callback from an older popup may choose another target within its
+    // captured recording. Select that neighborhood without consulting live chat.
+    messages: selectSearchPreview(
+      context.initialMessages,
+      context.loadedMessages,
+      context.focusedMessage
+    )
+  }))
+  let presentationSeed = $state.raw(
+    preview.presentation?.validity.valid ? preview.presentation : undefined
+  )
+  chatService.currentPotPlayerInfo = untrack(() => context.potplayerInfo)
 
-  let searchQuery = $state('')
+  let searchQuery = $state(untrack(() => context.initialSearch ?? ''))
   let caseSensitive = $state(false)
   let useRegex = $state(false)
   let scrolled = false
@@ -33,22 +48,29 @@
   let isFiltering = $state(false)
   let loadError = $state('')
   const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
-  let messages: readonly TwitchMessage[] = $state.raw([])
+  let messages: readonly TwitchMessage[] = $state.raw(preview.messages)
+  let completeDataset = $state(false)
+  let completeResults = $state(false)
+  let transcriptStarted = $state(false)
+  let backgroundStarted = false
   let filteredMessages: readonly TwitchMessage[] = $state.raw([])
+  let renderedMessages: readonly TwitchMessage[] = $state.raw([])
+  const isPublishing = $derived(transcriptStarted && renderedMessages !== filteredMessages)
   let searchPattern: string | RegExp | undefined = $state.raw(undefined)
-  let messageTimeline = $state.raw(chatService.usernameColorTimelineMap)
-  let filteredTimeline = $state.raw(chatService.usernameColorTimelineMap)
+  let messageTimeline = $state.raw(
+    untrack(() => presentationSeed?.mentionColors ?? chatService.usernameColorTimelineMap)
+  )
+  let filteredTimeline = $state.raw(untrack(() => messageTimeline))
   const renderContext = $derived({ pattern: searchPattern, timeline: filteredTimeline })
   let initialPosition: { index: number; options: { align: 'center' } } | undefined = $state.raw()
   let searchInputRef: HTMLInputElement | null = $state(null)
   let vlistRef: TranscriptHandle | null = $state(null)
   let navigationGeneration = 0
+  let positionedGeneration = -1
   let previousSearchSignature: string | undefined
 
   onMount(() => {
     searchInputRef?.focus()
-    searchQuery = context.initialSearch ?? ''
-    void loadAllMessages()
     window.api.onAppCacheCleared(handleAppCacheCleared)
     window.api.onSavedUrlsCleared(handleSavedUrlsCleared)
     return () => {
@@ -64,6 +86,7 @@
   })
 
   function handleAppCacheCleared(): void {
+    presentationSeed = undefined
     vlistRef?.clearCache?.()
     clearRendererCache(chatService, urlTracker)
     for (const reloadServicesFunction of Object.values(reloadServicesFunctionMap))
@@ -79,6 +102,27 @@
     lifetime.signal.throwIfAborted()
     messageTimeline = chatService.usernameColorTimelineMap
     messages = next
+    completeDataset = true
+  }
+
+  function startBackgroundAfterPaint(): void {
+    if (backgroundStarted || lifetime.signal.aborted) return
+    backgroundStarted = true
+    // Publication precedes DOM updates. Two frames allow the bounded viewport
+    // to paint before any full-history preparation starts on the shared thread.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        lifetime.signal.removeEventListener('abort', cancel)
+        if (!lifetime.signal.aborted) void loadAllMessages()
+      })
+    })
+    const cancel = (): void => cancelAnimationFrame(frame)
+    lifetime.signal.addEventListener('abort', cancel, { once: true })
+  }
+
+  function handleTranscriptPublish(rows: readonly TwitchMessage[]): void {
+    renderedMessages = rows
+    if (rows === filteredMessages) startBackgroundAfterPaint()
   }
 
   async function loadAllMessages(): Promise<void> {
@@ -143,7 +187,8 @@
 
   async function targetMessageIndex(
     results: readonly TwitchMessage[],
-    signal: AbortSignal
+    signal: AbortSignal,
+    initial: readonly TwitchMessage[] = context.initialMessages
   ): Promise<number | null> {
     if (results.length === 0) return null
     const focused = context.focusedMessage
@@ -153,8 +198,7 @@
         getClosestMessageIndex(results, focused.timestamp)
       )
     }
-    const initial = context.initialMessages
-    if (initial.length === 0) return null
+    if (initial.length === 0) return results.length - 1
     // Walk backward without a reversed array or a full timestamp allocation.
     const work = new CooperativeWork(signal)
     for (let i = initial.length - 1; i >= 0; i--) {
@@ -170,6 +214,7 @@
   // One pipeline owns filtering, highlight publication, and subsequent navigation.
   $effect(() => {
     const dataset = messages
+    const complete = completeDataset
     const timeline = messageTimeline
     const query = searchQuery
     const sensitive = caseSensitive
@@ -195,16 +240,27 @@
           sharedData.textCache,
           controller.signal
         )
-        const target = scrolled ? null : await targetMessageIndex(results, controller.signal)
+        const target =
+          scrolled || positionedGeneration === generation
+            ? null
+            : await targetMessageIndex(
+                results,
+                controller.signal,
+                complete ? context.initialMessages : preview.messages
+              )
         controller.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
         // Results and their highlighting/color data always describe the same completed query.
         filteredMessages = results
         searchPattern = pattern
         filteredTimeline = timeline
+        completeResults = complete
+        if (results.length > 0) transcriptStarted = true
         const canPosition = !scrolled && generation === navigationGeneration && target !== null
         initialPosition = canPosition ? { index: target, options: { align: 'center' } } : undefined
         isFiltering = false
+        if (canPosition) positionedGeneration = generation
+        if (results.length === 0) startBackgroundAfterPaint()
         await tick()
         if (
           !controller.signal.aborted &&
@@ -220,6 +276,7 @@
         isFiltering = false
         loadError = error instanceof Error ? error.message : 'Unable to search chat messages.'
         console.error('Failed to filter search messages:', error)
+        startBackgroundAfterPaint()
       }
     })()
     return () => controller.abort()
@@ -266,7 +323,8 @@
         {context.potplayerInfo.channel} · {context.potplayerInfo.title}
       </span>
       <span class="search-stats" role="status"
-        >{filteredMessages.length} result{filteredMessages.length !== 1 ? 's' : ''}</span
+        >{#if isFiltering || isPublishing || (!completeResults && !loadError)}Searching…{:else if completeResults}{filteredMessages.length}
+          result{filteredMessages.length !== 1 ? 's' : ''}{:else}Partial history{/if}</span
       >
     </div>
   </header>
@@ -278,8 +336,11 @@
     </div>
   {/if}
 
-  <div class="search-results" aria-busy={isLoading || isFiltering}>
-    {#if filteredMessages.length > 0}
+  <div
+    class="search-results"
+    aria-busy={isLoading || isFiltering || isPublishing || (!completeResults && !loadError)}
+  >
+    {#if transcriptStarted}
       <MessageTranscript
         bind:this={vlistRef}
         data={filteredMessages}
@@ -288,6 +349,8 @@
         videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
         searchQuery={searchPattern}
         {renderContext}
+        {presentationSeed}
+        onpublish={handleTranscriptPublish}
         {initialPosition}
         gutter
         onuserinteraction={() => {
@@ -328,10 +391,11 @@
           {/if}
         {/snippet}
       </MessageTranscript>
-    {:else}
+    {/if}
+    {#if filteredMessages.length === 0}
       <div class="search-state" role="status">
-        {#if isLoading || isFiltering}
-          <strong>Loading chat messages…</strong>
+        {#if isLoading || isFiltering || (!completeResults && !loadError)}
+          <strong>Searching…</strong>
         {:else if loadError || loadingState.state === 'error'}
           <strong>Messages are unavailable</strong>
           <span>Retry when the recording or connection is available.</span>
@@ -422,6 +486,7 @@
     font-variant-numeric: tabular-nums;
   }
   .search-results {
+    position: relative;
     min-height: 0;
     flex: 1;
     width: 100%;
@@ -470,6 +535,8 @@
     outline-offset: 2px;
   }
   .search-state {
+    position: absolute;
+    inset: 0;
     height: 100%;
     display: flex;
     flex-direction: column;

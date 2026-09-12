@@ -6,6 +6,12 @@
   import { openSearchPopup, takeSearchContext } from '@/renderer/src/core/search-window'
   import type { SearchContext } from '@/renderer/src/core/search-window'
   import type { HWND } from '@/types/globals'
+  import { SharedSearchDataCache } from '@/renderer/src/core/search-data'
+  import { selectSearchPreview } from '@/renderer/src/core/search-preview'
+  import {
+    MessagePresentationStore,
+    presentationOptions
+  } from '@/renderer/src/core/message-presentation'
 
   const isPopup = location.pathname.endsWith('/search.html')
   const count = Number(new URLSearchParams(location.search).get('count') ?? 10000)
@@ -36,12 +42,12 @@
       (_, i) =>
         new TwitchChatMessage(
           '',
-          {},
+          i === focusedIndex ? { color: '#7fdcb8', badges: 'moderator/1' } : {},
           `shared-${i}`,
           start + i * 1000,
           'fixture',
           'viewer',
-          `Message ${i} ${i % 2 ? 'odd' : 'even'} ${'ordinary text '.repeat(i % 5)} ${i % 7 === 0 ? 'FixtureBase' : ''}`
+          `Message ${i} ${i % 2 ? 'odd' : 'even'} ${'ordinary text '.repeat(i % 5)} ${i % 7 === 0 || i === focusedIndex ? 'FixtureBase' : ''}${i === focusedIndex ? ' @viewer' : ''}`
         )
     )
     const initialMessages = messages.slice(focusedIndex - 100, focusedIndex + 100)
@@ -55,13 +61,57 @@
     window.fixtureSharedMessages = messages
     window.fixtureSharedInitialMessages = initialMessages
     window.fixtureSharedSearchWindows = []
-    window.fixtureOpenSharedSearch = () => {
+    const sharedData = new SharedSearchDataCache()
+    window.fixtureOpenSharedSearch = async (options = {}) => {
+      window.fixtureSharedOptions = options
       const capturedRecording = recording
+      const previewMessages = selectSearchPreview(initialMessages, messages, messages[focusedIndex])
+      let preview: SearchContext['preview']
+      if (options.warmAssets) {
+        window.resolveFixtureMedia!()
+        const store = new MessagePresentationStore()
+        const presentation = presentationOptions()
+        await Promise.all(previewMessages.map((message) => store.load(message, presentation)))
+        for (const message of previewMessages) store.get(message, presentation)
+        preview = {
+          messages: previewMessages,
+          presentation: store.capture(previewMessages, { get: () => '#7fdcb8' })
+        }
+        window.fixtureSharedPreview = preview
+      }
+      let release: (() => void) | undefined
+      const gate = options.delayPreparation
+        ? new Promise<void>((resolve) => {
+            release = resolve
+          })
+        : Promise.resolve()
+      window.fixtureReleasePreparation = () => release?.()
+      let failed = false
+      window.fixturePreparationCalls = 0
+      window.fixtureSharedOpenedAt = performance.timeOrigin + performance.now()
       const popup = openSearchPopup({
         potplayerInfo: capturedRecording,
         focusedMessage: messages[focusedIndex],
         initialMessages,
         loadedMessages: messages,
+        initialSearch: options.initialSearch,
+        preview,
+        sharedData:
+          options.delayPreparation || options.failPreparation
+            ? {
+                textCache: sharedData.textCache,
+                prepare: async (initial, loaded, signal) => {
+                  window.fixturePreparationCalls!++
+                  await gate
+                  signal?.throwIfAborted()
+                  if (options.failPreparation && !failed) {
+                    failed = true
+                    throw new Error('Fixture preparation failed')
+                  }
+                  return sharedData.prepare(initial, loaded, signal)
+                }
+              }
+            : sharedData,
         searchRange: { startTime: start, endTime: start + (count - 1) * 1000 },
         focusMessage: (message) => {
           window.fixtureSharedCallback = {
@@ -83,9 +133,30 @@
 
   onMount(() => {
     window.fixtureShowSearch = () => {
+      if (showSearch) return
+      const timing = {
+        openedAt: (window.opener as Window).fixtureSharedOpenedAt!,
+        mountedAt: performance.timeOrigin + performance.now(),
+        firstChatAt: undefined as number | undefined
+      }
+      window.fixtureSearchTiming = timing
       showSearch = true
+      const observeFirstChat = (): void => {
+        const viewport = document.querySelector('.virtual-transcript')?.getBoundingClientRect()
+        const visible =
+          viewport &&
+          [...document.querySelectorAll('.chat-text')].some((row) => {
+            const bounds = row.getBoundingClientRect()
+            return bounds.bottom > viewport.top && bounds.top < viewport.bottom
+          })
+        if (visible) timing.firstChatAt = performance.timeOrigin + performance.now()
+        else requestAnimationFrame(observeFirstChat)
+      }
+      requestAnimationFrame(observeFirstChat)
     }
     window.fixtureReady = true
+    if (isPopup && (window.opener as Window).fixtureSharedOptions?.autoMount)
+      window.fixtureShowSearch()
   })
 </script>
 

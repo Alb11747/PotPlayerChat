@@ -10,6 +10,7 @@
   import { isEqualMessageBoundary } from '@/renderer/src/core/chat-view'
   import { openSearchPopup, type SearchOptions } from '@/renderer/src/core/search-window'
   import { SharedSearchDataCache } from '@/renderer/src/core/search-data'
+  import { selectSearchPreview, type SearchPreview } from '../core/search-preview'
   import { getUsernameClickAction, type UsernameClickInfo } from '../core/username-click'
   import { openUserPopup } from '../core/user-window'
   import type { PotPlayerInstance } from '@/types/potplayer'
@@ -418,15 +419,24 @@
     initialMessages: TwitchMessage[]
     loadedMessages: TwitchMessage[]
     searchRange?: { startTime: number; endTime: number }
+    preview: SearchPreview
   }
 
-  function capturePopupSource(): PopupSource | null {
+  function capturePopupSource(focused?: TwitchMessage): PopupSource | null {
     if (!selectedPotplayerInfo?.startTime || !selectedPotplayerInfo.endTime) return null
     const player = $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo
+    const previewMessages = selectSearchPreview(messages, chatService.currentChatData, focused)
     return {
       potplayerInfo: player,
       initialMessages: messages,
       loadedMessages: chatService.currentChatData,
+      preview: {
+        messages: previewMessages,
+        presentation: vlistRef?.capturePresentation?.(
+          previewMessages,
+          chatService.usernameColorTimelineMap
+        )
+      },
       searchRange: settings.search.showAllMessages
         ? { startTime: player.startTime - 3600000, endTime: player.endTime! + 3600000 }
         : undefined
@@ -436,7 +446,7 @@
   function openSearchWindow(
     info?: Partial<SearchOptions>,
     extraData?: { message?: TwitchMessage },
-    source = capturePopupSource()
+    source = capturePopupSource(extraData?.message)
   ): void {
     if (!source) return
     openSearchPopup({
@@ -462,11 +472,15 @@
     })
   }
 
-  function handleUsernameClick(info: UsernameClickInfo, source = capturePopupSource()): void {
+  function handleUsernameClick(info: UsernameClickInfo, source?: PopupSource | null): void {
     const action = getUsernameClickAction(info.username, info.altKey)
-    if (action.kind === 'user') openUserWindow(info, source)
+    if (action.kind === 'user') openUserWindow(info, source ?? capturePopupSource())
     else
-      openSearchWindow({ initialSearch: action.initialSearch }, { message: info.message }, source)
+      openSearchWindow(
+        { initialSearch: action.initialSearch },
+        { message: info.message },
+        source ?? capturePopupSource(info.message)
+      )
   }
 
   async function focusSourceMessage(message: TwitchMessage, source: PopupSource): Promise<void> {

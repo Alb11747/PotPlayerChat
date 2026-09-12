@@ -30,7 +30,7 @@
     videoEndTime?: number
     elapsedTime?: number
     urlTracker: UrlTracker
-    usernameColorTimelineMap?: TimelineMap<string, string>
+    usernameColorTimelineMap?: Pick<TimelineMap<string, string>, 'get'>
     searchQuery?: string | RegExp
     onUrlClick?: (url: string) => void
     onUsernameClick?: (info: UsernameClickInfo) => void

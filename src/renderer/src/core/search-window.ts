@@ -3,6 +3,7 @@ import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type { TwitchMessage } from '@/core/chat/twitch-msg'
 import type { SearchTextCache } from './search-messages'
 import { SharedSearchDataCache } from './search-data'
+import type { SearchPreview } from './search-preview'
 import {
   openPopupContext,
   PopupContextRegistry,
@@ -30,6 +31,7 @@ export interface SharedSearchData {
 }
 
 export type SearchContext = SearchOptions & {
+  preview?: SearchPreview
   initialMessages: readonly TwitchMessage[]
   loadedMessages: readonly TwitchMessage[]
   sharedData?: SharedSearchData

@@ -4,6 +4,7 @@
   import {
     MessagePresentationStore,
     presentationOptions,
+    type MessagePresentationSeed,
     type MessagePresentationOptions
   } from '../core/message-presentation'
   import {
@@ -17,6 +18,7 @@
   import { TranscriptEstimator } from '../core/transcript-estimator'
   import { createMessageLayoutDependencies } from '../core/transcript-cache'
   import { CooperativeWork } from '@/utils/cooperative-work'
+  import type { TimelineMap } from '@/utils/datastructs'
   import { settings } from '../state/settings.svelte'
   import VirtualTranscript from './VirtualTranscript.svelte'
 
@@ -34,6 +36,8 @@
     onfollowchange,
     onuserinteraction,
     renderContext,
+    presentationSeed,
+    onpublish,
     children: renderMessage
   }: {
     data: readonly T[]
@@ -49,10 +53,16 @@
     onfollowchange?: (following: boolean) => void
     onuserinteraction?: () => void
     renderContext?: C
+    presentationSeed?: MessagePresentationSeed
+    onpublish?: (rows: readonly T[]) => void
     children: Snippet<[T, number, MessagePresentationStore, C | undefined]>
   } = $props()
 
   const store = new MessagePresentationStore()
+  // Consume once before any estimates or mounted rows; clearing must never reseed stale assets.
+  untrack(() => {
+    if (presentationSeed) store.seed(presentationSeed)
+  })
   const elapsedOptions: Record<
     string,
     { base: MessagePresentationOptions; value: MessagePresentationOptions }
@@ -159,7 +169,10 @@
   }
 
   function releaseOldPresentations(rows: readonly T[]): void {
-    if (rows !== preparedData) return
+    // VirtualTranscript initially publishes its empty geometry while reporting viewport width.
+    // Retain assets until the currently requested replacement has actually been published.
+    if (rows !== preparedData || preparedData !== data) return
+    onpublish?.(rows)
     cleanupController?.abort()
     const controller = new AbortController()
     cleanupController = controller
@@ -251,6 +264,12 @@
   export function clearCache(): void {
     store.clear()
   }
+  export function capturePresentation(
+    messages: readonly TwitchMessage[],
+    timeline?: Pick<TimelineMap<string, string>, 'get'>
+  ): MessagePresentationSeed {
+    return store.capture(messages, timeline)
+  }
 
   onMount(() => {
     const refresh = (): void => {
@@ -274,7 +293,8 @@
       document.fonts.removeEventListener('loadingdone', fontsChanged)
       estimator.dispose()
       cleanupController?.abort()
-      store.clear()
+      // Captured popup assets outlive a transcript; only explicit cache clearing revokes them.
+      store.clear(false)
     }
   })
 </script>

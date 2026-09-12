@@ -1,6 +1,15 @@
 import type { TranscriptHandle } from '@/renderer/src/core/transcript-handle'
 import type { SearchContext } from '@/renderer/src/core/search-window'
 import type { TwitchMessage } from '@/core/chat/twitch-msg'
+import type { SearchPreview } from '@/renderer/src/core/search-preview'
+
+export interface SharedSearchFixtureOptions {
+  delayPreparation?: boolean
+  failPreparation?: boolean
+  warmAssets?: boolean
+  initialSearch?: string
+  autoMount?: boolean
+}
 
 export interface FixtureRow {
   id: string
@@ -32,7 +41,14 @@ declare global {
     fixtureClearCache?: () => void
     fixtureHeartbeat?: { ticks: number; maxGap: number; last: number; timer: number }
     fixtureShowSearch?: () => void
-    fixtureOpenSharedSearch?: () => void
+    fixtureOpenSharedSearch?: (options?: SharedSearchFixtureOptions) => Promise<void>
+    fixtureSharedOptions?: SharedSearchFixtureOptions
+    fixtureSharedPreview?: SearchPreview
+    fixtureReleasePreparation?: () => void
+    fixturePreparationCalls?: number
+    fixtureEmitAppCacheCleared?: () => void
+    fixtureSearchTiming?: { openedAt: number; mountedAt: number; firstChatAt?: number }
+    fixtureSharedOpenedAt?: number
     fixtureSwitchRecording?: () => void
     fixtureAppendMessages?: (count: number) => void
     fixtureSearchContext?: SearchContext
@@ -44,11 +60,19 @@ declare global {
 }
 
 // Only the renderer is mounted. Every external interaction is a deterministic fixture.
+const cacheClearedListeners = new Set<() => void>()
+window.fixtureEmitAppCacheCleared = () => {
+  for (const listener of cacheClearedListeners) listener()
+}
 Object.defineProperty(window, 'api', {
   value: new Proxy(
     {},
     {
       get: (_, key) => {
+        if (key === 'onAppCacheCleared')
+          return (listener: () => void) => cacheClearedListeners.add(listener)
+        if (key === 'offAppCacheCleared')
+          return (listener: () => void) => cacheClearedListeners.delete(listener)
         if (key === 'loadKeys') return async () => ({})
         if (key === 'openUrl')
           return async (url: string) => {

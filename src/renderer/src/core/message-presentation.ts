@@ -16,6 +16,7 @@ import type { InterfaceSettings } from '../state/settings-model'
 import conf from '../state/config'
 import { settings } from '../state/settings.svelte'
 import { CooperativeWork } from '@/utils/cooperative-work'
+import type { TimelineMap } from '@/utils/datastructs'
 
 export interface MessagePresentationOptions {
   showName: InterfaceSettings['showName']
@@ -52,8 +53,23 @@ export function presentationOptions(
   }
 }
 interface Assets {
+  message?: TwitchMessage
   emotes?: Collection<string, Emote | CheerEmote> | null
   badges?: [string, HelixChatBadgeVersion | null][]
+}
+
+type SharedEmotes = Omit<Collection<string, Emote | CheerEmote>, 'set' | 'delete' | 'clear'>
+export interface MessagePresentationSeed {
+  readonly assets: readonly (readonly [
+    TwitchMessage,
+    {
+      readonly emotes?: SharedEmotes | null
+      readonly badges?: readonly (readonly [string, HelixChatBadgeVersion | null])[]
+    }
+  ])[]
+  readonly channelEmotes: readonly (readonly [string, SharedEmotes])[]
+  readonly mentionColors: Pick<TimelineMap<string, string>, 'get'>
+  readonly validity: { readonly valid: boolean }
 }
 
 export type MessageLayoutChange =
@@ -64,6 +80,7 @@ export type MessageLayoutChange =
 /** Transcript-owned parsing survives row recycling without starting offscreen requests. */
 export class MessagePresentationStore {
   private assets = new SvelteMap<string, Assets>()
+  private previewAssets = new WeakMap<TwitchMessage, Assets>()
   private channelEmotes = new SvelteMap<string, Collection<string, Emote | CheerEmote>>()
   private parsed = new Map<
     string,
@@ -81,10 +98,73 @@ export class MessagePresentationStore {
   private retainedIds: Pick<ReadonlySet<string>, 'has'> | null = null
   private revisions = new Map<string, number>()
   private generation = 0
+  private seedValidity = { valid: true }
+  private seeded = new WeakSet<MessagePresentationSeed>()
   private cacheState = new SvelteMap([['generation', 0]])
   private timestampSecond = -1
   private timestampDay = ''
   private layoutListeners = new Set<(change: MessageLayoutChange) => void>()
+
+  private getAssets(message: TwitchMessage): Assets | undefined {
+    const local = this.assets.get(message.getId())
+    return local?.message === message ? local : this.previewAssets.get(message)
+  }
+
+  /** Capture only warm rows/channels. Opening a popup must never start asset work. */
+  capture(
+    messages: readonly TwitchMessage[],
+    timeline?: Pick<TimelineMap<string, string>, 'get'>
+  ): MessagePresentationSeed {
+    const assets: (readonly [TwitchMessage, Assets])[] = []
+    const channels = new Map<string, Collection<string, Emote | CheerEmote>>()
+    const mentionColors = new Map<string, Map<number, string>>()
+    for (const message of messages.slice(0, 200)) {
+      const id = message.getId()
+      const resolved = this.getAssets(message)
+      if (resolved?.message === message) assets.push([message, resolved])
+      const channel = message.channel ?? ''
+      const emotes = this.channelEmotes.get(channel)
+      if (emotes) channels.set(channel, emotes)
+      const cached = this.parsed.get(id)
+      if (cached?.message !== message || !timeline) continue
+      for (const segment of cached.value.segments ?? []) {
+        if (segment.type !== 'mention') continue
+        const username = segment.username.toLowerCase()
+        const color = timeline.get(username, message.timestamp)
+        if (color) {
+          let timestamps = mentionColors.get(username)
+          if (!timestamps) mentionColors.set(username, (timestamps = new Map()))
+          timestamps.set(message.timestamp, color)
+        }
+      }
+    }
+    return {
+      assets,
+      channelEmotes: [...channels],
+      // Missing preview rows must not inherit a color captured at another timestamp.
+      mentionColors: {
+        get: (username, timestamp) =>
+          timestamp === undefined ? undefined : mentionColors.get(username)?.get(timestamp)
+      },
+      validity: this.seedValidity
+    }
+  }
+
+  /** Local containers share immutable asset values; cheer augmentation copies its collection. */
+  seed(seed: MessagePresentationSeed): boolean {
+    if (!seed.validity.valid || this.generation !== 0 || this.seeded.has(seed)) return false
+    this.seeded.add(seed)
+    for (const [message, assets] of seed.assets) {
+      // Parsing's collection declaration is mutable, but parsing only reads it. Store loads
+      // replace asset records and copy channel collections before adding message-specific cheers.
+      const local = { ...assets, message } as Assets
+      this.assets.set(message.getId(), local)
+      this.previewAssets.set(message, local)
+    }
+    for (const [channel, emotes] of seed.channelEmotes)
+      this.channelEmotes.set(channel, emotes as Collection<string, Emote | CheerEmote>)
+    return true
+  }
 
   subscribeLayout(listener: (change: MessageLayoutChange) => void): () => void {
     this.layoutListeners.add(listener)
@@ -108,7 +188,7 @@ export class MessagePresentationStore {
   get(message: TwitchMessage, options: MessagePresentationOptions): MessagePresentation {
     this.cacheState.get('generation')
     const id = message.getId()
-    const assets = this.assets.get(id)
+    const assets = this.getAssets(message)
     const resolvedEmotes = options.enableEmotes
       ? (assets?.emotes ?? this.channelEmotes.get(message.channel ?? ''))
       : undefined
@@ -208,7 +288,7 @@ export class MessagePresentationStore {
       await existing
       return this.load(message, options)
     }
-    const old = this.assets.get(id) ?? {}
+    const old = this.getAssets(message) ?? {}
     const badges = options.enableBadges && old.badges === undefined
     const emotes = options.enableEmotes && old.emotes === undefined
     if (!badges && !emotes) return
@@ -217,7 +297,7 @@ export class MessagePresentationStore {
     const task = (async () => {
       setConfig(conf)
       const channel = await TwitchUserService.getUserIdByName(message.channel!)
-      const next: Assets = { ...old }
+      const next: Assets = { ...old, message }
       if (badges) {
         next.badges =
           message.type === 'chat'
@@ -267,6 +347,9 @@ export class MessagePresentationStore {
         (!this.retainedIds || this.retainedIds.has(id))
       ) {
         this.assets.set(id, next)
+        // Filtering can evict mounted-row state. Keep enriched values for the bounded
+        // opening seed so returning to those rows never depends on refetching assets.
+        if (this.previewAssets.has(message)) this.previewAssets.set(message, next)
         this.notifyLayout({ kind: 'message', id })
       }
     })()
@@ -310,10 +393,13 @@ export class MessagePresentationStore {
       }
     }
   }
-  clear(): void {
+  clear(invalidateCapturedSeeds = true): void {
+    if (invalidateCapturedSeeds) this.seedValidity.valid = false
+    this.seedValidity = { valid: true }
     this.generation++
     this.cacheState.set('generation', this.generation)
     this.assets.clear()
+    this.previewAssets = new WeakMap()
     this.channelEmotes.clear()
     this.parsed.clear()
     this.pending.clear()

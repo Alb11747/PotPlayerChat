@@ -1,13 +1,213 @@
 import { expect, test, type Page } from '@playwright/test'
-import type {} from './fixture'
+import type { SharedSearchFixtureOptions } from './fixture'
 
-async function openSharedSearch(source: Page): Promise<Page> {
+async function openSharedSearch(
+  source: Page,
+  options: SharedSearchFixtureOptions = {}
+): Promise<Page> {
   const opened = source.waitForEvent('popup')
-  await source.evaluate(() => window.fixtureOpenSharedSearch!())
+  await source.evaluate((options) => window.fixtureOpenSharedSearch!(options), options)
   const popup = await opened
   await popup.waitForFunction(() => window.fixtureReady)
   return popup
 }
+
+async function routeImages(page: Page): Promise<void> {
+  await page.context().route('https://**/*', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40"/></svg>'
+    })
+  )
+}
+
+async function readingAnchor(page: Page): Promise<{ id: string; top: number }> {
+  return page.evaluate(() => {
+    const viewport = document.querySelector('.virtual-transcript')!.getBoundingClientRect()
+    const row = [...document.querySelectorAll<HTMLElement>('[data-transcript-key]')].find(
+      (row) => row.getBoundingClientRect().bottom > viewport.top
+    )!
+    return { id: row.dataset['transcriptKey']!, top: row.getBoundingClientRect().top }
+  })
+}
+
+for (const count of [10000, 100000]) {
+  test(`Search paints a warm ${count}-message preview before delayed preparation`, async ({
+    page
+  }) => {
+    await routeImages(page)
+    await page.goto(`/?sharedSource&opener&count=${count}`)
+    await page.waitForFunction(() => window.fixtureReady)
+    const popup = await openSharedSearch(page, {
+      delayPreparation: true,
+      warmAssets: true,
+      autoMount: true
+    })
+    const focused = Math.floor(count * 0.6)
+    expect(
+      await page.evaluate(
+        (focused) =>
+          window
+            .fixtureSharedPreview!.presentation!.assets.find(
+              ([message]) => message.getId() === `shared-${focused}`
+            )?.[1]
+            .badges?.map(([, badge]) => badge?.title),
+        focused
+      )
+    ).toEqual(['Moderator'])
+    const row = popup.locator(`[data-transcript-key="shared-${focused}"]`)
+    await expect(row).toBeVisible()
+    await expect(row.locator('.emote-frame')).toBeVisible()
+    await expect(row.locator('.chat-badge')).toHaveAttribute('alt', 'Moderator')
+    await expect(row.locator('.chat-username').first()).toHaveCSS('color', 'rgb(127, 220, 184)')
+    await expect(row.locator('.chat-text .chat-username')).toHaveCSS('color', 'rgb(127, 220, 184)')
+    expect(
+      await popup.evaluate(() => {
+        const preview = window.fixtureSearchContext!.preview!
+        const source = window.opener as Window
+        return {
+          message:
+            preview.messages.find(
+              (message) =>
+                message.getId() ===
+                `shared-${Math.floor(window.fixtureSearchContext!.loadedMessages.length * 0.6)}`
+            ) === window.fixtureSearchContext!.focusedMessage,
+          assets: preview.presentation === source.fixtureSharedPreview!.presentation,
+          count: preview.messages.length
+        }
+      })
+    ).toEqual({ message: true, assets: true, count: 200 })
+    await row.getByRole('button', { name: 'Return to this message in chat' }).click()
+    expect((await page.evaluate(() => window.fixtureSharedCallback))?.original).toBe(true)
+    await popup.waitForTimeout(1100)
+    await expect(popup.getByRole('status').first()).toContainText('Searching')
+    if (count === 100000)
+      await popup.screenshot({ path: test.info().outputPath('warm-preview.png') })
+    const timing = await popup.evaluate(() => {
+      const timing = window.fixtureSearchTiming!
+      return {
+        openingToFirstChatMs: timing.firstChatAt! - timing.openedAt,
+        mountToFirstChatMs: timing.firstChatAt! - timing.mountedAt
+      }
+    })
+    await test.info().attach('preview-first-chat', {
+      body: JSON.stringify({ count, ...timing }),
+      contentType: 'application/json'
+    })
+    for (const [phase, elapsed] of Object.entries(timing)) {
+      if (elapsed >= 300) {
+        test.info().annotations.push({
+          type: 'performance target missed',
+          description: `${phase}: ${elapsed} ms`
+        })
+      }
+    }
+    const input = popup.getByRole('searchbox')
+    await input.fill('ordinary')
+    await input.fill(`Message ${focused} even`)
+    await expect(row.locator('mark').first()).toHaveText(`Message ${focused} even`)
+    await input.fill('')
+    await expect(row).toBeVisible()
+    await expect(row.locator('.chat-badge')).toHaveAttribute('alt', 'Moderator')
+    await expect.poll(() => popup.locator('[data-transcript-key]').count()).toBeGreaterThan(3)
+    const viewport = popup.locator('.virtual-transcript')
+    const beforeScroll = await readingAnchor(popup)
+    await viewport.dispatchEvent('pointerdown')
+    await viewport.evaluate((element) => element.scrollBy(0, 130))
+    await popup.waitForTimeout(100)
+    const saved = await readingAnchor(popup)
+    expect(saved.id !== beforeScroll.id || Math.abs(saved.top - beforeScroll.top) > 1).toBe(true)
+    await page.evaluate(() => window.fixtureReleasePreparation!())
+    await expect(popup.getByRole('status').first()).toHaveText(`${count} results`)
+    await expect(row.locator('.chat-badge')).toHaveAttribute('alt', 'Moderator')
+    await expect
+      .poll(async () =>
+        popup
+          .locator(`[data-transcript-key="${saved.id}"]`)
+          .evaluate(
+            (element, top) => Math.abs(element.getBoundingClientRect().top - top),
+            saved.top
+          )
+      )
+      .toBeLessThanOrEqual(1)
+    if (count === 100000)
+      await popup.screenshot({ path: test.info().outputPath('expanded-preview.png') })
+    await popup.close()
+  })
+}
+
+test('missing preview assets do not block content, and failed preparation can retry', async ({
+  page
+}) => {
+  await routeImages(page)
+  await page.goto('/?sharedSource&opener&count=10000')
+  await page.waitForFunction(() => window.fixtureReady)
+  const popup = await openSharedSearch(page, {
+    delayPreparation: true,
+    failPreparation: true,
+    autoMount: true
+  })
+  const row = popup.locator('[data-transcript-key="shared-6000"]')
+  await expect(row).toBeVisible()
+  await expect(row.locator('.emote-frame')).toHaveCount(0)
+  await popup.waitForTimeout(1100)
+  await expect(row).toBeVisible()
+  await popup.getByRole('searchbox').fill('Message 6000 even')
+  await page.evaluate(() => window.fixtureReleasePreparation!())
+  await expect(popup.getByRole('button', { name: 'Retry' })).toBeVisible()
+  await expect(row).toBeVisible()
+  await popup.getByRole('button', { name: 'Retry' }).click()
+  await expect(popup.getByRole('status').first()).toHaveText('1 result')
+  await expect(popup.getByRole('searchbox')).toHaveValue('Message 6000 even')
+  await popup.evaluate(() => window.resolveFixtureMedia!())
+  await expect(row.locator('.emote-frame')).toBeVisible()
+  expect(await page.evaluate(() => window.fixturePreparationCalls)).toBe(2)
+  await popup.close()
+})
+
+test('an initial query with no preview matches waits for full results', async ({ page }) => {
+  await page.goto('/?sharedSource&opener&count=10000')
+  await page.waitForFunction(() => window.fixtureReady)
+  const popup = await openSharedSearch(page, {
+    delayPreparation: true,
+    initialSearch: 'Message 100 even',
+    autoMount: true
+  })
+  await expect(popup.getByRole('searchbox')).toHaveValue('Message 100 even')
+  await expect(popup.getByRole('status').first()).toContainText('Searching')
+  await expect(popup.locator('.chat-text')).toHaveCount(0)
+  await popup.waitForTimeout(1100)
+  await expect(popup.getByRole('status').first()).toContainText('Searching')
+  await page.evaluate(() => window.fixtureReleasePreparation!())
+  await expect(popup.getByRole('status').first()).toHaveText('1 result')
+  await expect(popup.locator('[data-transcript-key="shared-100"]')).toBeVisible()
+  await popup.close()
+})
+
+test('clearing Search cache drops shared preview assets and later resolution remains usable', async ({
+  page
+}) => {
+  await routeImages(page)
+  await page.goto('/?sharedSource&opener&count=10000')
+  await page.waitForFunction(() => window.fixtureReady)
+  const popup = await openSharedSearch(page, {
+    delayPreparation: true,
+    warmAssets: true,
+    autoMount: true
+  })
+  const row = popup.locator('[data-transcript-key="shared-6000"]')
+  await expect(row.locator('.emote-frame')).toBeVisible()
+  await popup.evaluate(() => window.fixtureEmitAppCacheCleared!())
+  await expect(row.locator('.emote-frame')).toHaveCount(0)
+  await expect(row).toBeVisible()
+  await page.evaluate(() => window.fixtureReleasePreparation!())
+  await expect(popup.getByRole('status').first()).toHaveText('10000 results')
+  await expect(row.locator('.emote-frame')).toHaveCount(0)
+  await popup.evaluate(() => window.resolveFixtureMedia!())
+  await expect(row.locator('.emote-frame')).toBeVisible()
+  await expect(row.locator('.chat-badge')).toHaveAttribute('alt', 'Moderator')
+  await popup.close()
+})
 
 async function startHeartbeat(source: Page): Promise<void> {
   await source.evaluate(() => {
@@ -85,8 +285,13 @@ for (const count of [10000, 100000]) {
     const focused = Math.floor(count * 0.6)
     await expect(popup.getByRole('status').first()).toHaveText(`${count} results`)
     await expect(popup.locator(`[data-transcript-key="shared-${focused}"]`)).toBeVisible()
+    await popup.waitForFunction(() => window.fixtureSearchTiming?.firstChatAt !== undefined)
+    const firstChat = await popup.evaluate(() => {
+      const timing = window.fixtureSearchTiming!
+      return { mountToFirstChatMs: timing.firstChatAt! - timing.mountedAt }
+    })
     phases.push({
-      phase: 'first usable results',
+      phase: 'complete results and focused message',
       maxGap: await checkpoint(page),
       elapsedMs: performance.now() - started
     })
@@ -194,7 +399,7 @@ for (const count of [10000, 100000]) {
     await popup.getByRole('searchbox').fill(`Message ${focused} even`)
     await expect(popup.getByRole('status').first()).toHaveText('1 result')
     await test.info().attach('shared-search-performance', {
-      body: JSON.stringify({ count, phases, heaps }, null, 2),
+      body: JSON.stringify({ count, firstChat, phases, heaps }, null, 2),
       contentType: 'application/json'
     })
     expect(errors).toEqual([])
