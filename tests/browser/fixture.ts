@@ -61,6 +61,11 @@ declare global {
 
 // Only the renderer is mounted. Every external interaction is a deterministic fixture.
 const cacheClearedListeners = new Set<() => void>()
+// Session storage models persisted IPC history without touching application settings.
+const seenUrls = new Set<string>(JSON.parse(sessionStorage.getItem('fixtureSeenUrls') ?? '[]'))
+const clickedUrls = new Set<string>(
+  JSON.parse(sessionStorage.getItem('fixtureClickedUrls') ?? '[]')
+)
 window.fixtureEmitAppCacheCleared = () => {
   for (const listener of cacheClearedListeners) listener()
 }
@@ -69,6 +74,18 @@ Object.defineProperty(window, 'api', {
     {},
     {
       get: (_, key) => {
+        if (key === 'isUrlSeen') return async (url: string) => seenUrls.has(url)
+        if (key === 'isUrlClicked') return async (url: string) => clickedUrls.has(url)
+        if (key === 'addUrlSeen')
+          return async (url: string) => {
+            seenUrls.add(url)
+            sessionStorage.setItem('fixtureSeenUrls', JSON.stringify([...seenUrls]))
+          }
+        if (key === 'addUrlClicked')
+          return async (url: string) => {
+            clickedUrls.add(url)
+            sessionStorage.setItem('fixtureClickedUrls', JSON.stringify([...clickedUrls]))
+          }
         if (key === 'onAppCacheCleared')
           return (listener: () => void) => cacheClearedListeners.add(listener)
         if (key === 'offAppCacheCleared')

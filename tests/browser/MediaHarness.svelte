@@ -2,6 +2,9 @@
   import { onMount, tick } from 'svelte'
   import MessageTranscript from '@/renderer/src/components/MessageTranscript.svelte'
   import ChatMessage from '@/renderer/src/components/ChatMessage.svelte'
+  import LinkPreview from '@/renderer/src/components/LinkPreview.svelte'
+  import PreviewWindow from '@/renderer/src/components/PreviewWindow.svelte'
+  import type { PreviewWindowContext } from '@/renderer/src/core/preview-window'
   import { TwitchChatMessage } from '@/core/chat/twitch-msg'
   import { UrlTracker } from '@/renderer/src/core/url-tracker'
   import type { TranscriptHandle } from '@/renderer/src/core/transcript-handle'
@@ -15,6 +18,9 @@
   const reloadServices: Record<number, (() => void) | undefined> = $state({})
   const tracker = new UrlTracker(settings.chat)
   const start = 1700000000000
+  const params = new URLSearchParams(location.search)
+  const linkStates = params.has('linkStates')
+  let previewContext = $state.raw<PreviewWindowContext | null>(null)
   const variants = [
     'Hello  world! Repeated spaces  and Unicode 日本語 😀 @viewer',
     'Long line '.repeat(25),
@@ -26,6 +32,21 @@
   onMount(() => {
     void settingsReady.then(async () => {
       settings.interface.enableInlineImagePreviews = true
+      if (linkStates) {
+        settings.interface.enableInlineImagePreviews = false
+        settings.interface.enableLinkPreviews = true
+        settings.interface.previewMode = params.has('expanded') ? 'expanded' : 'hover'
+        const palette = params.get('palette')
+        if (palette === 'blue' || palette === 'graphite' || palette === 'lavender')
+          settings.interface.palette = palette
+        // Exercise the real preview action and shared tracker in the fixture document.
+        window.open = (url) => {
+          window.fixturePopup = String(url)
+          const token = new URL(String(url)).hash.slice(1)
+          previewContext = window.potPlayerChatPopup?.takeContext(token) as PreviewWindowContext
+          return window
+        }
+      }
       applyAppearance()
       const count = Number(new URLSearchParams(location.search).get('count') ?? 1000)
       messages = Array.from(
@@ -133,3 +154,10 @@
     {/snippet}
   </MessageTranscript>
 </div>
+
+{#if linkStates}
+  <LinkPreview />
+  {#if previewContext}
+    <PreviewWindow context={previewContext} />
+  {/if}
+{/if}

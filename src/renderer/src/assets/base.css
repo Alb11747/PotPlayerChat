@@ -43,6 +43,12 @@
   --color-accent-ts: #3178c6;
   --color-accent-yellow: #f0dc4e;
 
+  /* Link history states remain distinct regardless of the interface palette. */
+  --chat-link-color: #4e8cff;
+  --chat-link-seen-color: #6caefe;
+  --chat-link-hover-color: #6b9eff;
+  --chat-link-visited-color: #a855f7;
+
   /* Error, warning, success */
   --color-error: #ff4d4d;
   --color-error-soft: #ff6b6b;

@@ -477,7 +477,7 @@
     justify-content: flex-start;
     display: inline;
     font: inherit;
-    color: var(--color-accent);
+    color: var(--chat-link-color);
     text-decoration: underline;
     cursor: pointer;
     transition: color 0.2s ease;
@@ -493,15 +493,14 @@
     outline-offset: 2px;
   }
   .chat-url.seen {
-    color: var(--color-accent-light);
+    color: var(--chat-link-seen-color);
   }
   .chat-url:hover {
-    color: var(--color-accent-hover);
+    color: var(--chat-link-hover-color);
     text-decoration: none;
   }
-  .chat-url.visited,
-  .chat-url:focus-visible {
-    color: var(--color-accent-purple);
+  .chat-url.visited {
+    color: var(--chat-link-visited-color);
   }
 
   :global(mark) {
