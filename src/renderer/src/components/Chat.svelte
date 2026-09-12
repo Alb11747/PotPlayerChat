@@ -121,8 +121,6 @@
 
   let vlistRef: TranscriptHandle | null = $state(null)
   let scrollToBottom: boolean = $state(true)
-  const doubleSpacebarThresholdMs = 350
-  let lastSpacebarPressTime = 0
 
   function scrollToTarget(_scrollToBottom?: boolean): void {
     const _vlistRef = untrack(() => vlistRef)
@@ -533,16 +531,10 @@
       !event.metaKey &&
       !event.shiftKey &&
       !isEditableTarget(event.target) &&
-      (event.key === ' ' || event.code === 'Space')
+      event.key === 'Enter'
     ) {
-      const now = performance.now()
-      if (now - lastSpacebarPressTime <= doubleSpacebarThresholdMs) {
-        event.preventDefault()
-        scrollChatToBottom()
-        lastSpacebarPressTime = 0
-      } else {
-        lastSpacebarPressTime = now
-      }
+      event.preventDefault()
+      scrollChatToBottom()
       return
     }
 
