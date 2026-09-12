@@ -54,13 +54,29 @@ test('main chat keeps reading mode across media and settings and returns to play
   await page.mouse.wheel(0, -4000)
   await expect(page.getByText('Reading earlier messages', { exact: true })).toBeVisible()
   await expect(bottomButton).toBeVisible()
-  const chatBounds = await page.locator('.chat-container').boundingBox()
+  const chatBounds = await page.getByRole('region', { name: 'Chat', exact: true }).boundingBox()
   const buttonBounds = await bottomButton.boundingBox()
   expect(chatBounds).not.toBeNull()
   expect(buttonBounds).not.toBeNull()
-  expect(buttonBounds!.x).toBeGreaterThan(chatBounds!.x)
-  expect(buttonBounds!.x + buttonBounds!.width).toBeLessThan(chatBounds!.x + chatBounds!.width)
-  expect(chatBounds!.y + chatBounds!.height - buttonBounds!.y - buttonBounds!.height).toBeCloseTo(4)
+  const viewportWidth = await viewport.evaluate((node) => node.clientWidth)
+  const leftGap = buttonBounds!.x - chatBounds!.x
+  const rightGap = chatBounds!.x + viewportWidth - buttonBounds!.x - buttonBounds!.width
+  const bottomGap = chatBounds!.y + chatBounds!.height - buttonBounds!.y - buttonBounds!.height
+  expect(leftGap).toBeCloseTo(6)
+  expect(leftGap).toBeCloseTo(rightGap)
+  expect(bottomGap).toBeGreaterThan(leftGap)
+  expect(buttonBounds!.width).toBeLessThan(chatBounds!.width)
+  expect(
+    await viewport.evaluate(
+      (node, y) => {
+        const rect = node.getBoundingClientRect()
+        const gutter = node.offsetWidth - node.clientWidth
+        return document.elementFromPoint(rect.right - gutter / 2, y) === node
+      },
+      buttonBounds!.y + buttonBounds!.height / 2
+    )
+  ).toBe(true)
+  expect(bottomGap).toBeCloseTo(8)
   await page.waitForTimeout(100)
   const saved = await viewport.evaluate((node) => {
     const top = node.getBoundingClientRect().top

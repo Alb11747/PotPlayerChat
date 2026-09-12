@@ -769,14 +769,18 @@
         {/if}
       </div>
     {/if}
-    {#if !showSettings && !scrollToBottom}
-      <button class="scroll-to-bottom" onclick={scrollChatToBottom}>Scroll to bottom</button>
-    {/if}
   </div>
+  <!-- Anchor the control outside the transcript's bottom spacing. -->
+  {#if !showSettings && !scrollToBottom}
+    <div class="scroll-to-bottom-overlay">
+      <button class="scroll-to-bottom" onclick={scrollChatToBottom}>Scroll to bottom</button>
+    </div>
+  {/if}
 </div>
 
 <style>
   .chat-shell {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -897,11 +901,21 @@
   .concealed {
     display: none;
   }
-  .scroll-to-bottom {
+  .scroll-to-bottom-overlay {
     position: absolute;
-    inset-inline: 8px;
-    bottom: 4px;
+    inset-inline: 0;
+    bottom: 8px;
+    padding-inline: 6px;
     z-index: 5;
+    /* Match the transcript's native gutter without covering its scrollbar hit target. */
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    pointer-events: none;
+  }
+  .scroll-to-bottom {
+    display: block;
+    width: 100%;
+    pointer-events: auto;
     min-height: 32px;
     padding: 6px 12px;
     border: 1px solid color-mix(in srgb, var(--deck-accent) 45%, transparent);
