@@ -890,6 +890,10 @@
     margin-bottom: 8px;
     color: var(--deck-text);
   }
+  .chat-container :global(.virtual-transcript:focus) {
+    /* Keep keyboard scrolling without outlining the entire main chat. */
+    outline: none;
+  }
   .concealed {
     display: none;
   }
