@@ -22,12 +22,9 @@
   {:else if name === 'clock'}
     <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
   {:else if name === 'settings'}
-    <path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="2" fill="var(--deck-surface)" /><circle
-      cx="15"
-      cy="17"
-      r="2"
-      fill="var(--deck-surface)"
-    />
+    <path
+      d="M18.9 9.1 21.8 9.9v4.2l-2.9.8 1.5 2.6-2.9 2.9-2.6-1.5-.8 2.9H9.9l-.8-2.9-2.6 1.5-2.9-2.9 1.5-2.6-2.9-.8V9.9l2.9-.8-1.5-2.6 2.9-2.9 2.6 1.5.8-2.9h4.2l.8 2.9 2.6-1.5 2.9 2.9Z"
+    /><circle cx="12" cy="12" r="3" />
   {:else if name === 'copy'}
     <rect x="9" y="9" width="11" height="11" rx="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
