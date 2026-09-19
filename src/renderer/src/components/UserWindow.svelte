@@ -52,7 +52,13 @@
   )
   const login = $derived.by(() => profile?.login || context.username)
   const headerName = $derived(formatChatName(login, displayName, settings.interface.showName))
-  const userId = $derived.by(() => profile?.id || clickedSenderMessage?.userId || null)
+  const userId = $derived.by(
+    () =>
+      profile?.id ||
+      clickedSenderMessage?.userId ||
+      messages.find((message) => message.userId)?.userId ||
+      null
+  )
   const usernameColor = $derived(mostRecentMessage?.color || '#efeff1')
 
   onMount(() => {

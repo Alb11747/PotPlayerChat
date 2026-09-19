@@ -1,6 +1,23 @@
 import { expect, test } from '@playwright/test'
 import type {} from './fixture'
 
+for (const scenario of ['initial', 'late', 'missing']) {
+  test(`user ID falls back to matching ${scenario} history when profile is unavailable`, async ({
+    page
+  }) => {
+    await page.goto(`/?popup=user&userId=${scenario}`)
+    const id = page.locator('.metadata-row .profile-value')
+    await expect(page.getByText('Profile details are unavailable.', { exact: true })).toBeVisible()
+    await expect(id).toHaveText(scenario === 'initial' ? '123456' : 'Unavailable')
+    await page.evaluate(() => window.resolveFixtureHistory!())
+    await expect(page.locator('.history-count')).toHaveText('1000')
+    await expect(id).toHaveText(scenario === 'missing' ? 'Unavailable' : '123456')
+    await expect(
+      page.getByRole('button', { name: 'Copy Twitch user ID', exact: true })
+    ).toHaveCount(scenario === 'missing' ? 0 : 1)
+  })
+}
+
 for (const popup of ['search', 'user']) {
   test(`${popup} keeps the user's position when late history arrives`, async ({ page }) => {
     await page.goto(`/?popup=${popup}`)
