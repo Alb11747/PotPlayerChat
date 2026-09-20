@@ -17,6 +17,12 @@ viewport width, density, and timestamps. Popup cases resolve older history
 after the reader moves; the main chat case checks settings restoration and
 Return to playback.
 
+Input-ownership cases replay a stale scroll completion before a new wheel/key
+movement, verify inactivity expiration and continued native movement, and hold
+the scrollbar across the idle interval. A real-wheel case exercises direction
+changes during continuous appends and checks the stopped reader at 0.1px
+precision with known row heights; it does not certify rich-text painted stability.
+
 A large MessageTranscript replacement case requests a distant row while preparation
 is pending, then cancels another request with user input during a second replacement.
 It checks both target selection and preservation of the reader's pixel offset while

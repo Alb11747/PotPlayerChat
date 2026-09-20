@@ -56,6 +56,7 @@
   let programmaticTop: number | null = null
   let inputActive = false
   let pointerActive = false
+  let inputIdleTimer: ReturnType<typeof setTimeout> | undefined
   let lastNativeTop = 0
   let anchor: TranscriptAnchor | null = null
   let navigation: { key: string; options: TranscriptScrollOptions } | null = null
@@ -417,12 +418,32 @@
     }
   }
 
+  function endInput(): void {
+    clearTimeout(inputIdleTimer)
+    inputIdleTimer = undefined
+    inputActive = false
+  }
+
+  function refreshInput(): void {
+    clearTimeout(inputIdleTimer)
+    // scrollend can belong to an earlier programmatic correction and arrive
+    // before a new wheel/key movement. Expire ownership on inactivity instead,
+    // allowing native smooth scrolling to renew it and held drags to retain it.
+    if (pointerActive) return
+    inputIdleTimer = setTimeout(() => {
+      // The browser may update its offset before delivering the final scroll.
+      if (viewport.scrollTop !== lastNativeTop) onScroll()
+      endInput()
+    }, 250)
+  }
+
   function userIntent(): void {
     preservePosition()
     generation++
     navigation = null
     programmaticTop = null
     inputActive = true
+    refreshInput()
     onuserinteraction?.()
   }
 
@@ -446,6 +467,7 @@
       queueLayout()
       return
     }
+    refreshInput()
     generation++
     navigation = null
     scrollTop = currentTop
@@ -463,7 +485,7 @@
     const item = data[index]
     if (!item) return
     generation++
-    inputActive = false
+    endInput()
     if (!(index === data.length - 1 && options.align === 'end')) stopFollowing()
     navigation = { key: getKey(item), options }
     queueLayout()
@@ -512,14 +534,16 @@
     viewportHeight = viewport.clientHeight
     queueLayout()
     const pointerEnd = (): void => {
-      if (pointerActive && viewport.scrollTop !== lastNativeTop) onScroll()
+      if (!pointerActive) return
+      if (viewport.scrollTop !== lastNativeTop) onScroll()
       pointerActive = false
-      inputActive = false
+      endInput()
     }
     window.addEventListener('pointerup', pointerEnd)
     window.addEventListener('pointercancel', pointerEnd)
     return () => {
       disposed = true
+      endInput()
       preparation?.controller.abort()
       generation++
       cancelAnimationFrame(overscanFrame)
@@ -542,9 +566,6 @@
   aria-label="Chat transcript"
   tabindex="0"
   onscroll={onScroll}
-  onscrollend={() => {
-    if (!pointerActive) inputActive = false
-  }}
   onwheel={(event) => {
     userIntent()
     if (event.deltaY < 0) stopFollowing()

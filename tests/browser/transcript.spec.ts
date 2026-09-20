@@ -32,6 +32,128 @@ test.beforeEach(async ({ page }) => {
   await frame(page)
 })
 
+for (const input of ['wheel', 'keyboard'] as const) {
+  test(`an earlier scroll completion cannot cancel new ${input} movement`, async ({ page }) => {
+    await page.evaluate(() => window.transcriptTest.list().scrollToIndex(100))
+    await frame(page)
+    const saved = await anchor(page)
+    await page.evaluate((input) => {
+      const viewport = document.querySelector<HTMLElement>('.virtual-transcript')!
+      viewport.dispatchEvent(
+        input === 'wheel'
+          ? new WheelEvent('wheel', { deltaY: 60 })
+          : new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })
+      )
+      // Replay the browser ordering from the append/refinement trace: completion
+      // of an older correction arrives before this gesture's native movement.
+      viewport.dispatchEvent(new Event('scrollend'))
+      // Releasing a pointer elsewhere must not end this transcript's gesture.
+      window.dispatchEvent(new PointerEvent('pointerup'))
+      viewport.scrollTop += 60
+      viewport.dispatchEvent(new Event('scroll'))
+    }, input)
+    await frame(page)
+    await assertAnchor(page, { ...saved, top: saved.top - 60 })
+    await page.evaluate(() => {
+      const fixture = window.transcriptTest
+      fixture.replace([...fixture.rows(), { id: 'tail', height: 80, text: 'Appended message' }])
+    })
+    await frame(page)
+    await assertAnchor(page, { ...saved, top: saved.top - 60 })
+    expect(await page.evaluate(() => window.transcriptTest.state().following)).toBe(false)
+  })
+}
+
+test('completed wheel input cannot authorize later unsolicited scroll movement', async ({
+  page
+}) => {
+  await page.evaluate(() => window.transcriptTest.list().scrollToIndex(100))
+  await frame(page)
+  await page.locator('.virtual-transcript').hover()
+  await page.mouse.wheel(0, 60)
+  await expect
+    .poll(() => page.evaluate(() => window.transcriptTest.list().getScrollOffset()))
+    .toBe(8060)
+  // Leave time for the input session to become idle, independently of scrollend.
+  await page.waitForTimeout(500)
+  const saved = await anchor(page)
+  await page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('.virtual-transcript')!
+    viewport.scrollTop += 60
+    viewport.dispatchEvent(new Event('scroll'))
+  })
+  await frame(page)
+  await assertAnchor(page, saved)
+})
+
+test('continued native movement renews input ownership until scrolling stops', async ({ page }) => {
+  await page.evaluate(() => window.transcriptTest.list().scrollToIndex(100))
+  await frame(page)
+  const offsets = await page.evaluate(async () => {
+    const viewport = document.querySelector<HTMLElement>('.virtual-transcript')!
+    viewport.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true }))
+    const offsets: number[] = []
+    // A smooth keyboard scroll continues without another keydown. Its movement
+    // must remain authoritative even after the initial input deadline passes.
+    for (let step = 0; step < 4; step++) {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      viewport.scrollTop += 20
+      viewport.dispatchEvent(new Event('scroll'))
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+      offsets.push(viewport.scrollTop)
+    }
+    return offsets
+  })
+  expect(offsets).toEqual([8020, 8040, 8060, 8080])
+})
+
+test('wheel movement and direction changes survive continuous appends', async ({ page }) => {
+  await page.evaluate(() => window.transcriptTest.list().scrollToIndex(100))
+  await frame(page)
+  await page.locator('.virtual-transcript').hover()
+  const timer = await page.evaluate(() =>
+    window.setInterval(() => {
+      const fixture = window.transcriptTest
+      const index = fixture.rows().length
+      fixture.replace([
+        ...fixture.rows(),
+        { id: `tail-${index}`, height: 80, text: `Appended message ${index}` }
+      ])
+    }, 50)
+  )
+  try {
+    let expected = 8000
+    for (const delta of [60, 60, 8, -8, -60, -60, 60, 8]) {
+      expected += delta
+      await page.mouse.wheel(0, delta)
+      await expect
+        .poll(() => page.evaluate(() => window.transcriptTest.list().getScrollOffset()))
+        .toBe(expected)
+    }
+    await page.waitForTimeout(500)
+    const saved = await anchor(page)
+    const beforeCount = await page.evaluate(() => window.transcriptTest.rows().length)
+    const drift = await page.evaluate(async (saved) => {
+      let maximum = 0
+      for (let sample = 0; sample < 20; sample++) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        const row = document.querySelector(`[data-message-id="${saved.id}"]`)!
+        maximum = Math.max(maximum, Math.abs(row.getBoundingClientRect().top - saved.top))
+      }
+      return maximum
+    }, saved)
+    expect(drift).toBeLessThanOrEqual(0.1)
+    expect(await page.evaluate(() => window.transcriptTest.rows().length)).toBeGreaterThan(
+      beforeCount
+    )
+    expect(await page.evaluate(() => window.transcriptTest.state().following)).toBe(false)
+  } finally {
+    await page.evaluate((timer) => clearInterval(timer), timer)
+  }
+})
+
 test('compaction and growth above the reader preserve the same message offset', async ({
   page
 }) => {
@@ -211,6 +333,8 @@ test('dragging the native scrollbar leaves follow mode and keeps the new reading
   expect(rect).not.toBeNull()
   await page.mouse.move(rect!.x + rect!.width - 7, rect!.y + rect!.height - 30)
   await page.mouse.down()
+  // A held scrollbar must not expire like an idle wheel/keyboard gesture.
+  await page.waitForTimeout(500)
   await page.mouse.move(rect!.x + rect!.width - 7, rect!.y + rect!.height / 2, { steps: 12 })
   await page.mouse.up()
   await frame(page)
