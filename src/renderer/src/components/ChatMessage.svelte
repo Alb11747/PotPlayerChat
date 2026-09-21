@@ -214,15 +214,8 @@
   })
 
   const inlineUrlSegments = $derived(
-    orderedUrlSegments.filter(
-      (segment) =>
-        isInlinePreviewPending(segment.url) || getInlineImagePreview(segment.url) !== null
-    )
+    orderedUrlSegments.filter((segment) => getInlineImagePreview(segment.url) !== null)
   )
-
-  function isInlinePreviewPending(url: string): boolean {
-    return !urlTracker.isFailedUrl(url) && !urlTracker.getCachedPreview(url)
-  }
 
   function getInlineImagePreview(url: string): LinkPreview | null {
     const preview = urlTracker.getCachedPreview(url)
@@ -397,7 +390,6 @@
           <a
             href={segment.url}
             class="inline-image-preview-link"
-            class:pending-preview={!urlTracker.getImageDimensions(preview.thumbnail)}
             data-message-part={`preview-${segment.index}`}
             style:cursor={settings.interface.openInlineImagePreviewsOnClick ? 'pointer' : 'default'}
             onclick={(event) => onInlineImageClick(event, segment.url)}
@@ -406,6 +398,7 @@
               src={preview.thumbnail}
               alt="Preview"
               class="inline-image-preview"
+              class:loading={!urlTracker.getImageDimensions(preview.thumbnail)}
               loading="lazy"
               decoding="async"
               onload={async (event) => {
@@ -425,12 +418,6 @@
               }}
             />
           </a>
-        {:else if isInlinePreviewPending(segment.url)}
-          <div
-            class="pending-preview"
-            data-message-part={`preview-${segment.index}`}
-            aria-hidden="true"
-          ></div>
         {/if}
       {/each}
     </div>
@@ -525,14 +512,6 @@
     object-fit: contain;
   }
 
-  .pending-preview {
-    height: 20rem;
-    width: min(30rem, 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
   .inline-image-previews {
     display: flex;
     flex-direction: column;
@@ -548,6 +527,10 @@
     max-width: 100%;
     margin: 0 auto;
     cursor: pointer;
+  }
+
+  .inline-image-preview.loading {
+    height: 1em;
   }
 
   .inline-image-preview {

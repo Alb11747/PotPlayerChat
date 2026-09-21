@@ -128,7 +128,7 @@ describe('Pretext message measurement', () => {
     )
   })
 
-  it('reserves pending media and compacts using shared decoded dimensions', () => {
+  it('uses a default emote box until shared decoded dimensions arrive', () => {
     const tracker = new UrlTracker({ chatterinoBaseUrl: '' })
     const model = presentation('emote')
     model.segments = [
@@ -150,13 +150,14 @@ describe('Pretext message measurement', () => {
       naturalHeight: 28
     } as HTMLImageElement)
     const loaded = measureMessage(model, 160, metrics, tracker)
+    expect(pending).toBe(metrics.emoteSize + metrics.fontSize * 0.25 + metrics.padding * 2)
     expect(pending).toBeGreaterThan(loaded)
     expect(loaded).toBeGreaterThanOrEqual(28 + metrics.padding * 2)
     tracker.markFailedUrl('emote.png')
     expect(measureMessage(model, 160, metrics, tracker)).toBe(30)
   })
 
-  it('reserves every ordered preview until metadata and decoding resolve', async () => {
+  it('omits unknown previews and uses natural sizing while images load', async () => {
     const tracker = new UrlTracker({ chatterinoBaseUrl: '' })
     const model = presentation('links')
     model.segments = ['https://one.example', 'https://two.example'].map((url, index) => ({
@@ -169,7 +170,7 @@ describe('Pretext message measurement', () => {
     }))
     const textHeight = measureMessage(model, 500, metrics, tracker)
     const pending = measureMessage(model, 500, metrics, tracker, true)
-    expect(pending - textHeight).toBeCloseTo(640 + 14.4 + 8)
+    expect(pending).toBe(textHeight)
     vi.stubGlobal('window', {
       api: {
         getLinkPreview: vi
@@ -183,7 +184,9 @@ describe('Pretext message measurement', () => {
       }
     })
     await tracker.getPreview('https://one.example')
-    expect(measureMessage(model, 500, metrics, tracker, true)).toBe(pending)
+    expect(measureMessage(model, 500, metrics, tracker, true) - textHeight).toBeCloseTo(
+      metrics.fontSize + 14.4
+    )
     tracker.recordImageDimensions('image.png', {
       naturalWidth: 400,
       naturalHeight: 100

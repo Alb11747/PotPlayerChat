@@ -222,7 +222,7 @@ export function measureMessage(
             metrics.emoteSize,
             segment.type === 'cheer'
           )
-        : { width: metrics.rem * 9, height: metrics.emoteSize }
+        : { width: metrics.emoteSize, height: metrics.emoteSize }
       const amountWidth =
         segment.type === 'cheer'
           ? measureNaturalWidth(
@@ -244,7 +244,7 @@ export function measureMessage(
     for (const segment of presentation.segments ?? []) {
       if (segment.type !== 'url' || tracker.isFailedUrl(segment.url)) continue
       const preview = tracker.getCachedPreview(segment.url)
-      if (preview && (!preview.thumbnail || preview.status < 200 || preview.status >= 300)) continue
+      if (!preview?.thumbnail || preview.status < 200 || preview.status >= 300) continue
       const dimensions = preview?.thumbnail
         ? tracker.getImageDimensions(preview.thumbnail)
         : undefined
@@ -255,7 +255,7 @@ export function measureMessage(
             Math.min(available, metrics.rem * 30),
             metrics.rem * 20
           ).height
-        : metrics.rem * 20
+        : metrics.fontSize
       count++
     }
     if (count) height += metrics.rem * 0.9 + (count - 1) * metrics.rem * 0.5

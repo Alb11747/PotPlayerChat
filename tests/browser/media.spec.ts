@@ -75,6 +75,14 @@ for (const asset of [
       })
       expect(violations).toEqual([])
     }
+    const pendingBoxes = await row.locator('.emote-frame').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const box = node.getBoundingClientRect()
+        return { width: box.width, height: box.height }
+      })
+    )
+    expect(pendingBoxes.length).toBeGreaterThan(0)
+    for (const box of pendingBoxes) expect(box).toEqual({ width: 40, height: 40 })
     await checkFrames()
     releaseImages()
     await expect
@@ -160,7 +168,7 @@ test('small cheer assets fill the emote size across layouts and text scaling', a
   }
 })
 
-test('native messages compact delayed and failed previews without moving the reader', async ({
+test('native messages resolve delayed and failed previews without moving the reader', async ({
   page
 }) => {
   let releaseImages: () => void = () => {}
@@ -191,6 +199,15 @@ test('native messages compact delayed and failed previews without moving the rea
     )!
     return { id: row.dataset['messageId']!, top: row.getBoundingClientRect().top }
   })
+  await expect(page.locator('.inline-image-previews')).toHaveCount(0)
+  await page.evaluate(() => window.resolveFixtureMedia!())
+  await expect(page.locator('.inline-image-preview').first()).toBeAttached()
+  expect(
+    await page
+      .locator('.inline-image-preview-link')
+      .first()
+      .evaluate((node) => node.getBoundingClientRect().height)
+  ).toBeLessThan(40)
   releaseImages()
   const drifts = await page.evaluate(async (before) => {
     const values: number[] = []

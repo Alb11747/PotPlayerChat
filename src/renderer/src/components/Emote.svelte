@@ -62,7 +62,7 @@
   const frameWidth = $derived(
     dimensions
       ? `min(${intrinsicWidthLimit}calc(var(--deck-emote-size, 2.5rem) * ${ratio}), 9rem)`
-      : '9rem'
+      : 'var(--deck-emote-size, 2.5rem)'
   )
   const frameHeight = $derived(
     dimensions
