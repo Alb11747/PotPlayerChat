@@ -222,7 +222,18 @@ export function measureMessage(
             metrics.emoteSize,
             segment.type === 'cheer'
           )
-        : { width: metrics.emoteSize, height: metrics.emoteSize }
+        : {
+            width: Math.max(
+              metrics.emoteSize,
+              measureNaturalWidth(
+                prepareText(
+                  plainPresentationText(segment.escaped),
+                  `900 ${metrics.fontSize}px ${metrics.fontFamily}`
+                )
+              )
+            ),
+            height: Math.max(metrics.emoteSize, metrics.lineHeight)
+          }
       const amountWidth =
         segment.type === 'cheer'
           ? measureNaturalWidth(

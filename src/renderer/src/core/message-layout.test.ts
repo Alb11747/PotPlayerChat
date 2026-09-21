@@ -128,34 +128,40 @@ describe('Pretext message measurement', () => {
     )
   })
 
-  it('uses a default emote box until shared decoded dimensions arrive', () => {
-    const tracker = new UrlTracker({ chatterinoBaseUrl: '' })
-    const model = presentation('emote')
-    model.segments = [
-      {
-        type: 'emote',
-        text: 'emote',
-        fullText: 'emote',
-        escaped: 'emote',
-        index: 0,
-        name: 'emote',
-        source: 'twitch',
-        urls: { '1': 'emote.png' },
-        emote: new NativeTwitchEmote('123', 'emote')
-      }
-    ]
-    const pending = measureMessage(model, 160, metrics, tracker)
-    tracker.recordImageDimensions('emote.png', {
-      naturalWidth: 28,
-      naturalHeight: 28
-    } as HTMLImageElement)
-    const loaded = measureMessage(model, 160, metrics, tracker)
-    expect(pending).toBe(metrics.emoteSize + metrics.fontSize * 0.25 + metrics.padding * 2)
-    expect(pending).toBeGreaterThan(loaded)
-    expect(loaded).toBeGreaterThanOrEqual(28 + metrics.padding * 2)
-    tracker.markFailedUrl('emote.png')
-    expect(measureMessage(model, 160, metrics, tracker)).toBe(30)
-  })
+  it.each([
+    { name: 'emote', pendingHeight: 50, failedHeight: 30 },
+    { name: 'aMuchLongerTemporaryEmoteName', pendingHeight: 74, failedHeight: 54 }
+  ])(
+    'sizes pending emotes for the square and text: $name',
+    ({ name, pendingHeight, failedHeight }) => {
+      const tracker = new UrlTracker({ chatterinoBaseUrl: '' })
+      const model = presentation('emote')
+      model.segments = [
+        {
+          type: 'emote',
+          text: 'emote',
+          fullText: 'emote',
+          escaped: name,
+          index: 0,
+          name,
+          source: 'twitch',
+          urls: { '1': 'emote.png' },
+          emote: new NativeTwitchEmote('123', 'emote')
+        }
+      ]
+      const pending = measureMessage(model, 160, metrics, tracker)
+      tracker.recordImageDimensions('emote.png', {
+        naturalWidth: 28,
+        naturalHeight: 28
+      } as HTMLImageElement)
+      const loaded = measureMessage(model, 160, metrics, tracker)
+      expect(pending).toBe(pendingHeight)
+      expect(pending).toBeGreaterThan(loaded)
+      expect(loaded).toBeGreaterThanOrEqual(28 + metrics.padding * 2)
+      tracker.markFailedUrl('emote.png')
+      expect(measureMessage(model, 160, metrics, tracker)).toBe(failedHeight)
+    }
+  )
 
   it('omits unknown previews and uses natural sizing while images load', async () => {
     const tracker = new UrlTracker({ chatterinoBaseUrl: '' })

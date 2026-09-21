@@ -62,12 +62,12 @@
   const frameWidth = $derived(
     dimensions
       ? `min(${intrinsicWidthLimit}calc(var(--deck-emote-size, 2.5rem) * ${ratio}), 9rem)`
-      : 'var(--deck-emote-size, 2.5rem)'
+      : 'max-content'
   )
   const frameHeight = $derived(
     dimensions
       ? `min(${intrinsicHeightLimit}var(--deck-emote-size, 2.5rem), calc(9rem / ${ratio}))`
-      : 'var(--deck-emote-size, 2.5rem)'
+      : 'max-content'
   )
 
   const emoteSizeMap: Record<string, string> = {
@@ -209,13 +209,19 @@
     min-height: 0;
     object-fit: contain;
   }
+  .emote-frame.loading {
+    min-width: var(--deck-emote-size, 2.5rem);
+    min-height: var(--deck-emote-size, 2.5rem);
+    grid-template-columns: auto;
+    grid-template-rows: auto;
+  }
   .emote-frame.loading img {
+    position: absolute;
+    inset: 0;
     visibility: hidden;
   }
   .emote-frame > span {
-    position: absolute;
-    max-width: 100%;
-    overflow: hidden;
+    white-space: pre;
   }
   .chat-emote {
     grid-area: 1 / 1;

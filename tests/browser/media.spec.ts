@@ -78,11 +78,21 @@ for (const asset of [
     const pendingBoxes = await row.locator('.emote-frame').evaluateAll((nodes) =>
       nodes.map((node) => {
         const box = node.getBoundingClientRect()
-        return { width: box.width, height: box.height }
+        const text = node.querySelector('span')!.getBoundingClientRect()
+        return {
+          width: box.width,
+          height: box.height,
+          textWidth: text.width,
+          textHeight: text.height
+        }
       })
     )
     expect(pendingBoxes.length).toBeGreaterThan(0)
-    for (const box of pendingBoxes) expect(box).toEqual({ width: 40, height: 40 })
+    expect(pendingBoxes.some((box) => box.textWidth > 40)).toBe(true)
+    for (const box of pendingBoxes) {
+      expect(box.width).toBeCloseTo(Math.max(40, box.textWidth), 1)
+      expect(box.height).toBeCloseTo(Math.max(40, box.textHeight), 1)
+    }
     await checkFrames()
     releaseImages()
     await expect
