@@ -13,13 +13,14 @@
   const focusedIndex = Math.floor(count * 0.6)
   const idScenario = new URLSearchParams(location.search).get('userId')
   const contrast = new URLSearchParams(location.search).has('contrast')
+  const color = new URLSearchParams(location.search).has('red') ? '#ff0000' : '#000080'
   let showSearch = $state(count <= 1000)
   const messages = Array.from(
     { length: count },
     (_, i) =>
       new TwitchChatMessage(
         '',
-        contrast ? { color: '#000080', ...(i === focusedIndex ? { 'first-msg': '1' } : {}) } : {},
+        contrast ? { color, ...(i === focusedIndex ? { 'first-msg': '1' } : {}) } : {},
         `popup-${i}`,
         start + i * 1000,
         'fixture',

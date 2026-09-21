@@ -2,6 +2,7 @@ export type Rgb = readonly [number, number, number]
 type Rgba = readonly [number, number, number, number]
 
 export const USERNAME_CONTRAST = 4.5
+const VISIBLE_USERNAME_CONTRAST = 3
 const CACHE_LIMIT = 2048
 
 /** Twitch supplies hex colors; RGB also covers computed CSS surface tokens. */
@@ -55,7 +56,10 @@ function toHex(rgb: Rgb): string {
 }
 
 /** One resolver per surface set keeps colors stable across hover and row recycling. */
-export function createUsernameColorResolver(backgrounds: readonly Rgb[]) {
+export function createUsernameColorResolver(
+  backgrounds: readonly Rgb[],
+  readingBackgrounds: readonly Rgb[] = backgrounds
+) {
   const cache = new Map<string, string>()
   const readable = (rgb: Rgb): boolean =>
     backgrounds.every((bg) => contrastRatio(rgb, bg) >= USERNAME_CONTRAST)
@@ -68,7 +72,12 @@ export function createUsernameColorResolver(backgrounds: readonly Rgb[]) {
     const input = parseColor(source) ?? [239, 239, 241, 1]
     const rgb: Rgb = [input[0], input[1], input[2]]
     let result = source
-    if (!readable(rgb)) {
+    // Preserve distinguishable source colors. Transient highlights should not make
+    // ordinary reds turn pink; the stronger target is only for colors that blend in.
+    const visible = readingBackgrounds.every(
+      (bg) => contrastRatio(rgb, bg) >= VISIBLE_USERNAME_CONTRAST
+    )
+    if (!visible && !readable(rgb)) {
       const normalized = rgb.map((v) => v / 255)
       const max = Math.max(...normalized)
       const min = Math.min(...normalized)

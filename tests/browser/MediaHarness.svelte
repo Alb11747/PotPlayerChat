@@ -25,6 +25,7 @@
   const mentionColors = new TimelineMap<string, string>()
   mentionColors.set('viewer', '#800000', start)
   mentionColors.set('viewer', '#000080', start + 1000)
+  mentionColors.set('redviewer', '#ff0000', start)
   let previewContext = $state.raw<PreviewWindowContext | null>(null)
   const variants = [
     'Hello  world! Repeated spaces  and Unicode 日本語 😀 @viewer',
@@ -62,7 +63,7 @@
             '',
             {
               'display-name': `Viewer${i}`,
-              color: contrast ? (i === 2 ? '#ffffff' : '#000080') : '#7fdcb8',
+              color: contrast ? (i === 2 ? '#ffffff' : i === 3 ? '#ff0000' : '#000080') : '#7fdcb8',
               ...(contrast && i === 1 ? { 'first-msg': '1' } : {}),
               ...(i % 6 === 4 ? { emotes: '25:0-4', bits: '100' } : {}),
               ...(i % 9 === 0 ? { badges: 'moderator/1,subscriber/12' } : {})
@@ -72,7 +73,7 @@
             'fixture',
             `viewer${i}`,
             contrast
-              ? `\u0001ACTION waves @viewer https://fixture.test/${i}\u0001`
+              ? `\u0001ACTION waves @${i === 3 ? 'redviewer' : 'viewer'} https://fixture.test/${i}\u0001`
               : variants[i % variants.length]!.replaceAll('INDEX', String(i))
           )
       )

@@ -14,7 +14,7 @@ The existing configuration store persists `interface.layout`, `interface.palette
 
 Settings categories are Appearance, Chat, Previews, Search, Advanced, and Maintenance. They preserve the existing fields and units. Changes save immediately; app-cache clearing and seen/clicked-URL clearing remain separate operations.
 
-Improve username contrast is enabled by default under Appearance and updates all open windows. Sender names, mentions, action text, and profile names retain their source hue while dark colors are brightened to reach 4.5:1 across the active palette's normal, hovered, and first-message backgrounds. Readable colors stay unchanged. The renderer caches corrections without changing stored Twitch colors; disabling the preference restores the source colors.
+Improve username contrast is enabled by default under Appearance and updates all open windows. Sender names, mentions, action text, and profile names keep their exact source color when it has at least 3:1 contrast on the normal chat and profile-header backgrounds. Hover and first-message highlights do not trigger recoloring of these already visible names. Only colors below that visibility threshold are brightened toward 4.5:1 across the active palette's normal, hovered, and first-message backgrounds. The renderer caches corrections without changing stored Twitch colors; disabling the preference restores the source colors.
 
 ## Navigation and previews
 

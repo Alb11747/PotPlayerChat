@@ -26,10 +26,10 @@ export function refreshUsernameContrast(palette: string): void {
   const highlight = parseColor(style.getPropertyValue('--color-success-alpha'))
   if (!highlight) throw new Error('Invalid first-message highlight color')
   // First messages can sit inside a hovered/focused history row.
-  resolver = createUsernameColorResolver([
-    ...backgrounds,
-    ...backgrounds.map((bg) => compositeColor(highlight, bg))
-  ])
+  resolver = createUsernameColorResolver(
+    [...backgrounds, ...backgrounds.map((bg) => compositeColor(highlight, bg))],
+    backgrounds.slice(0, 2)
+  )
   currentPalette = palette
 }
 

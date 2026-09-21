@@ -68,6 +68,15 @@ for (const palette of ['blue', 'graphite', 'lavender'] as const) {
       page.locator('[data-message-id="message-2"] [data-message-part="prefix"]')
     ).toHaveCSS('color', 'rgb(255, 255, 255)')
     await expect(row.locator('.chat-url')).toHaveCSS('color', 'rgb(78, 140, 255)')
+    const redRow = page.locator('[data-message-id="message-3"]')
+    const redElements = [
+      redRow.locator('[data-message-part="prefix"]'),
+      redRow.locator('.chat-text .chat-username'),
+      redRow.locator('.chat-text')
+    ]
+    for (const element of redElements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
+    await redRow.hover()
+    for (const element of redElements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
 
     await page.evaluate(() => window.fixtureAppearance!({ improveUsernameContrast: false }))
     for (const element of [sender, mention, action])
@@ -75,19 +84,49 @@ for (const palette of ['blue', 'graphite', 'lavender'] as const) {
     await expect(earlierMention).toHaveCSS('color', 'rgb(128, 0, 0)')
     await page.evaluate(() => window.fixtureAppearance!({ improveUsernameContrast: true }))
     await expect(sender).toHaveCSS('color', corrected)
+    for (const element of redElements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
 
     await page.evaluate(() => window.transcriptTest.list().scrollToIndex(250))
     await expect(row).toHaveCount(0)
+    await expect(redRow).toHaveCount(0)
     await page.evaluate(() => window.transcriptTest.list().scrollToIndex(0))
     await expect(sender).toHaveCSS('color', corrected)
     for (const element of [sender, mention, action]) await expectReadable(element)
+    for (const element of redElements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
     const nextPalette = palette === 'lavender' ? 'blue' : 'lavender'
     await page.evaluate((palette) => window.fixtureAppearance!({ palette }), nextPalette)
     await expect(page.locator('html')).toHaveAttribute('data-palette', nextPalette)
     for (const element of [sender, mention, action]) await expectReadable(element)
+    for (const element of redElements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
   })
 
   for (const popup of ['search', 'user']) {
+    test(`${palette}: ${popup} preserves ordinary red in names, mentions and actions`, async ({
+      page
+    }) => {
+      await openFixture(page, `popup=${popup}&palette=${palette}&red`)
+      await page.evaluate(() => window.resolveFixtureHistory!())
+      const row = page.locator('[data-transcript-key="popup-180"]')
+      const elements = [
+        row.locator('[data-message-part="prefix"]'),
+        row.locator('.chat-text .chat-username'),
+        row.locator('.chat-text'),
+        ...(popup === 'user' ? [page.locator('.display-name')] : [])
+      ]
+      for (const element of elements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
+      await row.hover()
+      for (const element of elements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
+      await elements[0]!.focus()
+      await page.mouse.move(5, 5)
+      for (const element of elements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
+      await page.evaluate(() => window.fixtureAppearance!({ improveUsernameContrast: false }))
+      for (const element of elements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
+      await page.evaluate(() =>
+        window.fixtureAppearance!({ improveUsernameContrast: true, palette: 'lavender' })
+      )
+      for (const element of elements) await expect(element).toHaveCSS('color', 'rgb(255, 0, 0)')
+    })
+
     test(`${palette}: ${popup} keeps corrected colors across highlight, hover, focus and notifications`, async ({
       page
     }) => {
