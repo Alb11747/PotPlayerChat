@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import icon from '../../resources/icon.png?asset'
+import { ensureWindowOnScreen, getWindowPlacement } from './window-placement'
 
 export type PopupKind = 'search' | 'user' | 'preview'
 
@@ -37,15 +38,21 @@ export function initPopupWindows(source: BrowserWindow): void {
     const kind = getPopupKind(url, urls)
     if (!kind) return { action: 'deny' }
     const bounds = source.getBounds()
+    const placement = getWindowPlacement(
+      {
+        ...bounds,
+        width: kind === 'preview' ? 420 : kind === 'user' ? 600 : Math.round(bounds.width * 0.8),
+        height: kind === 'preview' ? 690 : kind === 'user' ? 640 : Math.round(bounds.height * 0.8)
+      },
+      [360, 400],
+      bounds
+    )
     return {
       action: 'allow',
       outlivesOpener: false,
       overrideBrowserWindowOptions: {
         icon,
-        width: kind === 'preview' ? 420 : kind === 'user' ? 600 : Math.round(bounds.width * 0.8),
-        height: kind === 'preview' ? 690 : kind === 'user' ? 640 : Math.round(bounds.height * 0.8),
-        minWidth: 360,
-        minHeight: 400,
+        ...placement,
         show: false,
         autoHideMenuBar: true,
         parent: source,
@@ -58,6 +65,7 @@ export function initPopupWindows(source: BrowserWindow): void {
     if (!getPopupKind(url, urls)) return
     initPopupWindows(popup)
     popup.once('ready-to-show', () => {
+      ensureWindowOnScreen(popup, source)
       popup.show()
       popup.focus()
     })

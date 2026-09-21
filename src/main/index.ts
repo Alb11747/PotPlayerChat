@@ -5,6 +5,7 @@ import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import { initPopupWindows } from './popup-windows'
 import { initAppearanceHandlers } from './appearance'
+import { ensureWindowOnScreen } from './window-placement'
 
 import { initLinks } from './links'
 import { initLog } from './log'
@@ -42,6 +43,7 @@ function createWindow(): void {
   initMaintenanceHandlers(conf)
 
   mainWindow.on('ready-to-show', () => {
+    ensureWindowOnScreen(mainWindow)
     mainWindow.show()
     initAutoUpdater(conf)
   })
