@@ -14,6 +14,8 @@ The existing configuration store persists `interface.layout`, `interface.palette
 
 Settings categories are Appearance, Chat, Previews, Search, Advanced, and Maintenance. They preserve the existing fields and units. Changes save immediately; app-cache clearing and seen/clicked-URL clearing remain separate operations.
 
+Improve username contrast is enabled by default under Appearance and updates all open windows. Sender names, mentions, action text, and profile names retain their source hue while dark colors are brightened to reach 4.5:1 across the active palette's normal, hovered, and first-message backgrounds. Readable colors stay unchanged. The renderer caches corrections without changing stored Twitch colors; disabling the preference restores the source colors.
+
 ## Navigation and previews
 
 Normal username activation opens the profile; Alt activation searches the bare username. Search and profile windows carry their source recording and message context. Returning to a historical message does not seek PotPlayer: chat displays that history until Return to playback is activated.

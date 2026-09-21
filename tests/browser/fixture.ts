@@ -2,6 +2,7 @@ import type { TranscriptHandle } from '@/renderer/src/core/transcript-handle'
 import type { SearchContext } from '@/renderer/src/core/search-window'
 import type { TwitchMessage } from '@/core/chat/twitch-msg'
 import type { SearchPreview } from '@/renderer/src/core/search-preview'
+import type { AppearancePreferences } from '@/types/appearance'
 
 export interface SharedSearchFixtureOptions {
   delayPreparation?: boolean
@@ -56,11 +57,23 @@ declare global {
     fixtureSharedSearchWindows?: Window[]
     fixtureSharedInitialMessages?: TwitchMessage[]
     fixtureSharedCallback?: { id: string; original: boolean; recording: string }
+    fixtureAppearance?: (value: Partial<AppearancePreferences>) => void
   }
 }
 
 // Only the renderer is mounted. Every external interaction is a deterministic fixture.
 const cacheClearedListeners = new Set<() => void>()
+const appearanceListeners = new Set<(value: AppearancePreferences) => void>()
+let appearance = {
+  layout: 'streamlined',
+  palette: new URLSearchParams(location.search).get('palette') ?? 'blue',
+  previewMode: 'hover',
+  improveUsernameContrast: true
+} as AppearancePreferences
+window.fixtureAppearance = (value) => {
+  appearance = { ...appearance, ...value }
+  for (const listener of appearanceListeners) listener(appearance)
+}
 // Session storage models persisted IPC history without touching application settings.
 const seenUrls = new Set<string>(JSON.parse(sessionStorage.getItem('fixtureSeenUrls') ?? '[]'))
 const clickedUrls = new Set<string>(
@@ -109,8 +122,13 @@ Object.defineProperty(window, 'api', {
             startTime: 1700000000000,
             endTime: 1700001000000
           })
-        if (key === 'getAppearancePreferences')
-          return async () => ({ layout: 'streamlined', palette: 'dark', previewMode: 'hover' })
+        if (key === 'getAppearancePreferences') return async () => appearance
+        if (key === 'onAppearanceChanged')
+          return (listener: (value: AppearancePreferences) => void) =>
+            appearanceListeners.add(listener)
+        if (key === 'offAppearanceChanged')
+          return (listener: (value: AppearancePreferences) => void) =>
+            appearanceListeners.delete(listener)
         if (key === 'getLinkPreview')
           return async (url: string) => {
             await mediaReady
@@ -187,6 +205,8 @@ TwitchCheerEmoteService.getCheerEmoteInfo = async (name, bits) => {
   return new CheerEmote({ '1': info, '1.5': info, '2': info, '3': info, '4': info }, name, bits)
 }
 const params = new URLSearchParams(location.search)
+// Settings initialization reads the same computed palette tokens as the real renderer.
+await import('./main.css')
 const { default: Harness } =
   params.has('sharedSource') || location.pathname.endsWith('/search.html')
     ? await import('./SharedSearchHarness.svelte')
@@ -197,5 +217,4 @@ const { default: Harness } =
         : params.has('media')
           ? await import('./MediaHarness.svelte')
           : await import('./Harness.svelte')
-await import('./main.css')
 mount(Harness, { target: document.getElementById('app')! })

@@ -17,7 +17,12 @@ describe('appearance preference notification', () => {
     vi.clearAllMocks()
   })
   it('reads the main config and broadcasts changes to live windows once without writing back', () => {
-    let value = { layout: 'comfort', palette: 'blue', previewMode: 'hover' }
+    let value = {
+      layout: 'comfort',
+      palette: 'blue',
+      previewMode: 'hover',
+      improveUsernameContrast: true
+    }
     let change: (() => void) | undefined
     const config = {
       get: vi.fn(() => value),
@@ -41,6 +46,12 @@ describe('appearance preference notification', () => {
     change?.()
     expect(send).toHaveBeenCalledExactlyOnceWith('appearanceChanged', value)
     expect(destroyedSend).not.toHaveBeenCalled()
+    expect(config.set).not.toHaveBeenCalled()
+    send.mockClear()
+    value = { ...value, improveUsernameContrast: false }
+    change?.()
+    change?.()
+    expect(send).toHaveBeenCalledExactlyOnceWith('appearanceChanged', value)
     expect(config.set).not.toHaveBeenCalled()
   })
 })

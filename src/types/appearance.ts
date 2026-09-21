@@ -2,6 +2,7 @@ export interface AppearancePreferences {
   layout: 'streamlined' | 'comfort'
   palette: 'graphite' | 'blue' | 'lavender'
   previewMode: 'hover' | 'expanded'
+  improveUsernameContrast: boolean
 }
 
 export function normalizeAppearancePreferences(value: unknown): AppearancePreferences {
@@ -9,6 +10,7 @@ export function normalizeAppearancePreferences(value: unknown): AppearancePrefer
   return {
     layout: raw.layout === 'comfort' ? 'comfort' : 'streamlined',
     palette: raw.palette === 'graphite' || raw.palette === 'lavender' ? raw.palette : 'blue',
-    previewMode: raw.previewMode === 'expanded' ? 'expanded' : 'hover'
+    previewMode: raw.previewMode === 'expanded' ? 'expanded' : 'hover',
+    improveUsernameContrast: raw.improveUsernameContrast !== false
   }
 }

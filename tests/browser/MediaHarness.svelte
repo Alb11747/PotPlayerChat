@@ -9,6 +9,7 @@
   import { UrlTracker } from '@/renderer/src/core/url-tracker'
   import type { TranscriptHandle } from '@/renderer/src/core/transcript-handle'
   import { settings, settingsReady, applyAppearance } from '@/renderer/src/state/settings.svelte'
+  import { TimelineMap } from '@/utils/datastructs'
 
   let list: TranscriptHandle
   let messages: TwitchChatMessage[] = $state.raw([])
@@ -20,6 +21,10 @@
   const start = 1700000000000
   const params = new URLSearchParams(location.search)
   const linkStates = params.has('linkStates')
+  const contrast = params.has('contrast')
+  const mentionColors = new TimelineMap<string, string>()
+  mentionColors.set('viewer', '#800000', start)
+  mentionColors.set('viewer', '#000080', start + 1000)
   let previewContext = $state.raw<PreviewWindowContext | null>(null)
   const variants = [
     'Hello  world! Repeated spaces  and Unicode 日本語 😀 @viewer',
@@ -32,6 +37,7 @@
   onMount(() => {
     void settingsReady.then(async () => {
       settings.interface.enableInlineImagePreviews = true
+      if (contrast) settings.interface.enableInlineImagePreviews = false
       if (linkStates) {
         settings.interface.enableInlineImagePreviews = false
         settings.interface.enableLinkPreviews = true
@@ -56,7 +62,8 @@
             '',
             {
               'display-name': `Viewer${i}`,
-              color: '#7fdcb8',
+              color: contrast ? (i === 2 ? '#ffffff' : '#000080') : '#7fdcb8',
+              ...(contrast && i === 1 ? { 'first-msg': '1' } : {}),
               ...(i % 6 === 4 ? { emotes: '25:0-4', bits: '100' } : {}),
               ...(i % 9 === 0 ? { badges: 'moderator/1,subscriber/12' } : {})
             },
@@ -64,7 +71,9 @@
             start + i * 1000,
             'fixture',
             `viewer${i}`,
-            variants[i % variants.length]!.replaceAll('INDEX', String(i))
+            contrast
+              ? `\u0001ACTION waves @viewer https://fixture.test/${i}\u0001`
+              : variants[i % variants.length]!.replaceAll('INDEX', String(i))
           )
       )
       await tick()
@@ -141,6 +150,7 @@
           videoStartTime={start}
           elapsedTime={message.timestamp - start}
           presentationStore={store}
+          usernameColorTimelineMap={contrast ? mentionColors : undefined}
           bind:reloadServicesFunction={reloadServices[index]}
           onUsernameClick={(info) => {
             window.fixtureUsername = info.username

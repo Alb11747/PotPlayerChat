@@ -12,18 +12,21 @@
   const count = Number(new URLSearchParams(location.search).get('count') ?? 1000)
   const focusedIndex = Math.floor(count * 0.6)
   const idScenario = new URLSearchParams(location.search).get('userId')
+  const contrast = new URLSearchParams(location.search).has('contrast')
   let showSearch = $state(count <= 1000)
   const messages = Array.from(
     { length: count },
     (_, i) =>
       new TwitchChatMessage(
         '',
-        {},
+        contrast ? { color: '#000080', ...(i === focusedIndex ? { 'first-msg': '1' } : {}) } : {},
         `popup-${i}`,
         start + i * 1000,
         'fixture',
         'viewer',
-        `Message ${i} ${i % 2 ? 'odd' : 'even'} ${'ordinary text '.repeat(i % 5)} ${i % 7 === 0 ? 'FixtureBase' : ''}`
+        contrast
+          ? `\u0001ACTION Message ${i} waves @viewer\u0001`
+          : `Message ${i} ${i % 2 ? 'odd' : 'even'} ${'ordinary text '.repeat(i % 5)} ${i % 7 === 0 ? 'FixtureBase' : ''}`
       )
   )
   if (idScenario && idScenario !== 'missing') {

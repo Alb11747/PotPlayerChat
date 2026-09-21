@@ -16,6 +16,7 @@
     previewState
   } from '../state/preview.svelte'
   import { settings } from '../state/settings.svelte'
+  import { usernameColor } from '../state/username-contrast.svelte'
   import {
     openPreviewPopup,
     restorePreviewTrigger,
@@ -281,7 +282,7 @@
       data-message-part="prefix"
       role="link"
       tabindex={onUsernameClick ? 0 : -1}
-      style="color: {message.color}"
+      style:color={usernameColor(message.color, settings.interface.improveUsernameContrast)}
       onclick={(e) => {
         if (onUsernameClick) {
           onUsernameClick({ username: message.username, message, altKey: e.altKey })
@@ -312,7 +313,7 @@
     <span
       class="chat-text whitespace-pre-wrap"
       style={message.type === 'chat' && isActionMessage(message.message)
-        ? `color: ${message.color}`
+        ? `color: ${usernameColor(message.color, settings.interface.improveUsernameContrast)}`
         : ''}
     >
       {#each parsedMessageSegments || [] as segment (`${message.getId()}-${segment.index}`)}
@@ -360,10 +361,11 @@
               role="link"
               tabindex={onUsernameClick ? 0 : -1}
               class="chat-username"
-              style="color: {usernameColorTimelineMap?.get(
-                segment.username.toLowerCase(),
-                message.timestamp
-              ) || '#ffffff'}"
+              style:color={usernameColor(
+                usernameColorTimelineMap?.get(segment.username.toLowerCase(), message.timestamp),
+                settings.interface.improveUsernameContrast,
+                '#ffffff'
+              )}
               onclick={(e) => {
                 if (onUsernameClick) {
                   onUsernameClick({ username: segment.username, message, altKey: e.altKey })

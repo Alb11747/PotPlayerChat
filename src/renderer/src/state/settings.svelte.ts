@@ -1,6 +1,7 @@
 import type { AppearancePreferences } from '@/types/appearance'
 import { normalizeAppearancePreferences } from '@/types/appearance'
 import conf from './config'
+import { refreshUsernameContrast } from './username-contrast.svelte'
 import {
   createDefaultSettings,
   defaultSettings,
@@ -31,6 +32,7 @@ export function applyAppearance(): void {
   document.documentElement.dataset['layout'] = appearance.layout
   document.documentElement.dataset['palette'] = appearance.palette
   document.documentElement.dataset['previewMode'] = appearance.previewMode
+  refreshUsernameContrast(appearance.palette)
 }
 
 export function normalizeSettings(): void {

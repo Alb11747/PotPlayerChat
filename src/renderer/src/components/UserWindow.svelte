@@ -16,6 +16,7 @@
   import { UrlTracker } from '../core/url-tracker'
   import conf from '../state/config'
   import { settings } from '../state/settings.svelte'
+  import { usernameColor as readableUsernameColor } from '../state/username-contrast.svelte'
   import ChatMessage from './ChatMessage.svelte'
   import LinkPreview from './LinkPreview.svelte'
   import Icon from './Icon.svelte'
@@ -59,7 +60,13 @@
       messages.find((message) => message.userId)?.userId ||
       null
   )
-  const usernameColor = $derived(mostRecentMessage?.color || '#efeff1')
+  const usernameColor = $derived(
+    readableUsernameColor(
+      mostRecentMessage?.color,
+      settings.interface.improveUsernameContrast,
+      '#efeff1'
+    )
+  )
 
   onMount(() => {
     setConfig(conf)

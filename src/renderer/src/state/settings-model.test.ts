@@ -67,9 +67,11 @@ describe('settings migration and reset', () => {
   it('creates isolated nested defaults for fresh state and each reset', () => {
     const first = createDefaultSettings()
     first.interface.palette = 'lavender'
+    first.interface.improveUsernameContrast = false
     first.chat.videoTimestampOffsets.push({ title: 'film', offset: 10 })
     const reset = createDefaultSettings()
     expect(reset.interface.palette).toBe('blue')
+    expect(reset.interface.improveUsernameContrast).toBe(true)
     expect(reset.chat.videoTimestampOffsets).toEqual([])
     reset.intervals.videoTime = 9876
     expect(defaultSettings.intervals.videoTime).not.toBe(9876)
@@ -98,6 +100,18 @@ describe('settings migration and reset', () => {
     expect(saved.chat._sessionTimestampOffset).toBe(100)
     expect(saved.chat.videoTimestampOffsets[0]?.title).toBe(' film ')
   })
+  it.each([undefined, null, '', 'false', 0, {}, true, false])(
+    'defaults malformed contrast preferences and preserves explicit opt-out (%j)',
+    (value) => {
+      const saved = { interface: { improveUsernameContrast: value } }
+      const hydrated = hydrateSettings(saved)
+      expect(hydrated.interface.improveUsernameContrast).toBe(value !== false)
+      expect(hydrateSettings(structuredClone(hydrated)).interface.improveUsernameContrast).toBe(
+        value !== false
+      )
+      expect(saved.interface.improveUsernameContrast).toBe(value)
+    }
+  )
   it('keeps the most recent valid per-video offset and limits retained history', () => {
     const result = hydrateSettings({
       chat: {

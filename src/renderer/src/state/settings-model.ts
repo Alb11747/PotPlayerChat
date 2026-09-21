@@ -59,6 +59,7 @@ export const defaultSettings: Settings = {
     layout: 'streamlined',
     palette: 'blue',
     previewMode: 'hover',
+    improveUsernameContrast: true,
     enableEmotes: true,
     enableLinkPreviews: true,
     enableInlineImagePreviews: false,

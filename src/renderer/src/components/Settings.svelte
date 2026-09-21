@@ -139,6 +139,11 @@
               >
             </select>
           </label>
+          <label>
+            <input type="checkbox" bind:checked={settings.interface.improveUsernameContrast} />
+            Improve username contrast
+          </label>
+          <p class="section-note">Adjust hard-to-read username colors, mentions, and /me text.</p>
           <div class="appearance-sample" aria-label="Message appearance preview">
             <span class="sample-name">Chat Deck</span> Messages use your selected color and spacing.
             <p>Longer messages wrap naturally, keeping the conversation easy to read.</p>
