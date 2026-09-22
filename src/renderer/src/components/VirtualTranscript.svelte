@@ -18,6 +18,7 @@
     preserveOnReplace = true,
     onfollowchange,
     onuserinteraction,
+    onuserscroll,
     onviewportchange,
     onrangechange,
     onpublish,
@@ -35,6 +36,7 @@
     preserveOnReplace?: boolean
     onfollowchange?: (following: boolean) => void
     onuserinteraction?: () => void
+    onuserscroll?: () => void
     onviewportchange?: (width: number, height: number) => void
     onrangechange?: (start: number, end: number) => void
     onpublish?: (rows: readonly T[]) => void
@@ -479,6 +481,7 @@
       onfollowchange?.(bottom)
     }
     preservePosition()
+    onuserscroll?.()
   }
 
   export function scrollToIndex(index: number, options: TranscriptScrollOptions = {}): void {

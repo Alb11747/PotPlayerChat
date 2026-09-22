@@ -98,7 +98,7 @@ test('large search histories keep their opener responsive while heights and emot
   }
   await popup.evaluate(() => window.fixtureShowSearch!())
   await expect(popup.locator('[data-transcript-key="popup-6000"]')).toBeVisible()
-  await expect(popup.getByRole('status').first()).toHaveText('10000 results')
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
   await checkpoint('opening')
   const input = popup.getByRole('searchbox')
   await input.fill('odd')

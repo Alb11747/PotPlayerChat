@@ -10,6 +10,9 @@ export interface SharedSearchFixtureOptions {
   warmAssets?: boolean
   initialSearch?: string
   autoMount?: boolean
+  previewOnly?: boolean
+  failRange?: boolean
+  delayRange?: boolean
 }
 
 export interface FixtureRow {
@@ -47,6 +50,9 @@ declare global {
     fixtureSharedPreview?: SearchPreview
     fixtureReleasePreparation?: () => void
     fixturePreparationCalls?: number
+    fixtureRangeCalls?: { start: number; end: number }[]
+    fixtureFullHistoryCalls?: number
+    fixtureReleaseRange?: () => void
     fixtureEmitAppCacheCleared?: () => void
     fixtureSearchTiming?: { openedAt: number; mountedAt: number; firstChatAt?: number }
     fixtureSharedOpenedAt?: number

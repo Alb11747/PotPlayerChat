@@ -4,6 +4,7 @@
   import { getSearchPattern, filterSearchMessages } from '@/renderer/src/core/search-messages'
   import { SharedSearchDataCache, mergeSearchMessages } from '@/renderer/src/core/search-data'
   import { selectSearchPreview } from '@/renderer/src/core/search-preview'
+  import { SearchMessagePager, type SearchPageDirection } from '../core/search-paging'
   import type { SearchContext } from '@/renderer/src/core/search-window'
   import { findMessageIndex, getClosestMessageIndex, isRangeInMessages } from '@/utils/chat'
   import { CooperativeWork } from '@/utils/cooperative-work'
@@ -47,6 +48,18 @@
   let isLoading = $state(false)
   let isFiltering = $state(false)
   let loadError = $state('')
+  let pageErrors = $state({ older: '', newer: '' })
+  let pagingDirection: SearchPageDirection | null = $state(null)
+  let pageController = new AbortController()
+  let fullController: AbortController | undefined
+  let edgeInput = false
+  let previousQuery = untrack(() => searchQuery)
+  let browsingTarget = untrack(() => context.focusedMessage)
+  let pager = untrack(() => createPager(preview.messages))
+  let browsingMessages = $state.raw(pager.messages)
+  let browsingTimeline = $state.raw(
+    untrack(() => presentationSeed?.mentionColors ?? chatService.usernameColorTimelineMap)
+  )
   const reloadServicesFunctionMap: Record<number, (() => void) | undefined> = $state({})
   let messages: readonly TwitchMessage[] = $state.raw(preview.messages)
   let completeDataset = $state(false)
@@ -68,14 +81,24 @@
   let navigationGeneration = 0
   let positionedGeneration = -1
   let previousSearchSignature: string | undefined
+  let historyRange: Promise<{ start: number; end: number }> | undefined
 
   onMount(() => {
+    const stopWork = (): void => {
+      lifetime.abort()
+      fullController?.abort()
+      pageController.abort()
+      pager.dispose()
+      navigationGeneration++
+    }
     searchInputRef?.focus()
+    window.addEventListener('pagehide', stopWork)
     window.api.onAppCacheCleared(handleAppCacheCleared)
     window.api.onSavedUrlsCleared(handleSavedUrlsCleared)
+    if (!searchQuery && browsingMessages.length === 0) void loadPage('older')
     return () => {
-      lifetime.abort()
-      navigationGeneration++
+      stopWork()
+      window.removeEventListener('pagehide', stopWork)
       window.api.offAppCacheCleared(handleAppCacheCleared)
       window.api.offSavedUrlsCleared(handleSavedUrlsCleared)
     }
@@ -97,23 +120,162 @@
     clearRendererSavedUrls(urlTracker)
   }
 
-  async function publishMessages(next: readonly TwitchMessage[]): Promise<void> {
-    await chatService.updateMessageDataCooperatively(next, lifetime.signal)
-    lifetime.signal.throwIfAborted()
+  function createPager(
+    seed: readonly TwitchMessage[],
+    extra: readonly TwitchMessage[] = []
+  ): SearchMessagePager {
+    return new SearchMessagePager({
+      sources: [context.initialMessages, context.loadedMessages, extra],
+      preview: seed,
+      history: {
+        resolveRange: async (signal) => {
+          historyRange ??= (async () => {
+            if (context.searchRange)
+              return { start: context.searchRange.startTime, end: context.searchRange.endTime }
+            const currentTime = await window.api.getCurrentVideoTime(context.potplayerInfo.hwnd)
+            const end = context.potplayerInfo.startTime + currentTime
+            return { start: end - 60 * 60 * 1000, end }
+          })().catch((error) => {
+            historyRange = undefined
+            throw error
+          })
+          const range = await historyRange
+          signal.throwIfAborted()
+          return range
+        },
+        fetchRange: (start, end, signal) => chatService.getMessagesInRange(start, end, signal)
+      }
+    })
+  }
+
+  function firstVisibleMessage(): TwitchMessage | undefined {
+    if (!vlistRef || renderedMessages.length === 0) return undefined
+    const top = vlistRef.getScrollOffset()
+    let low = 0
+    let high = renderedMessages.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (vlistRef.getItemOffset(middle) + vlistRef.getItemSize(middle) <= top) low = middle + 1
+      else high = middle
+    }
+    return renderedMessages[low]
+  }
+
+  function changeSearchMode(query: string): void {
+    if (!!query === !!previousQuery) {
+      previousQuery = query
+      return
+    }
+    previousQuery = query
+    edgeInput = false
+    pageController.abort()
+    pageController = new AbortController()
+    pagingDirection = null
+    pageErrors = { older: '', newer: '' }
+    if (query) {
+      backgroundStarted = false
+      return
+    }
+    fullController?.abort()
+    fullController = undefined
+    isLoading = false
+    backgroundStarted = false
+    loadError = ''
+    loadingState.state = 'idle'
+    const visible = firstVisibleMessage()
+    browsingTarget = visible ?? context.focusedMessage
+    const seed = visible
+      ? selectSearchPreview(messages, context.loadedMessages, visible)
+      : preview.messages
+    pager.dispose()
+    pager = createPager(seed, messages)
+    browsingMessages = pager.messages
+    // Keep the completed result's colors until the bounded neighborhood is rebuilt.
+    browsingTimeline = filteredTimeline
+    if (visible) {
+      vlistRef?.preservePosition()
+      scrolled = true
+    }
+    if (browsingMessages.length === 0) void loadPage('older')
+  }
+
+  async function loadPage(direction: SearchPageDirection): Promise<void> {
+    if (searchQuery || pagingDirection || lifetime.signal.aborted || pager.isExhausted(direction))
+      return
+    const currentPager = pager
+    const { signal } = pageController
+    edgeInput = false
+    pagingDirection = direction
+    pageErrors[direction] = ''
+    try {
+      const next = await currentPager.page(direction, signal)
+      signal.throwIfAborted()
+      lifetime.signal.throwIfAborted()
+      browsingMessages = next
+    } catch (error) {
+      if (signal.aborted || lifetime.signal.aborted) return
+      pageErrors[direction] =
+        error instanceof Error ? error.message : 'Unable to load chat messages.'
+    } finally {
+      if (!signal.aborted && currentPager === pager) pagingDirection = null
+    }
+  }
+
+  function handleRangeChange(): void {
+    if (
+      searchQuery ||
+      !edgeInput ||
+      pagingDirection ||
+      isFiltering ||
+      isPublishing ||
+      !vlistRef ||
+      renderedMessages !== browsingMessages
+    )
+      return
+    const top = vlistRef.getScrollOffset()
+    const height = vlistRef.getViewportSize()
+    const remaining = vlistRef.getScrollSize() - top - height
+    const candidates: SearchPageDirection[] =
+      remaining < top ? ['newer', 'older'] : ['older', 'newer']
+    const direction = candidates.find(
+      (side) =>
+        (side === 'older' ? top : remaining) <= height &&
+        !pageErrors[side] &&
+        !pager.isExhausted(side)
+    )
+    if (direction) void loadPage(direction)
+  }
+
+  function handleUserInteraction(): void {
+    scrolled = true
+    navigationGeneration++
+    edgeInput = true
+    // Wheel input at an already reached boundary need not change the rendered range.
+    requestAnimationFrame(() => {
+      if (!lifetime.signal.aborted) handleRangeChange()
+    })
+  }
+
+  async function publishMessages(
+    next: readonly TwitchMessage[],
+    signal: AbortSignal
+  ): Promise<void> {
+    await chatService.updateMessageDataCooperatively(next, signal)
+    signal.throwIfAborted()
     messageTimeline = chatService.usernameColorTimelineMap
     messages = next
     completeDataset = true
   }
 
   function startBackgroundAfterPaint(): void {
-    if (backgroundStarted || lifetime.signal.aborted) return
+    if (!searchQuery || backgroundStarted || lifetime.signal.aborted) return
     backgroundStarted = true
     // Publication precedes DOM updates. Two frames allow the bounded viewport
     // to paint before any full-history preparation starts on the shared thread.
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
         lifetime.signal.removeEventListener('abort', cancel)
-        if (!lifetime.signal.aborted) void loadAllMessages()
+        if (!lifetime.signal.aborted && searchQuery) void loadAllMessages()
       })
     })
     const cancel = (): void => cancelAnimationFrame(frame)
@@ -126,35 +288,38 @@
   }
 
   async function loadAllMessages(): Promise<void> {
-    if (isLoading || lifetime.signal.aborted) return
+    if (!searchQuery || isLoading || lifetime.signal.aborted) return
+    const controller = new AbortController()
+    fullController = controller
+    const { signal } = controller
     isLoading = true
     loadError = ''
     try {
       let potplayerInfo = context.potplayerInfo
       await chatService.updateVideoInfo(potplayerInfo, -1)
-      lifetime.signal.throwIfAborted()
+      signal.throwIfAborted()
 
       // Keep the source's objects and ordered snapshot shared across Search windows.
       const prepared = await sharedData.prepare(
         context.initialMessages,
         context.loadedMessages,
-        lifetime.signal
+        signal
       )
-      await publishMessages(prepared)
+      await publishMessages(prepared, signal)
       await new Promise((resolve) => setTimeout(resolve, 0))
-      lifetime.signal.throwIfAborted()
+      signal.throwIfAborted()
 
       if (!potplayerInfo?.hwnd) {
         const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
         const instances = await window.api.getPotPlayers()
-        lifetime.signal.throwIfAborted()
+        signal.throwIfAborted()
         const potplayerInstance = instances.find((p) => p.hwnd === selectedHwnd)
         if (!potplayerInstance?.hwnd) {
           loadError = 'No PotPlayer instance is connected.'
           return
         }
         const resolvedPotplayerInfo = await window.api.getPotplayerExtraInfo(potplayerInstance)
-        lifetime.signal.throwIfAborted()
+        signal.throwIfAborted()
         if (!resolvedPotplayerInfo) {
           loadError = 'Recording information is unavailable.'
           return
@@ -164,24 +329,24 @@
 
       const videoStartTime = potplayerInfo.startTime
       const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
-      lifetime.signal.throwIfAborted()
+      signal.throwIfAborted()
       const defaultStartTime = videoStartTime + currentTime - 60 * 60 * 1000
       const defaultEndTime = videoStartTime + currentTime
       const { startTime = defaultStartTime, endTime = defaultEndTime } = context.searchRange || {}
       if (!isRangeInMessages(context.initialMessages, startTime, endTime)) {
         await chatService.updateVideoInfo(potplayerInfo, 0)
-        lifetime.signal.throwIfAborted()
+        signal.throwIfAborted()
         const loaded = await chatService.getMessagesBetweenTimes(startTime, endTime)
-        lifetime.signal.throwIfAborted()
-        const merged = await mergeSearchMessages(messages, loaded, lifetime.signal)
-        await publishMessages(merged)
+        signal.throwIfAborted()
+        const merged = await mergeSearchMessages(messages, loaded, signal)
+        await publishMessages(merged, signal)
       }
     } catch (error) {
-      if (lifetime.signal.aborted) return
+      if (signal.aborted || lifetime.signal.aborted) return
       loadError = error instanceof Error ? error.message : 'Unable to load chat messages.'
       console.error('Failed to load messages for search:', error)
     } finally {
-      if (!lifetime.signal.aborted) isLoading = false
+      if (fullController === controller && !lifetime.signal.aborted) isLoading = false
     }
   }
 
@@ -191,7 +356,7 @@
     initial: readonly TwitchMessage[] = context.initialMessages
   ): Promise<number | null> {
     if (results.length === 0) return null
-    const focused = context.focusedMessage
+    const focused = searchQuery ? context.focusedMessage : browsingTarget
     if (focused) {
       return (
         findMessageIndex(results, focused.getId(), focused.timestamp) ??
@@ -213,24 +378,36 @@
 
   // One pipeline owns filtering, highlight publication, and subsequent navigation.
   $effect(() => {
-    const dataset = messages
-    const complete = completeDataset
-    const timeline = messageTimeline
     const query = searchQuery
     const sensitive = caseSensitive
     const regex = useRegex
     const controller = new AbortController()
-    const signature = JSON.stringify([query, sensitive, regex])
+    const signature = query ? JSON.stringify([query, sensitive, regex]) : ''
     if (signature !== previousSearchSignature) {
       previousSearchSignature = signature
       navigationGeneration++
       scrolled = false
     }
+    untrack(() => changeSearchMode(query))
+    const dataset = query ? messages : browsingMessages
+    const complete = query ? completeDataset : true
+    const timeline = query ? messageTimeline : browsingTimeline
     const generation = navigationGeneration
     const pattern = getSearchPattern(query, sensitive, regex)
     isFiltering = true
     void (async () => {
       try {
+        let publishedTimeline = timeline
+        if (!query) {
+          // A cold preview has no captured mention colors. Prepare only admitted
+          // rows, keeping source colors as fallback for mentions before this slice.
+          await chatService.updateMessageDataCooperatively(dataset, controller.signal)
+          const colors = chatService.usernameColorTimelineMap
+          publishedTimeline = {
+            get: (username, timestamp) =>
+              colors.get(username, timestamp) ?? timeline.get(username, timestamp)
+          }
+        }
         const results = await filterSearchMessages(
           dataset,
           query,
@@ -253,14 +430,14 @@
         // Results and their highlighting/color data always describe the same completed query.
         filteredMessages = results
         searchPattern = pattern
-        filteredTimeline = timeline
+        filteredTimeline = publishedTimeline
         completeResults = complete
         if (results.length > 0) transcriptStarted = true
         const canPosition = !scrolled && generation === navigationGeneration && target !== null
         initialPosition = canPosition ? { index: target, options: { align: 'center' } } : undefined
         isFiltering = false
         if (canPosition) positionedGeneration = generation
-        if (results.length === 0) startBackgroundAfterPaint()
+        startBackgroundAfterPaint()
         await tick()
         if (
           !controller.signal.aborted &&
@@ -323,22 +500,42 @@
         {context.potplayerInfo.channel} · {context.potplayerInfo.title}
       </span>
       <span class="search-stats" role="status"
-        >{#if isFiltering || isPublishing || (!completeResults && !loadError)}Searching…{:else if completeResults}{filteredMessages.length}
+        >{#if !searchQuery}{filteredMessages.length} messages loaded{#if pagingDirection}
+            · Loading {pagingDirection}…{/if}{:else if isFiltering || isPublishing || (!completeResults && !loadError)}Searching…{:else if completeResults}{filteredMessages.length}
           result{filteredMessages.length !== 1 ? 's' : ''}{:else}Partial history{/if}</span
       >
     </div>
   </header>
 
-  {#if loadError || loadingState.state === 'error'}
+  {#if searchQuery && (loadError || loadingState.state === 'error')}
     <div class="load-notice" role="alert">
       <span>{loadError || loadingState.errorMessage || 'Unable to load chat messages.'}</span>
       <button type="button" disabled={isLoading} onclick={() => loadAllMessages()}>Retry</button>
     </div>
   {/if}
 
+  {#if !searchQuery}
+    {#each ['older', 'newer'] as const as direction (direction)}
+      {#if pageErrors[direction]}
+        <div class="load-notice" role="alert">
+          <span>{pageErrors[direction]}</span>
+          <button
+            type="button"
+            disabled={pagingDirection !== null}
+            onclick={() => loadPage(direction)}>Retry {direction} messages</button
+          >
+        </div>
+      {/if}
+    {/each}
+  {/if}
+
   <div
     class="search-results"
-    aria-busy={isLoading || isFiltering || isPublishing || (!completeResults && !loadError)}
+    aria-busy={pagingDirection !== null ||
+      isLoading ||
+      isFiltering ||
+      isPublishing ||
+      (!!searchQuery && !completeResults && !loadError)}
   >
     {#if transcriptStarted}
       <MessageTranscript
@@ -353,10 +550,12 @@
         onpublish={handleTranscriptPublish}
         {initialPosition}
         gutter
-        onuserinteraction={() => {
-          scrolled = true
-          navigationGeneration++
+        onuserinteraction={handleUserInteraction}
+        onuserscroll={() => {
+          edgeInput = true
+          handleRangeChange()
         }}
+        onrangechange={handleRangeChange}
       >
         {#snippet children(msg, i, presentationStore, renderedContext)}
           {#if msg}
@@ -394,9 +593,9 @@
     {/if}
     {#if filteredMessages.length === 0}
       <div class="search-state" role="status">
-        {#if isLoading || isFiltering || (!completeResults && !loadError)}
-          <strong>Searching…</strong>
-        {:else if loadError || loadingState.state === 'error'}
+        {#if pagingDirection || isLoading || isFiltering || (!!searchQuery && !completeResults && !loadError)}
+          <strong>{searchQuery ? 'Searching…' : 'Loading messages…'}</strong>
+        {:else if loadError || loadingState.state === 'error' || pageErrors.older || pageErrors.newer}
           <strong>Messages are unavailable</strong>
           <span>Retry when the recording or connection is available.</span>
         {:else if loadingState.state === 'chat-not-found'}

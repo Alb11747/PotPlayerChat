@@ -32,9 +32,7 @@ async function readingAnchor(page: Page): Promise<{ id: string; top: number }> {
 }
 
 for (const count of [10000, 100000]) {
-  test(`Search paints a warm ${count}-message preview before delayed preparation`, async ({
-    page
-  }) => {
+  test(`Search opens only 200 warm messages from ${count} source messages`, async ({ page }) => {
     await routeImages(page)
     await page.goto(`/?sharedSource&opener&count=${count}`)
     await page.waitForFunction(() => window.fixtureReady)
@@ -80,7 +78,9 @@ for (const count of [10000, 100000]) {
     await row.getByRole('button', { name: 'Return to this message in chat' }).click()
     expect((await page.evaluate(() => window.fixtureSharedCallback))?.original).toBe(true)
     await popup.waitForTimeout(1100)
-    await expect(popup.getByRole('status').first()).toContainText('Searching')
+    await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
+    expect(await page.evaluate(() => window.fixturePreparationCalls)).toBe(0)
+    await expect(popup.locator('.search-results')).toHaveAttribute('aria-busy', 'false')
     if (count === 100000)
       await popup.screenshot({ path: test.info().outputPath('warm-preview.png') })
     const timing = await popup.evaluate(() => {
@@ -106,6 +106,7 @@ for (const count of [10000, 100000]) {
     await input.fill('ordinary')
     await input.fill(`Message ${focused} even`)
     await expect(row.locator('mark').first()).toHaveText(`Message ${focused} even`)
+    await expect.poll(() => page.evaluate(() => window.fixturePreparationCalls)).toBe(1)
     await input.fill('')
     await expect(row).toBeVisible()
     await expect(row.locator('.chat-badge')).toHaveAttribute('alt', 'Moderator')
@@ -118,7 +119,8 @@ for (const count of [10000, 100000]) {
     const saved = await readingAnchor(popup)
     expect(saved.id !== beforeScroll.id || Math.abs(saved.top - beforeScroll.top) > 1).toBe(true)
     await page.evaluate(() => window.fixtureReleasePreparation!())
-    await expect(popup.getByRole('status').first()).toHaveText(`${count} results`)
+    await popup.waitForTimeout(300)
+    await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
     await expect(row.locator('.chat-badge')).toHaveAttribute('alt', 'Moderator')
     await expect
       .poll(async () =>
@@ -131,10 +133,200 @@ for (const count of [10000, 100000]) {
       )
       .toBeLessThanOrEqual(1)
     if (count === 100000)
-      await popup.screenshot({ path: test.info().outputPath('expanded-preview.png') })
+      await popup.screenshot({ path: test.info().outputPath('bounded-preview-after-search.png') })
     await popup.close()
   })
 }
+
+for (const count of [10000, 100000]) {
+  test(`unfiltered ${count}-message Search pages both ends without preparing full history`, async ({
+    page
+  }) => {
+    await page.goto(`/?sharedSource&opener&count=${count}`)
+    await page.waitForFunction(() => window.fixtureReady)
+    const popup = await openSharedSearch(page, { autoMount: true })
+    const status = popup.getByRole('status').first()
+    const viewport = popup.locator('.virtual-transcript')
+    await expect(status).toHaveText('200 messages loaded')
+    await expect(popup.locator('.search-results')).toHaveAttribute('aria-busy', 'false')
+    await popup.getByRole('checkbox', { name: 'Case sensitive' }).check()
+    await popup.getByRole('checkbox', { name: 'Regular expression' }).check()
+    await expect(status).toHaveText('200 messages loaded')
+    expect(await page.evaluate(() => window.fixturePreparationCalls)).toBe(0)
+
+    for (const [direction, total] of [
+      ['older', 400],
+      ['newer', 600]
+    ] as const) {
+      await viewport.dispatchEvent('pointerdown')
+      await viewport.evaluate((element, direction) => {
+        const gap = element.clientHeight * 1.4
+        element.scrollTop =
+          direction === 'older' ? gap : element.scrollHeight - element.clientHeight - gap
+      }, direction)
+      await popup.waitForTimeout(150)
+      await expect(status).toHaveText(`${total - 200} messages loaded`)
+      const anchor = await readingAnchor(popup)
+      const movement = await viewport.evaluate((element, direction) => {
+        const before = element.scrollTop
+        element.scrollBy(0, element.clientHeight * (direction === 'older' ? -0.7 : 0.7))
+        return element.scrollTop - before
+      }, direction)
+      await expect(status).toHaveText(`${total} messages loaded`)
+      await expect
+        .poll(() =>
+          popup
+            .locator(`[data-transcript-key="${anchor.id}"]`)
+            .evaluate(
+              (element, expected) => Math.abs(element.getBoundingClientRect().top - expected),
+              anchor.top - movement
+            )
+        )
+        .toBeLessThanOrEqual(1)
+      await viewport.dispatchEvent('pointerup')
+      await popup.waitForTimeout(300)
+      await expect(status).toHaveText(`${total} messages loaded`)
+      expect(await page.evaluate(() => window.fixturePreparationCalls)).toBe(0)
+    }
+    await popup.close()
+  })
+}
+
+test('a held pointer can keep paging older messages without repeated pointerdown events', async ({
+  page
+}) => {
+  await page.goto('/?sharedSource&opener&count=10000')
+  await page.waitForFunction(() => window.fixtureReady)
+  const popup = await openSharedSearch(page, { autoMount: true })
+  const status = popup.getByRole('status').first()
+  const viewport = popup.locator('.virtual-transcript')
+  await expect(status).toHaveText('200 messages loaded')
+  await viewport.dispatchEvent('pointerdown')
+  await viewport.evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await expect(status).toHaveText('400 messages loaded')
+  await expect(popup.locator('.search-results')).toHaveAttribute('aria-busy', 'false')
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  await popup.waitForTimeout(300)
+  await expect(status).toHaveText('400 messages loaded')
+  // A scrollbar drag keeps ownership while the new page moves the old edge down.
+  await viewport.evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await expect(status).toHaveText('600 messages loaded')
+  await expect(popup.locator('.search-results')).toHaveAttribute('aria-busy', 'false')
+  await viewport.dispatchEvent('pointerup')
+  await popup.waitForTimeout(300)
+  await expect(status).toHaveText('600 messages loaded')
+  expect(await page.evaluate(() => window.fixturePreparationCalls)).toBe(0)
+  await popup.close()
+})
+
+test('clearing a full-history filter browses around its first visible result', async ({ page }) => {
+  await page.goto('/?sharedSource&opener&count=10000')
+  await page.waitForFunction(() => window.fixtureReady)
+  const popup = await openSharedSearch(page, { autoMount: true })
+  const input = popup.getByRole('searchbox')
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
+  await input.fill('Message 100 even')
+  await expect(popup.getByRole('status').first()).toHaveText('1 result')
+  const match = popup.locator('[data-transcript-key="shared-100"]')
+  await expect(match).toBeVisible()
+  await input.fill('')
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
+  await expect(match).toBeVisible()
+  await expect(popup.locator('[data-transcript-key="shared-6000"]')).toHaveCount(0)
+  await match.getByRole('button', { name: 'Return to this message in chat' }).click()
+  expect(await page.evaluate(() => window.fixtureSharedCallback)).toEqual({
+    id: 'shared-100',
+    original: true,
+    recording: 'Source recording'
+  })
+  await input.fill('no matching fixture messages')
+  await expect(popup.getByRole('status').first()).toHaveText('0 results')
+  await input.fill('')
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
+  await expect(popup.locator('[data-transcript-key="shared-6000"]')).toBeVisible()
+  await popup.close()
+})
+
+test('unfiltered range paging requests five-minute slices and retries without dropping chat', async ({
+  page
+}) => {
+  await page.goto('/?sharedSource&opener&count=10000')
+  await page.waitForFunction(() => window.fixtureReady)
+  const popup = await openSharedSearch(page, {
+    autoMount: true,
+    previewOnly: true,
+    failRange: true,
+    delayRange: true
+  })
+  const viewport = popup.locator('.virtual-transcript')
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
+  expect(await popup.evaluate(() => window.fixtureRangeCalls)).toEqual([])
+  await viewport.dispatchEvent('pointerdown')
+  await viewport.evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await expect(popup.getByRole('status').first()).toContainText('Loading older')
+  await expect(popup.locator('[data-transcript-key="shared-5900"]')).toBeVisible()
+  await popup.evaluate(() => window.fixtureReleaseRange!())
+  const retry = popup.getByRole('button', { name: 'Retry older messages' })
+  await expect(retry).toBeVisible()
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
+  await expect(popup.locator('[data-transcript-key="shared-5900"]')).toBeVisible()
+  await retry.click()
+  await expect(popup.getByRole('status').first()).toHaveText('400 messages loaded')
+  await expect(popup.locator('[data-transcript-key="shared-5900"]')).toBeVisible()
+  const calls = await popup.evaluate(() => window.fixtureRangeCalls!)
+  expect(calls).toHaveLength(2)
+  expect(calls[1]).toEqual(calls[0])
+  expect(calls.every(({ start, end }) => end - start <= 5 * 60 * 1000)).toBe(true)
+  expect(await popup.evaluate(() => window.fixtureFullHistoryCalls)).toBe(0)
+  expect(await page.evaluate(() => window.fixturePreparationCalls)).toBe(0)
+  await viewport.dispatchEvent('pointerup')
+  await popup.waitForTimeout(300)
+  await expect(popup.getByRole('status').first()).toHaveText('400 messages loaded')
+  await popup.close()
+})
+
+test('closing Search during a range request leaves captured history usable', async ({ page }) => {
+  const errors: string[] = []
+  page.context().on('page', (popup) => popup.on('pageerror', (error) => errors.push(error.message)))
+  await page.goto('/?sharedSource&opener&count=10000')
+  await page.waitForFunction(() => window.fixtureReady)
+  const popup = await openSharedSearch(page, {
+    autoMount: true,
+    previewOnly: true,
+    delayRange: true
+  })
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
+  const viewport = popup.locator('.virtual-transcript')
+  await viewport.dispatchEvent('pointerdown')
+  await viewport.evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await expect(popup.getByRole('status').first()).toContainText('Loading older')
+  await page.evaluate(() => {
+    window.fixtureReleaseRange = window.fixtureSharedSearchWindows!.at(-1)!.fixtureReleaseRange
+  })
+  await popup.close()
+  await page.evaluate(() => window.fixtureReleaseRange!())
+  const reopened = await openSharedSearch(page, { autoMount: true, previewOnly: true })
+  await expect(reopened.getByRole('status').first()).toHaveText('200 messages loaded')
+  await expect(reopened.locator('[data-transcript-key="shared-6000"]')).toBeVisible()
+  expect(await reopened.evaluate(() => window.fixtureRangeCalls)).toEqual([])
+  expect(
+    await page.evaluate(() => ({
+      preparationCalls: window.fixturePreparationCalls,
+      initialCount: window.fixtureSharedInitialMessages!.length,
+      fullCount: window.fixtureSharedMessages!.length
+    }))
+  ).toEqual({ preparationCalls: 0, initialCount: 200, fullCount: 10000 })
+  expect(errors).toEqual([])
+  await reopened.close()
+})
 
 test('missing preview assets do not block content, and failed preparation can retry', async ({
   page
@@ -201,7 +393,7 @@ test('clearing Search cache drops shared preview assets and later resolution rem
   await expect(row.locator('.emote-frame')).toHaveCount(0)
   await expect(row).toBeVisible()
   await page.evaluate(() => window.fixtureReleasePreparation!())
-  await expect(popup.getByRole('status').first()).toHaveText('10000 results')
+  await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
   await expect(row.locator('.emote-frame')).toHaveCount(0)
   await popup.evaluate(() => window.resolveFixtureMedia!())
   await expect(row.locator('.emote-frame')).toBeVisible()
@@ -283,7 +475,7 @@ for (const count of [10000, 100000]) {
     let started = performance.now()
     await popup.evaluate(() => window.fixtureShowSearch!())
     const focused = Math.floor(count * 0.6)
-    await expect(popup.getByRole('status').first()).toHaveText(`${count} results`)
+    await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
     await expect(popup.locator(`[data-transcript-key="shared-${focused}"]`)).toBeVisible()
     await popup.waitForFunction(() => window.fixtureSearchTiming?.firstChatAt !== undefined)
     const firstChat = await popup.evaluate(() => {
@@ -291,7 +483,7 @@ for (const count of [10000, 100000]) {
       return { mountToFirstChatMs: timing.firstChatAt! - timing.mountedAt }
     })
     phases.push({
-      phase: 'complete results and focused message',
+      phase: 'bounded opening and focused message',
       maxGap: await checkpoint(page),
       elapsedMs: performance.now() - started
     })
@@ -322,7 +514,7 @@ for (const count of [10000, 100000]) {
       recording: 'Source recording'
     })
     await input.fill('')
-    await expect(popup.getByRole('status').first()).toHaveText(`${count} results`)
+    await expect(popup.getByRole('status').first()).toHaveText('200 messages loaded')
     started = performance.now()
     await checkpoint(page)
     await popup.evaluate(() => {
@@ -346,7 +538,7 @@ for (const count of [10000, 100000]) {
       const other = await openSharedSearch(page)
       others.push(other)
       await other.evaluate(() => window.fixtureShowSearch!())
-      await expect(other.getByRole('status').first()).toHaveText(`${count} results`)
+      await expect(other.getByRole('status').first()).toHaveText('200 messages loaded')
       await expect(other.locator(`[data-transcript-key="shared-${focused}"]`)).toBeVisible()
       expect(
         await other.evaluate(

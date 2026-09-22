@@ -30,7 +30,29 @@
       this.currentPotPlayerInfo = info
       return true
     }
+    const options = (window.opener as Window).fixtureSharedOptions!
+    window.fixtureRangeCalls = []
+    window.fixtureFullHistoryCalls = 0
+    const rangeReady = options.delayRange
+      ? new Promise<void>((resolve) => {
+          window.fixtureReleaseRange = resolve
+        })
+      : Promise.resolve()
+    let rangeFailed = false
+    ChatService.prototype.getMessagesInRange = async (start, end, signal) => {
+      window.fixtureRangeCalls!.push({ start, end })
+      await rangeReady
+      signal?.throwIfAborted()
+      if (options.failRange && !rangeFailed) {
+        rangeFailed = true
+        throw new Error('Fixture range request failed')
+      }
+      return (window.opener as Window).fixtureSharedMessages!.filter(
+        (message) => message.timestamp >= start && message.timestamp <= end
+      )
+    }
     ChatService.prototype.getMessagesBetweenTimes = async () => {
+      window.fixtureFullHistoryCalls!++
       await history
       return context!.loadedMessages
     }
@@ -62,6 +84,11 @@
     window.fixtureSharedInitialMessages = initialMessages
     window.fixtureSharedSearchWindows = []
     const sharedData = new SharedSearchDataCache()
+    const prepare = sharedData.prepare.bind(sharedData)
+    sharedData.prepare = async (...args) => {
+      window.fixturePreparationCalls!++
+      return prepare(...args)
+    }
     window.fixtureOpenSharedSearch = async (options = {}) => {
       window.fixtureSharedOptions = options
       const capturedRecording = recording
@@ -93,7 +120,7 @@
         potplayerInfo: capturedRecording,
         focusedMessage: messages[focusedIndex],
         initialMessages,
-        loadedMessages: messages,
+        loadedMessages: options.previewOnly ? initialMessages : messages,
         initialSearch: options.initialSearch,
         preview,
         sharedData:
@@ -108,7 +135,7 @@
                     failed = true
                     throw new Error('Fixture preparation failed')
                   }
-                  return sharedData.prepare(initial, loaded, signal)
+                  return prepare(initial, loaded, signal)
                 }
               }
             : sharedData,

@@ -35,6 +35,8 @@
     preserveOnReplace = true,
     onfollowchange,
     onuserinteraction,
+    onuserscroll,
+    onrangechange,
     renderContext,
     presentationSeed,
     onpublish,
@@ -52,6 +54,8 @@
     preserveOnReplace?: boolean
     onfollowchange?: (following: boolean) => void
     onuserinteraction?: () => void
+    onuserscroll?: () => void
+    onrangechange?: (start: number, end: number) => void
     renderContext?: C
     presentationSeed?: MessagePresentationSeed
     onpublish?: (rows: readonly T[]) => void
@@ -318,7 +322,11 @@
         queuedNavigation = null
         onuserinteraction?.()
       }}
-      onrangechange={(start, end) => estimator.prioritize(start, end)}
+      {onuserscroll}
+      onrangechange={(start, end) => {
+        estimator.prioritize(start, end)
+        onrangechange?.(start, end)
+      }}
       onpublish={releaseOldPresentations}
       onviewportchange={(nextWidth) => {
         if (nextWidth > 0) width = nextWidth

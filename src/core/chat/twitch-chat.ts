@@ -518,6 +518,30 @@ export class ChatService {
     return this.currentChatData
   }
 
+  /** Fetch a popup-owned range without starting playback's full-day backfill. */
+  public async getMessagesInRange(
+    startTime: number,
+    endTime: number,
+    signal?: AbortSignal
+  ): Promise<TwitchMessage[]> {
+    signal?.throwIfAborted()
+    const info = this.currentPotPlayerInfo
+    if (!info) return []
+
+    const data = await this.justLogApi.getChannelLogs(
+      {
+        channelStr: info.channel,
+        fromTime: new Date(startTime),
+        toTime: new Date(endTime)
+      },
+      { baseUrl: this.settings.chat.justlogUrl }
+    )
+    // JustLog does not accept an AbortSignal; never publish a cancelled response.
+    signal?.throwIfAborted()
+    if (data === null) throw new Error('Failed to load chat range')
+    return deduplicateMessages(data.messages).sort((a, b) => a.timestamp - b.timestamp)
+  }
+
   public async getMessagesBetweenTimes(
     startTime: number,
     endTime: number
