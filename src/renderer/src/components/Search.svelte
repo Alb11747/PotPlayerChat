@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '../assets/search-input.css'
   import { ChatService, type LoadingState } from '@/core/chat/twitch-chat'
   import type { TwitchMessage } from '@/core/chat/twitch-msg'
   import { getSearchPattern, filterSearchMessages } from '@/renderer/src/core/search-messages'
@@ -18,7 +19,7 @@
   import { settings } from '../state/settings.svelte'
   import ChatMessage from './ChatMessage.svelte'
 
-  let { context }: { context: SearchContext } = $props()
+  let { context, earlyInput }: { context: SearchContext; earlyInput?: HTMLInputElement } = $props()
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
@@ -41,7 +42,7 @@
   )
   chatService.currentPotPlayerInfo = untrack(() => context.potplayerInfo)
 
-  let searchQuery = $state(untrack(() => context.initialSearch ?? ''))
+  let searchQuery = $state(untrack(() => earlyInput?.value ?? context.initialSearch ?? ''))
   let caseSensitive = $state(false)
   let useRegex = $state(false)
   let scrolled = false
@@ -91,12 +92,17 @@
       pager.dispose()
       navigationGeneration++
     }
-    searchInputRef?.focus()
+    const updateQuery = (): void => {
+      searchQuery = earlyInput!.value
+    }
+    if (earlyInput) earlyInput.addEventListener('input', updateQuery)
+    else searchInputRef?.focus()
     window.addEventListener('pagehide', stopWork)
     window.api.onAppCacheCleared(handleAppCacheCleared)
     window.api.onSavedUrlsCleared(handleSavedUrlsCleared)
     if (!searchQuery && browsingMessages.length === 0) void loadPage('older')
     return () => {
+      earlyInput?.removeEventListener('input', updateQuery)
       stopWork()
       window.removeEventListener('pagehide', stopWork)
       window.api.offAppCacheCleared(handleAppCacheCleared)
@@ -470,7 +476,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') window.close()
+    if (event.key === 'Escape' && !event.isComposing) window.close()
   }
 
   function handleUrlClick(url: string): void {
@@ -482,15 +488,17 @@
 <LinkPreview />
 
 <div class="search-container" role="presentation" onkeydown={handleKeydown}>
-  <header class="search-header">
-    <input
-      bind:this={searchInputRef}
-      bind:value={searchQuery}
-      type="search"
-      aria-label="Search messages and usernames"
-      placeholder="Search messages and usernames…"
-      class="search-input"
-    />
+  <header class="search-header" class:with-early-input={!!earlyInput}>
+    {#if !earlyInput}
+      <input
+        bind:this={searchInputRef}
+        bind:value={searchQuery}
+        type="search"
+        aria-label="Search messages and usernames"
+        placeholder="Search messages and usernames…"
+        class="search-input"
+      />
+    {/if}
     <div class="search-options">
       <label><input type="checkbox" bind:checked={caseSensitive} /> Case sensitive</label>
       <label><input type="checkbox" bind:checked={useRegex} /> Regular expression</label>
@@ -633,20 +641,8 @@
     background: var(--deck-surface);
     border-bottom: 1px solid var(--deck-line);
   }
-  .search-input {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    padding: 7px 9px;
-    border: 1px solid var(--deck-line);
-    border-radius: 4px;
-    background: var(--deck-bg);
-    color: var(--deck-text);
-    font: inherit;
-    font-size: 13px;
-  }
-  .search-input::placeholder {
-    color: var(--deck-muted);
+  .search-header.with-early-input {
+    padding-top: 8px;
   }
   .search-options {
     display: flex;

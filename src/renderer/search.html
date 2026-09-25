@@ -11,7 +11,17 @@
     />
   </head>
 
-  <body>
+  <body class="search-page">
+    <div id="search-bootstrap" class="search-input-shell">
+      <input
+        type="search"
+        aria-label="Search messages and usernames"
+        placeholder="Search messages and usernames…"
+        class="search-input"
+        autofocus
+      />
+      <div role="status">Loading Search…</div>
+    </div>
     <main id="app"></main>
     <script type="module" src="/src/search.ts"></script>
   </body>

@@ -213,14 +213,19 @@ TwitchCheerEmoteService.getCheerEmoteInfo = async (name, bits) => {
 const params = new URLSearchParams(location.search)
 // Settings initialization reads the same computed palette tokens as the real renderer.
 await import('./main.css')
-const { default: Harness } =
-  params.has('sharedSource') || location.pathname.endsWith('/search.html')
-    ? await import('./SharedSearchHarness.svelte')
-    : params.has('main')
-      ? await import('./MainHarness.svelte')
-      : params.has('popup')
-        ? await import('./PopupHarness.svelte')
-        : params.has('media')
-          ? await import('./MediaHarness.svelte')
-          : await import('./Harness.svelte')
-mount(Harness, { target: document.getElementById('app')! })
+if (location.pathname.endsWith('/early-search.html')) {
+  await import('./early-search-fixture')
+  await import('@/renderer/src/search')
+} else {
+  const { default: Harness } =
+    params.has('sharedSource') || location.pathname.endsWith('/search.html')
+      ? await import('./SharedSearchHarness.svelte')
+      : params.has('main')
+        ? await import('./MainHarness.svelte')
+        : params.has('popup')
+          ? await import('./PopupHarness.svelte')
+          : params.has('media')
+            ? await import('./MediaHarness.svelte')
+            : await import('./Harness.svelte')
+  mount(Harness, { target: document.getElementById('app')! })
+}
