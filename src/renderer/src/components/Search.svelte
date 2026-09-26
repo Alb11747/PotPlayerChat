@@ -7,6 +7,7 @@
   import { selectSearchPreview } from '@/renderer/src/core/search-preview'
   import { SearchMessagePager, type SearchPageDirection } from '../core/search-paging'
   import type { SearchContext } from '@/renderer/src/core/search-window'
+  import { capturePopupSearchRange } from '../core/popup-search-range'
   import { findMessageIndex, getClosestMessageIndex, isRangeInMessages } from '@/utils/chat'
   import { CooperativeWork } from '@/utils/cooperative-work'
   import { deleteNullishKeysInPlace } from '@/utils/objects'
@@ -26,6 +27,7 @@
   const urlTracker = new UrlTracker(settings.chat)
   // The context captures one recording and its source-owned caches for this popup's lifetime.
   const sharedData = untrack(() => context.sharedData ?? new SharedSearchDataCache())
+  const searchRange = untrack(() => capturePopupSearchRange(context))
   const lifetime = new AbortController()
   const preview = untrack(() => ({
     ...context.preview,
@@ -82,7 +84,6 @@
   let navigationGeneration = 0
   let positionedGeneration = -1
   let previousSearchSignature: string | undefined
-  let historyRange: Promise<{ start: number; end: number }> | undefined
 
   onMount(() => {
     const stopWork = (): void => {
@@ -133,21 +134,11 @@
     return new SearchMessagePager({
       sources: [context.initialMessages, context.loadedMessages, extra],
       preview: seed,
+      anchorTime: searchRange.endTime,
       history: {
         resolveRange: async (signal) => {
-          historyRange ??= (async () => {
-            if (context.searchRange)
-              return { start: context.searchRange.startTime, end: context.searchRange.endTime }
-            const currentTime = await window.api.getCurrentVideoTime(context.potplayerInfo.hwnd)
-            const end = context.potplayerInfo.startTime + currentTime
-            return { start: end - 60 * 60 * 1000, end }
-          })().catch((error) => {
-            historyRange = undefined
-            throw error
-          })
-          const range = await historyRange
           signal.throwIfAborted()
-          return range
+          return { start: searchRange.startTime, end: searchRange.endTime }
         },
         fetchRange: (start, end, signal) => chatService.getMessagesInRange(start, end, signal)
       }
@@ -301,7 +292,7 @@
     isLoading = true
     loadError = ''
     try {
-      let potplayerInfo = context.potplayerInfo
+      const potplayerInfo = context.potplayerInfo
       await chatService.updateVideoInfo(potplayerInfo, -1)
       signal.throwIfAborted()
 
@@ -315,30 +306,7 @@
       await new Promise((resolve) => setTimeout(resolve, 0))
       signal.throwIfAborted()
 
-      if (!potplayerInfo?.hwnd) {
-        const selectedHwnd = await window.api.getSelectedPotPlayerHWND()
-        const instances = await window.api.getPotPlayers()
-        signal.throwIfAborted()
-        const potplayerInstance = instances.find((p) => p.hwnd === selectedHwnd)
-        if (!potplayerInstance?.hwnd) {
-          loadError = 'No PotPlayer instance is connected.'
-          return
-        }
-        const resolvedPotplayerInfo = await window.api.getPotplayerExtraInfo(potplayerInstance)
-        signal.throwIfAborted()
-        if (!resolvedPotplayerInfo) {
-          loadError = 'Recording information is unavailable.'
-          return
-        }
-        potplayerInfo = resolvedPotplayerInfo
-      }
-
-      const videoStartTime = potplayerInfo.startTime
-      const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
-      signal.throwIfAborted()
-      const defaultStartTime = videoStartTime + currentTime - 60 * 60 * 1000
-      const defaultEndTime = videoStartTime + currentTime
-      const { startTime = defaultStartTime, endTime = defaultEndTime } = context.searchRange || {}
+      const { startTime, endTime } = searchRange
       if (!isRangeInMessages(context.initialMessages, startTime, endTime)) {
         await chatService.updateVideoInfo(potplayerInfo, 0)
         signal.throwIfAborted()

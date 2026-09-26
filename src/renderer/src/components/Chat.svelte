@@ -7,7 +7,7 @@
 
   import { clearAll, TwitchUserService } from '@/core/chat/twitch-api'
   import { ChatService, type LoadingState, type PotPlayerInfo } from '@/core/chat/twitch-chat'
-  import { isEqualMessageBoundary } from '@/renderer/src/core/chat-view'
+  import { isEqualMessageBoundary, playbackMessageWindow } from '@/renderer/src/core/chat-view'
   import { openSearchPopup, type SearchOptions } from '@/renderer/src/core/search-window'
   import { SharedSearchDataCache } from '@/renderer/src/core/search-data'
   import { selectSearchPreview, type SearchPreview } from '../core/search-preview'
@@ -113,6 +113,7 @@
   }
   let changingPotPlayerPromise: Promise<SelectedPotplayerInfo | null> | null = $state(null)
   let potPlayerSelectionNonce = 0
+  let instanceUpdateNonce = 0
 
   let messages: TwitchMessage[] = $state.raw([])
   let autoSelectPotPlayer = $state(true)
@@ -160,10 +161,16 @@
     )
   }
 
-  async function resetVideoTimeHistory(hwnd: HWND | null): Promise<void> {
+  async function resetVideoTimeHistory(
+    hwnd: HWND | null,
+    isCurrent: () => boolean
+  ): Promise<boolean> {
+    const time = hwnd ? await window.api.getCurrentVideoTime(hwnd) : null
+    if (!isCurrent()) return false
     videoTimeHistory.clear()
-    playbackTime = hwnd ? await window.api.getCurrentVideoTime(hwnd) : null
+    playbackTime = time
     if (playbackTime !== null) videoTimeHistory.addSample(playbackTime)
+    return true
   }
 
   async function getSelectedPotplayerInstance(
@@ -182,6 +189,11 @@
     instances: (PotPlayerInstance & { selected?: boolean })[]
   ): Promise<void> {
     isPotplayerUpdated = true
+    const updateNonce = ++instanceUpdateNonce
+    let selectionNonce = potPlayerSelectionNonce
+    const isCurrent = (): boolean =>
+      updateNonce === instanceUpdateNonce && selectionNonce === potPlayerSelectionNonce
+    potplayerInstances = instances
     if (instances.length === 0) {
       potPlayerSelectionNonce++
       navigationGeneration++
@@ -197,24 +209,23 @@
       return
     }
 
-    let newSelectedPotplayerInstanceInfo: SelectedPotplayerInfo | null = null
-    if (changingPotPlayerPromise) newSelectedPotplayerInstanceInfo = await changingPotPlayerPromise
-    potplayerInstances = instances
+    if (changingPotPlayerPromise) await changingPotPlayerPromise
+    if (!isCurrent()) return
+    // Reconcile the event after a manual selection: it may describe a newer title.
+    const selectedPotplayerInstance = await getSelectedPotplayerInstance(instances)
+    if (!isCurrent()) return
 
-    if (!newSelectedPotplayerInstanceInfo) {
-      const selectedPotplayerInstance = await getSelectedPotplayerInstance(instances)
+    if (
+      !selectedPotplayerInstance ||
+      (selectedPotplayerInstance.hwnd === selectedPotplayerInfo?.hwnd &&
+        selectedPotplayerInstance.title === selectedPotplayerInfo?.title)
+    )
+      return
 
-      if (
-        !selectedPotplayerInstance ||
-        (selectedPotplayerInstance.hwnd === selectedPotplayerInfo?.hwnd &&
-          selectedPotplayerInstance.title === selectedPotplayerInfo?.title)
-      )
-        return
-
-      newSelectedPotplayerInstanceInfo = await window.api.getPotplayerExtraInfo(
-        $state.snapshot(selectedPotplayerInstance)
-      )
-    }
+    const newSelectedPotplayerInstanceInfo = await window.api.getPotplayerExtraInfo(
+      $state.snapshot(selectedPotplayerInstance)
+    )
+    if (!isCurrent()) return
 
     if (
       selectedPotplayerInfo?.hwnd !== newSelectedPotplayerInstanceInfo?.hwnd ||
@@ -222,7 +233,7 @@
     ) {
       viewingHistory = false
       navigationGeneration++
-      potPlayerSelectionNonce++
+      selectionNonce = ++potPlayerSelectionNonce
       scrollToBottom = true
     }
     selectedPotplayerInfo = newSelectedPotplayerInstanceInfo
@@ -239,7 +250,8 @@
       await chatService.updateVideoInfo(null)
     }
 
-    await resetVideoTimeHistory(selectedPotplayerInfo?.hwnd ?? null)
+    if (!isCurrent()) return
+    if (!(await resetVideoTimeHistory(selectedPotplayerInfo?.hwnd ?? null, isCurrent))) return
     await updateChatMessages()
   }
 
@@ -273,21 +285,25 @@
 
     if (!potplayerInfo && changingPotPlayerPromise) potplayerInfo = await changingPotPlayerPromise
     if (!potplayerInfo) potplayerInfo = selectedPotplayerInfo
+    if (selectionNonce !== potPlayerSelectionNonce || !potplayerInfo?.startTime) return
 
     const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
     if (predictedTime === null) return
-    const effectiveTime =
-      predictedTime + settings.chat.timestampOffset + settings.chat._sessionTimestampOffset
-    const newMessages = await chatService.getMessagesForTime(effectiveTime, true)
+    const timestampOffset = settings.chat.timestampOffset + settings.chat._sessionTimestampOffset
+    const effectiveTime = predictedTime + timestampOffset
+    const fetchedMessages = await chatService.getMessagesForTime(effectiveTime, true)
     if (selectionNonce !== potPlayerSelectionNonce || viewingHistory) return
-    if (!newMessages || newMessages.length === 0) {
+    if (!fetchedMessages || fetchedMessages.length === 0) {
       messages = []
       return
     }
 
-    const lastMessage = messages[messages.length - 1] || null
-    const nextMessage =
-      lastMessage && lastMessage.timestamp > predictedTime ? newMessages.pop() : null
+    const { messages: newMessages, nextVideoTime } = playbackMessageWindow(
+      fetchedMessages,
+      potplayerInfo.startTime,
+      predictedTime,
+      timestampOffset
+    )
 
     if (!isEqual(selectedPotplayerInfo, potplayerInfo)) {
       viewingHistory = false
@@ -299,10 +315,13 @@
       messages = newMessages
     }
 
-    if (nextMessage) {
-      const waitTime = videoTimeHistory.getPredictedTimeUntil(nextMessage.timestamp)
-      // console.debug(`Waiting ${waitTime}ms before fetching next messages`)
-      if (waitTime !== null) chatIntervalId = setTimeout(updateChatMessages, waitTime)
+    if (nextVideoTime !== undefined) {
+      const waitTime = videoTimeHistory.getPredictedTimeUntil(nextVideoTime)
+      if (waitTime !== null)
+        chatIntervalId = setTimeout(
+          updateChatMessages,
+          Math.min(2_147_483_647, Math.max(1, waitTime))
+        )
     }
   }
 
@@ -322,8 +341,8 @@
     let id: ReturnType<typeof setTimeout> | null = setTimeout(async () => {
       id = null
       if (isPotplayerUpdated) return
-      potplayerInstances = await window.api.getPotPlayers()
-      onPotPlayerInstancesChanged(potplayerInstances)
+      const instances = await window.api.getPotPlayers()
+      if (!isPotplayerUpdated) void onPotPlayerInstancesChanged(instances)
     }, 500)
     return () => id && clearTimeout(id)
   })
@@ -367,6 +386,8 @@
     viewingHistory = false
     navigationGeneration++
     const currentSelectionNonce = ++potPlayerSelectionNonce
+    instanceUpdateNonce++
+    const isCurrent = (): boolean => currentSelectionNonce === potPlayerSelectionNonce
     changingPotPlayerPromise = (async (): Promise<PotPlayerInfo | null> => {
       const instance = $state.snapshot(instanceInfo)
       const hwnd = instance?.hwnd
@@ -379,10 +400,8 @@
         return null
       }
       autoSelectPotPlayer = false
-      if (!selectedPotplayerInfo) selectedPotplayerInfo = instanceInfo
-      else selectedPotplayerInfo.hwnd = hwnd
       await window.api.setSelectedPotPlayerHWND(hwnd)
-      await resetVideoTimeHistory(hwnd)
+      if (!isCurrent()) return null
 
       // A captured popup source may refer to an older recording in the same HWND.
       const currentSelectedPotPlayerInfo = await window.api.getPotplayerExtraInfo(instance)
@@ -393,7 +412,7 @@
       settings.chat._sessionTimestampOffset = getSessionTimestampOffsetByTitle(
         currentSelectedPotPlayerInfo.title
       )
-      await resetVideoTimeHistory(hwnd)
+      if (!(await resetVideoTimeHistory(hwnd, isCurrent))) return null
       await chatService.updateVideoInfo(currentSelectedPotPlayerInfo)
       if (currentSelectionNonce !== potPlayerSelectionNonce) return null
       await updateChatMessages(currentSelectedPotPlayerInfo)
@@ -407,7 +426,9 @@
         if (currentSelectionNonce === potPlayerSelectionNonce) changingPotPlayerPromise = null
       }
       if (currentSelectionNonce === potPlayerSelectionNonce) {
-        potplayerInstances = await window.api.getPotPlayers()
+        const updateNonce = instanceUpdateNonce
+        const instances = await window.api.getPotPlayers()
+        if (isCurrent() && updateNonce === instanceUpdateNonce) potplayerInstances = instances
       }
     })()
   }
@@ -416,13 +437,14 @@
     potplayerInfo: PotPlayerInfo
     initialMessages: TwitchMessage[]
     loadedMessages: TwitchMessage[]
-    searchRange?: { startTime: number; endTime: number }
+    searchRange: { startTime: number; endTime: number }
     preview: SearchPreview
   }
 
   function capturePopupSource(focused?: TwitchMessage): PopupSource | null {
     if (!selectedPotplayerInfo?.startTime || !selectedPotplayerInfo.endTime) return null
     const player = $state.snapshot(selectedPotplayerInfo) as PotPlayerInfo
+    const capturedEndTime = player.startTime + (playbackTime ?? 0)
     const previewMessages = selectSearchPreview(messages, chatService.currentChatData, focused)
     return {
       potplayerInfo: player,
@@ -437,7 +459,7 @@
       },
       searchRange: settings.search.showAllMessages
         ? { startTime: player.startTime - 3600000, endTime: player.endTime! + 3600000 }
-        : undefined
+        : { startTime: capturedEndTime - 3600000, endTime: capturedEndTime }
     }
   }
 

@@ -1,6 +1,98 @@
 import { expect, test } from '@playwright/test'
 import type {} from './fixture'
 
+test('playback retains the final logged message across repeated time updates', async ({ page }) => {
+  await page.goto('/?main')
+  const last = page.locator('[data-transcript-key="main-199"]')
+  await expect(last).toBeVisible()
+  for (const time of [1001000, 1002000]) {
+    await page.evaluate((value) => window.fixturePlayers!.time(value), time)
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    )
+    await expect(last).toBeVisible()
+  }
+})
+
+test('closing every player invalidates delayed recording metadata', async ({ page }) => {
+  await page.goto('/?main')
+  const search = page.getByRole('button', { name: 'Search chat', exact: true })
+  await expect(search).toBeEnabled()
+  await page.evaluate(() => {
+    window.fixturePlayers!.holdMetadata('Delayed recording')
+    window.fixturePlayers!.instances([{ hwnd: 2 as never, pid: 2, title: 'Delayed recording' }])
+  })
+  await expect
+    .poll(() => page.evaluate(() => window.fixturePlayers!.metadataRequests))
+    .toContain('Delayed recording')
+  await page.evaluate(() => window.fixturePlayers!.instances([]))
+  await expect(search).toBeDisabled()
+  await page.evaluate(async () => {
+    window.fixturePlayers!.releaseMetadata('Delayed recording')
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+  })
+  await expect(search).toBeDisabled()
+  await expect(page.locator('.chat-message')).toContainText('No PotPlayer instance selected')
+})
+
+test('manual player selection wins over an older metadata event', async ({ page }) => {
+  await page.goto('/?main')
+  await expect(page.getByRole('button', { name: 'Search chat', exact: true })).toBeEnabled()
+  await page.evaluate(() => {
+    window.fixturePlayers!.holdMetadata('Delayed recording')
+    window.fixturePlayers!.instances([
+      { hwnd: 2 as never, pid: 2, title: 'Delayed recording', selected: true },
+      { hwnd: 3 as never, pid: 3, title: 'Chosen recording' }
+    ])
+  })
+  await expect
+    .poll(() => page.evaluate(() => window.fixturePlayers!.metadataRequests))
+    .toContain('Delayed recording')
+  const chosen = page.getByRole('tab', { name: 'Chosen recording', exact: true })
+  await chosen.click()
+  await expect(chosen).toHaveAttribute('aria-selected', 'true')
+  await page.evaluate(async () => {
+    window.fixturePlayers!.releaseMetadata('Delayed recording')
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+  })
+  await expect(chosen).toHaveAttribute('aria-selected', 'true')
+})
+
+test('a recording change arriving during manual selection is reconciled afterward', async ({
+  page
+}) => {
+  await page.goto('/?main')
+  await expect(page.getByRole('button', { name: 'Search chat', exact: true })).toBeEnabled()
+  await page.evaluate(() => {
+    window.fixturePlayers!.instances([
+      { hwnd: 1 as never, pid: 1, title: 'Fixture recording', selected: true },
+      { hwnd: 2 as never, pid: 2, title: 'Chosen old' }
+    ])
+    window.fixturePlayers!.holdMetadata('Chosen old')
+  })
+  await page.getByRole('tab', { name: 'Chosen old', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => window.fixturePlayers!.metadataRequests))
+    .toContain('Chosen old')
+  await page.evaluate(() => {
+    window.fixturePlayers!.instances([
+      { hwnd: 2 as never, pid: 2, title: 'Chosen new', selected: true }
+    ])
+    window.fixturePlayers!.releaseMetadata('Chosen old')
+  })
+  await expect
+    .poll(() => page.evaluate(() => window.fixturePlayers!.metadataRequests))
+    .toContain('Chosen new')
+  await expect(page.getByRole('tab', { name: 'Chosen new', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  )
+})
+
 test('chat fills the window across responsive breakpoints and layouts', async ({ page }) => {
   await page.goto('/?main')
   await page.waitForFunction(() => window.fixtureReady)

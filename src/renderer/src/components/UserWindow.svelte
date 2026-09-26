@@ -3,7 +3,8 @@
   import { ChatService, type LoadingState } from '@/core/chat/twitch-chat'
   import { TwitchChatMessage } from '@/core/chat/twitch-msg'
   import { isRangeInMessages } from '@/utils/chat'
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
+  import { capturePopupSearchRange } from '../core/popup-search-range'
   import { SvelteSet } from 'svelte/reactivity'
   import MessageTranscript from './MessageTranscript.svelte'
   import type { TranscriptHandle } from '../core/transcript-handle'
@@ -28,6 +29,7 @@
   const chatService = new ChatService(window.api, loadingState, settings)
   const urlTracker = new UrlTracker(settings.chat)
   const seenMessages = new SvelteSet<string>()
+  const searchRange = untrack(() => capturePopupSearchRange(context))
 
   let profile: TwitchUserProfile | null = $state(null)
   let profileLoaded = $state(false)
@@ -122,10 +124,7 @@
       scrollToRelevantMessage()
 
       try {
-        const currentTime = await window.api.getCurrentVideoTime(potplayerInfo.hwnd)
-        const defaultStartTime = potplayerInfo.startTime + currentTime - 60 * 60 * 1000
-        const defaultEndTime = potplayerInfo.startTime + currentTime
-        const { startTime = defaultStartTime, endTime = defaultEndTime } = context.searchRange || {}
+        const { startTime, endTime } = searchRange
 
         if (!isRangeInMessages(context.initialMessages, startTime, endTime)) {
           await chatService.updateVideoInfo(potplayerInfo, 0)

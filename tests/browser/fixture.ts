@@ -3,6 +3,8 @@ import type { SearchContext } from '@/renderer/src/core/search-window'
 import type { TwitchMessage } from '@/core/chat/twitch-msg'
 import type { SearchPreview } from '@/renderer/src/core/search-preview'
 import type { AppearancePreferences } from '@/types/appearance'
+import type { PotPlayerInstance } from '@/types/potplayer'
+import type { WindowApi } from '@/types/preload'
 
 export interface SharedSearchFixtureOptions {
   delayPreparation?: boolean
@@ -64,6 +66,13 @@ declare global {
     fixtureSharedInitialMessages?: TwitchMessage[]
     fixtureSharedCallback?: { id: string; original: boolean; recording: string }
     fixtureAppearance?: (value: Partial<AppearancePreferences>) => void
+    fixturePlayers?: {
+      instances(value: (PotPlayerInstance & { selected?: boolean })[]): void
+      holdMetadata(title: string): void
+      releaseMetadata(title: string): void
+      metadataRequests: string[]
+      time(value: number): void
+    }
   }
 }
 
@@ -87,6 +96,34 @@ const clickedUrls = new Set<string>(
 )
 window.fixtureEmitAppCacheCleared = () => {
   for (const listener of cacheClearedListeners) listener()
+}
+const instanceListeners = new Set<Parameters<WindowApi['onPotPlayerInstancesChanged']>[0]>()
+const timeListeners = new Set<Parameters<WindowApi['onSetCurrentTime']>[0]>()
+let playerInstances: PotPlayerInstance[] = [
+  { hwnd: 1 as unknown as PotPlayerInstance['hwnd'], pid: 1, title: 'Fixture recording' }
+]
+let playerTime = 1000000
+let selectedHwnd = playerInstances[0]!.hwnd
+const heldMetadata = new Map<string, { promise: Promise<void>; resolve: () => void }>()
+window.fixturePlayers = {
+  instances(value) {
+    playerInstances = value
+    for (const listener of instanceListeners) listener({} as Electron.IpcRendererEvent, value)
+  },
+  holdMetadata(title) {
+    let resolve!: () => void
+    const promise = new Promise<void>((done) => (resolve = done))
+    heldMetadata.set(title, { promise, resolve })
+  },
+  releaseMetadata(title) {
+    heldMetadata.get(title)?.resolve()
+    heldMetadata.delete(title)
+  },
+  metadataRequests: [],
+  time(value) {
+    playerTime = value
+    for (const listener of timeListeners) listener({} as Electron.IpcRendererEvent, value)
+  }
 }
 Object.defineProperty(window, 'api', {
   value: new Proxy(
@@ -115,19 +152,36 @@ Object.defineProperty(window, 'api', {
             window.fixtureUrl = url
           }
         if (key === 'getDefaultPollingIntervals') return async () => ({})
-        if (key === 'getCurrentVideoTime') return async () => 1000000
-        if (key === 'getSelectedPotPlayerHWND') return async () => 1
-        if (key === 'getPotPlayers')
-          return async () => [{ hwnd: 1, pid: 1, title: 'Fixture recording' }]
+        if (key === 'getCurrentVideoTime') return async () => playerTime
+        if (key === 'getSelectedPotPlayerHWND') return async () => selectedHwnd
+        if (key === 'setSelectedPotPlayerHWND')
+          return async (hwnd: typeof selectedHwnd) => {
+            selectedHwnd = hwnd
+          }
+        if (key === 'getPotPlayers') return async () => playerInstances
+        if (key === 'onPotPlayerInstancesChanged')
+          return (listener: Parameters<WindowApi['onPotPlayerInstancesChanged']>[0]) =>
+            instanceListeners.add(listener)
+        if (key === 'offPotPlayerInstancesChanged')
+          return (listener: Parameters<WindowApi['onPotPlayerInstancesChanged']>[0]) =>
+            instanceListeners.delete(listener)
+        if (key === 'onSetCurrentTime')
+          return (listener: Parameters<WindowApi['onSetCurrentTime']>[0]) =>
+            timeListeners.add(listener)
+        if (key === 'offSetCurrentTime')
+          return (listener: Parameters<WindowApi['onSetCurrentTime']>[0]) =>
+            timeListeners.delete(listener)
         if (key === 'getPotplayerExtraInfo')
-          return async () => ({
-            hwnd: 1,
-            pid: 1,
-            title: 'Fixture recording',
-            channel: 'fixture',
-            startTime: 1700000000000,
-            endTime: 1700001000000
-          })
+          return async (instance: PotPlayerInstance = playerInstances[0]!) => {
+            window.fixturePlayers!.metadataRequests.push(instance.title)
+            await heldMetadata.get(instance.title)?.promise
+            return {
+              ...instance,
+              channel: 'fixture',
+              startTime: 1700000000000,
+              endTime: 1700001000000
+            }
+          }
         if (key === 'getAppearancePreferences') return async () => appearance
         if (key === 'onAppearanceChanged')
           return (listener: (value: AppearancePreferences) => void) =>

@@ -157,10 +157,14 @@ export function isRangeInMessages<T extends { timestamp: number }>(
   startTime: number,
   endTime: number
 ): boolean {
-  // If there is a msg before startTime and a msg after endTime, then the range is in the messages
-  const startIdx = bounds.ge(messages, { timestamp: startTime } as T, cmp)
-  const endIdx = bounds.le(messages, { timestamp: endTime } as T, cmp)
-  return startIdx !== -1 && endIdx !== -1 && startIdx < endIdx
+  // Sorted, contiguous history covers the request only when it brackets both endpoints.
+  // Rows merely inside the interval are not evidence that its missing edges were loaded.
+  return (
+    startTime <= endTime &&
+    messages.length > 0 &&
+    messages[0]!.timestamp <= startTime &&
+    messages.at(-1)!.timestamp >= endTime
+  )
 }
 
 export function isMessageInMessages<T extends { timestamp: number; getId: () => string }>(

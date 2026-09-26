@@ -3,7 +3,8 @@ import {
   findIntersectingMessageIndex,
   getClosestMessageIndex,
   getMessagesBetween,
-  getMessagesForTime
+  getMessagesForTime,
+  isRangeInMessages
 } from '@/utils/chat'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -63,6 +64,25 @@ describe('chat utils', () => {
   it('returns messages between timestamps inclusively', () => {
     const results = getMessagesBetween(messages, 2_000, 3_000)
     expect(results.map((m) => m.id)).toEqual(['b', 'c', 'd'])
+  })
+
+  it.each([
+    [0, 6_000, false],
+    [0, 3_000, false],
+    [2_000, 6_000, false],
+    [1_000, 5_000, true],
+    [1_500, 4_000, true],
+    [2_000, 2_000, true],
+    [5_000, 1_000, false]
+  ])('requires history to bracket the complete range %i–%i', (start, end, covered) => {
+    expect(isRangeInMessages(messages, start, end)).toBe(covered)
+  })
+
+  it('handles empty history and a single exact endpoint', () => {
+    expect(isRangeInMessages([], 0, 0)).toBe(false)
+    expect(isRangeInMessages([createMessage('only', 100)], 100, 100)).toBe(true)
+    expect(isRangeInMessages([createMessage('only', 100)], 0, 200)).toBe(false)
+    expect(isRangeInMessages([{ timestamp: 100 }, { timestamp: 200 }], 0, 1_000)).toBe(false)
   })
 
   it('returns recent messages and optionally one next message', () => {

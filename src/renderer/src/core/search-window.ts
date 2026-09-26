@@ -4,6 +4,7 @@ import type { TwitchMessage } from '@/core/chat/twitch-msg'
 import type { SearchTextCache } from './search-messages'
 import { SharedSearchDataCache } from './search-data'
 import type { SearchPreview } from './search-preview'
+import { capturePopupSearchRange } from './popup-search-range'
 import {
   openPopupContext,
   PopupContextRegistry,
@@ -49,6 +50,7 @@ export function openSearchPopup(
   registry?: PopupContextRegistry<SearchContext>
 ): Window | null {
   context.sharedData ??= defaultSharedData
+  context.searchRange = capturePopupSearchRange(context)
   return openPopupContext('search.html', context, 'search', hostWindow, registry)
 }
 

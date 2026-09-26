@@ -1,6 +1,7 @@
 import type { UsernameClickInfo } from './username-click'
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import { TwitchChatMessage, type TwitchMessage } from '@/core/chat/twitch-msg'
+import { capturePopupSearchRange } from './popup-search-range'
 import {
   openPopupContext,
   PopupContextRegistry,
@@ -30,6 +31,7 @@ export function openUserPopup(
   hostWindow: PopupWindowHost = window,
   registry?: PopupContextRegistry<UserWindowContext>
 ): Window | null {
+  context.searchRange = capturePopupSearchRange(context)
   return openPopupContext('user.html', context, 'user', hostWindow, registry)
 }
 
