@@ -283,6 +283,38 @@ test('native media resolution keeps the following transcript at the bottom each 
   expect(await page.evaluate(() => window.transcriptTest.state().following)).toBe(true)
 })
 
+test('following pins late media content changes before the next resize delivery', async ({
+  page
+}) => {
+  await page.route('https://**/*', async (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="28"></svg>'
+    })
+  )
+  await page.goto('/?media')
+  await page.waitForFunction(() => window.fixtureReady)
+  await page.evaluate(() => {
+    window.resolveFixtureMedia!()
+    window.transcriptTest.follow(true)
+  })
+  const image = page.locator('[data-message-id="message-999"] .inline-image-preview').first()
+  await expect(image).toBeVisible()
+  await frames(page, 8)
+  const gap = await image.evaluate(async (image) => {
+    // A decode continuation may run after a frame's resize delivery. Mutate the
+    // actual media box in that task and sample after microtasks, without letting
+    // another animation frame/ResizeObserver hide a one-frame bottom gap.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+    image.style.height = `${image.getBoundingClientRect().height + 50}px`
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    const viewport = document.querySelector('.virtual-transcript')!
+    return Math.abs(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop)
+  })
+  expect(gap).toBeLessThanOrEqual(1)
+  expect(await page.evaluate(() => window.transcriptTest.state().following)).toBe(true)
+})
+
 test('resolved badges, cheers, and overlays retain their boxes after repeated cache clearing', async ({
   page
 }) => {

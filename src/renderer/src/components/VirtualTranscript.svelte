@@ -534,6 +534,18 @@
     })
     observer.observe(viewport)
     for (const node of elements.values()) observer.observe(node)
+    // Decoding can update a mounted message after this frame's ResizeObserver
+    // delivery. Pin that DOM change in its own microtask instead of waiting for
+    // the next frame; ResizeObserver still owns geometry and reader anchoring.
+    const contentObserver = new MutationObserver(() => {
+      if (following) setScroll(viewport.scrollHeight)
+    })
+    contentObserver.observe(viewport, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true
+    })
     viewportHeight = viewport.clientHeight
     queueLayout()
     const pointerEnd = (): void => {
@@ -552,6 +564,7 @@
       cancelAnimationFrame(overscanFrame)
       clearTimeout(overscanTask)
       observer?.disconnect()
+      contentObserver.disconnect()
       cancelAnimationFrame(frame)
       window.removeEventListener('pointerup', pointerEnd)
       window.removeEventListener('pointercancel', pointerEnd)
