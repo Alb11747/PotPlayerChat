@@ -1,11 +1,6 @@
 import type { PotPlayerInstance } from '@/types/potplayer'
 import type { WindowApi } from '@/types/preload'
-import {
-  deduplicateMessages,
-  getMessagesBetween,
-  getMessagesForTime,
-  isMessageInMessages
-} from '@/utils/chat'
+import { deduplicateMessages, getMessagesBetween, getMessagesForTime } from '@/utils/chat'
 import { TimelineMap } from '@/utils/datastructs'
 import { logTime } from '@/utils/debug'
 import { isSorted } from '@/utils/objects'
@@ -43,6 +38,7 @@ export interface ChatDataRange {
 export class ChatService {
   public static loadChatTimePadding = 1 * 60 * 60 * 1000 // 1 hour in milliseconds
   public static prefetchTimePadding = 5 * 60 * 1000 // 5 minutes in milliseconds
+  public static incompleteRefreshInterval = 30 * 1000
 
   private api: WindowApi
   private justLogApi: JustLogAPI
@@ -52,16 +48,22 @@ export class ChatService {
   public currentPotPlayerInfo: PotPlayerInfo | null = null
 
   private lastPrefetchRange: ChatDataRange | null = null
+  private lastPrefetchAt = 0
+  private selectionGeneration = 0
+  private loadChatTimer: ReturnType<typeof setTimeout> | undefined
+  private publishedBatches: { batches: TwitchMessage[][]; messages: TwitchMessage[] } | null = null
   public currentChatData: TwitchMessage[] = []
 
   // Caching chat data per day
-  private chatCache: TTLCache<string, { messages: TwitchMessage[]; complete: boolean }> =
-    new TTLCache({
-      max: 15,
-      ttl: 2 * 24 * 60 * 60 * 1000, // Cache for 2 days
-      updateAgeOnGet: true,
-      checkAgeOnGet: false
-    })
+  private chatCache: TTLCache<
+    string,
+    { messages: TwitchMessage[]; complete: boolean; fetchedAt: number }
+  > = new TTLCache({
+    max: 15,
+    ttl: 2 * 24 * 60 * 60 * 1000, // Cache for 2 days
+    updateAgeOnGet: true,
+    checkAgeOnGet: false
+  })
 
   // Lock to prevent concurrent fetches for the same cache key
   private fetchLock = new AsyncLock()
@@ -81,6 +83,10 @@ export class ChatService {
     newPotPlayerInfo: PotPlayerInfo | null,
     loadChatDelay: number = 1000
   ): Promise<boolean> {
+    const generation = ++this.selectionGeneration
+    clearTimeout(this.loadChatTimer)
+    this.lastPrefetchRange = null
+    this.publishedBatches = null
     this.currentPotPlayerInfo = newPotPlayerInfo
     this.currentChatData = []
 
@@ -90,7 +96,9 @@ export class ChatService {
 
       if (loadChatDelay > 0) {
         this.loadChatCached()
-        setTimeout(this.loadChat.bind(this), loadChatDelay)
+        this.loadChatTimer = setTimeout(() => {
+          if (generation === this.selectionGeneration) void this.loadChat()
+        }, loadChatDelay)
       } else if (loadChatDelay === 0) {
         await this.loadChat()
       }
@@ -131,15 +139,7 @@ export class ChatService {
         }
       }
 
-      // If the new data is already loaded, we can skip loading it
-      if (!this.shouldLoadNewData(allCachedMessageData)) return true
-
-      const allMessages = deduplicateMessages(allCachedMessageData.flat())
-      console.assert(
-        isSorted(allMessages, (a, b) => a.timestamp - b.timestamp),
-        'Chat messages are not sorted'
-      )
-      this.currentChatData = allMessages
+      this.publishChatBatches(allCachedMessageData)
       return allCached
     } finally {
       const loadEndTime = window.performance.now()
@@ -156,149 +156,98 @@ export class ChatService {
   }
 
   async loadChat(loadDates: Date[] | null = null): Promise<void> {
-    const { hwnd, channel, startTime: videoStartTime, endTime } = this.currentPotPlayerInfo ?? {}
+    const generation = this.selectionGeneration
+    const info = this.currentPotPlayerInfo
+    const isCurrent = (): boolean =>
+      generation === this.selectionGeneration && info === this.currentPotPlayerInfo
+    const { hwnd, channel, startTime: videoStartTime, endTime } = info ?? {}
     if (!hwnd || !channel || !videoStartTime) {
       this.state.state = 'no-potplayer-info'
-      console.warn('No PotPlayer info available for chat loading.', {
-        ...this.currentPotPlayerInfo
-      })
       return
     }
 
     try {
       const videoEndTime = endTime ?? videoStartTime + (await this.api.getTotalVideoTime(hwnd))
-
-      const datePadding = ChatService.loadChatTimePadding
-      const startDate = new Date(videoStartTime - datePadding)
-      const endDate = new Date(videoEndTime + datePadding)
-
-      const datesToFetch = loadDates ?? this.generateDatesInRange(startDate, endDate)
-      const datesToFetchData = datesToFetch
-        .map((date: Date) => {
+      if (!isCurrent()) return
+      const padding = ChatService.loadChatTimePadding
+      const videoDates = this.generateDatesInRange(
+        new Date(videoStartTime - padding),
+        new Date(videoEndTime + padding)
+      )
+      // Retain cached days when a prefetch fills just one part of the recording.
+      const requestedDates = loadDates ?? videoDates
+      const dates = [
+        ...new Map(
+          [...videoDates, ...requestedDates].map((date) => [this.getCacheKey(channel, date), date])
+        ).values()
+      ]
+      const requestedKeys = new Set(requestedDates.map((date) => this.getCacheKey(channel, date)))
+      this.state.state = 'loading'
+      const batches = await Promise.all(
+        dates.map(async (date): Promise<TwitchMessage[]> => {
           const cacheKey = this.getCacheKey(channel, date)
-          if (this.chatCache.get(cacheKey)) return null
-          const year = date.getUTCFullYear()
-          const month = date.getUTCMonth() + 1
-          const day = date.getUTCDate()
-          return { date, cacheKey, year, month, day }
-        })
-        .filter((d) => d !== null)
-
-      // If all dates are cached, we can skip fetching
-      if (datesToFetchData.length === 0) {
-        this.state.state = 'loaded'
-        return
-      }
-
-      const fetchPromises = datesToFetchData.map(
-        async ({ date, cacheKey, year, month, day }): Promise<TwitchMessage[]> => {
-          return await this.fetchLock.acquire(cacheKey, async () => {
+          const cached = this.chatCache.get(cacheKey)
+          if (!requestedKeys.has(cacheKey) || this.isCacheFresh(cacheKey))
+            return cached?.messages ?? []
+          return this.fetchLock.acquire(cacheKey, async () => {
+            if (!isCurrent()) return []
             const cached = this.chatCache.get(cacheKey)
-            let cachedMessages: TwitchMessage[] | null = null
-            let lastTimestamp: number | null = null
-            if (cached && cached.messages) {
-              cachedMessages = cached.messages
-              lastTimestamp =
-                cachedMessages.length > 0
-                  ? (cachedMessages[cachedMessages.length - 1]?.timestamp ?? null)
-                  : null
-            }
-
-            if (cachedMessages !== null && cached?.complete) return cachedMessages
-
-            // Check for new data if the cached data is incomplete (fetched on the same day)
-            const complete = !this.isSameUTCDate(date, new Date())
-
+            if (this.isCacheFresh(cacheKey)) return cached?.messages ?? []
             try {
               const data = await logTime(
-                `Fetching chat data for ${channel} on ${year}/${month}/${day}`,
+                `Fetching chat data for ${channel} on ${date.toISOString()}`,
                 () =>
                   this.justLogApi.getChannelLogsByDate(
                     {
                       channelStr: channel,
-                      year,
-                      month,
-                      day
+                      year: date.getUTCFullYear(),
+                      month: date.getUTCMonth() + 1,
+                      day: date.getUTCDate()
                     },
                     { baseUrl: this.settings.chat.justlogUrl }
                   )
               )
-
-              if (data == null) {
-                console.warn(`Failed to fetch chat for ${year}/${month}/${day}`)
-                this.chatCache.set(cacheKey, { messages: [], complete })
-                return cachedMessages || []
-              }
-
-              const newMessages = deduplicateMessages(data.messages)
-              this.updateMessageData(newMessages)
-
-              let messages: TwitchMessage[]
-              if (cachedMessages && lastTimestamp !== null) {
-                messages = this.mergeMessageArrays(cachedMessages, newMessages, lastTimestamp)
-                const newCount = messages.length - cachedMessages.length
-                console.debug(
-                  `Fetched ${newCount} new lines from ${year}/${month}/${day} (total: ${messages.length})`
-                )
-              } else {
-                messages = newMessages
-                console.debug(`Fetched ${newMessages.length} lines from ${year}/${month}/${day}`)
-              }
-              messages.sort((a, b) => a.timestamp - b.timestamp)
-              this.chatCache.set(cacheKey, { messages, complete })
+              if (!isCurrent()) return []
+              // Null is a failed request, not proof of an empty, complete day.
+              if (data === null) throw new Error('Failed to fetch daily chat')
+              const messages = this.mergeMessageArrays(cached?.messages ?? [], data.messages)
+              this.updateMessageData(messages)
+              this.chatCache.set(cacheKey, {
+                messages,
+                complete: !this.isSameUTCDate(date, new Date()),
+                fetchedAt: Date.now()
+              })
               return messages
             } catch (error) {
-              console.warn(`Error fetching chat for ${year}/${month}/${day}:`, error)
-              this.chatCache.set(cacheKey, { messages: cachedMessages || [], complete: false })
-              return cachedMessages || []
+              if (!isCurrent()) return []
+              console.warn(`Error fetching chat for ${channel} on ${date.toISOString()}:`, error)
+              const messages = cached?.messages ?? []
+              this.chatCache.set(cacheKey, { messages, complete: false, fetchedAt: Date.now() })
+              return messages
             }
           })
-        }
+        })
       )
-
-      this.state.state = 'loading'
-      console.debug(`Loading chat for ${channel} starting from ${new Date(videoStartTime)}`)
-      const chatDataArrays = await Promise.all(fetchPromises)
-
-      if (
-        this.currentPotPlayerInfo?.channel !== channel ||
-        this.currentPotPlayerInfo?.startTime !== videoStartTime
-      ) {
-        console.debug(
-          `Chat data for ${channel} at ${new Date(videoStartTime)} was updated while loading, skipping`
-        )
-        return
-      }
-
-      // If the new data is already loaded, we can skip loading it
-      if (!this.shouldLoadNewData(chatDataArrays)) return
-
-      const allMessages = deduplicateMessages(chatDataArrays.flat())
-
-      console.assert(
-        isSorted(allMessages, (a, b) => a.timestamp - b.timestamp),
-        'Chat messages are not sorted'
-      )
-
-      this.currentChatData = allMessages
-      console.debug(
-        `Loaded ${this.currentChatData.length} chat messages for ${channel} across ${datesToFetch.length} day(s)`
-      )
-
-      if (allMessages.length > 0) {
-        this.state.state = 'loaded'
-      } else {
-        this.state.state = 'chat-not-found'
-      }
+      if (!isCurrent()) return
+      this.publishChatBatches(batches)
+      this.state.state = this.currentChatData.length > 0 ? 'loaded' : 'chat-not-found'
     } catch (error: unknown) {
+      if (!isCurrent()) return
       console.error('Error loading chat:', error)
       this.state.state = 'error'
-      if (error && typeof error === 'object' && 'message' in error) {
-        this.state.errorMessage = `Failed to load chat: ${(error as { message: string }).message}`
-      } else {
-        this.state.errorMessage = 'Failed to load chat: Unknown error'
-      }
+      this.state.errorMessage =
+        error instanceof Error
+          ? `Failed to load chat: ${error.message}`
+          : 'Failed to load chat: Unknown error'
     }
+  }
+
+  private isCacheFresh(cacheKey: string): boolean {
+    const cached = this.chatCache.get(cacheKey)
+    return (
+      !!cached &&
+      (cached.complete || Date.now() - cached.fetchedAt < ChatService.incompleteRefreshInterval)
+    )
   }
 
   /**
@@ -317,8 +266,11 @@ export class ChatService {
   ): Date[] {
     const now = new Date()
     const currentDate = new Date(startDate)
+    currentDate.setUTCHours(0, 0, 0, 0)
+    const lastDate = new Date(endDate)
+    lastDate.setUTCHours(0, 0, 0, 0)
     let datesToFetch: Date[] = []
-    while (currentDate < endDate) {
+    while (currentDate < lastDate) {
       datesToFetch.push(new Date(currentDate))
       currentDate.setUTCDate(currentDate.getUTCDate() + 1)
     }
@@ -397,23 +349,14 @@ export class ChatService {
 
   private mergeMessageArrays(
     cachedMessages: TwitchMessage[],
-    newMessages: TwitchMessage[],
-    lastTimestamp: number
+    newMessages: TwitchMessage[]
   ): TwitchMessage[] {
-    const filteredNew = newMessages.filter((msg) => msg.timestamp > lastTimestamp)
-
-    // If there are new messages with the same timestamp as the last cached message,
-    // we need to ensure we don't duplicate them
-    let overlappedNew = newMessages.filter((msg) => msg.timestamp === lastTimestamp)
-    if (overlappedNew.length > 0) {
-      const overlappedOld = cachedMessages.filter((msg) => msg.timestamp === lastTimestamp)
-      // Remove old messages with the same timestamp
-      overlappedNew = overlappedNew.filter(
-        (msg) => !overlappedOld.some((oldMsg) => msg.getId() === oldMsg.getId())
-      )
-    }
-
-    return deduplicateMessages([...cachedMessages, ...overlappedNew, ...filteredNew])
+    // Full-day refreshes can backfill messages before the previous last timestamp.
+    const knownIds = new Set(cachedMessages.map((message) => message.getId()))
+    return deduplicateMessages([
+      ...cachedMessages,
+      ...newMessages.filter((message) => !knownIds.has(message.getId()))
+    ]).sort((a, b) => a.timestamp - b.timestamp)
   }
 
   private async prefetchMessagesForTime(
@@ -421,6 +364,10 @@ export class ChatService {
     startTime: number,
     endTime: number
   ): Promise<boolean> {
+    const generation = this.selectionGeneration
+    const info = this.currentPotPlayerInfo
+    const isCurrent = (): boolean =>
+      generation === this.selectionGeneration && info === this.currentPotPlayerInfo
     if (endTime - startTime > 8 * 60 * 60 * 1000) return false // Avoid fetching too large ranges
 
     const padding = ChatService.prefetchTimePadding
@@ -436,7 +383,7 @@ export class ChatService {
     const isCached = (): boolean =>
       datesToFetch.every((d) => {
         const cacheKey = this.getCacheKey(channel, d)
-        return !!this.chatCache.get(cacheKey)
+        return this.isCacheFresh(cacheKey)
       })
 
     if (isCached()) {
@@ -444,14 +391,24 @@ export class ChatService {
       return false
     }
     return this.fetchLock.acquire(`${channel}:prefetch`, async (): Promise<boolean> => {
+      if (!isCurrent()) return false
       if (isCached()) return false
+
+      // Once whole-day data exists, refresh it on a bounded cadence instead of
+      // permanently treating an incomplete current-day entry as authoritative.
+      if (datesToFetch.every((date) => this.chatCache.has(this.getCacheKey(channel, date)))) {
+        await this.loadChat(datesToFetch)
+        return isCurrent()
+      }
 
       // If the last prefetch range overlaps with the current range, skip prefetching
       if (
         this.lastPrefetchRange &&
         this.lastPrefetchRange.channel === channel &&
         this.lastPrefetchRange.startTime <= startTime &&
-        this.lastPrefetchRange.endTime >= endTime
+        this.lastPrefetchRange.endTime >= endTime &&
+        (this.lastPrefetchRange.complete ||
+          Date.now() - this.lastPrefetchAt < ChatService.incompleteRefreshInterval)
       )
         return false
 
@@ -467,6 +424,7 @@ export class ChatService {
             { baseUrl: this.settings.chat.justlogUrl }
           )
       )
+      if (!isCurrent()) return false
       if (prefetchedMessages == null) {
         console.warn(`Failed to prefetch messages for ${channel} from ${startDate} to ${endDate}`)
         return false
@@ -482,36 +440,50 @@ export class ChatService {
       console.debug(
         `Prefetched ${messages.length} messages for ${channel} from ${startTime} to ${endTime}`
       )
-      this.currentChatData = messages.sort((a, b) => a.timestamp - b.timestamp)
+      this.currentChatData = this.mergeMessageArrays(this.currentChatData, messages)
       this.lastPrefetchRange = {
         channel,
         startTime: startDate.getTime(),
         endTime: endDate.getTime(),
         complete: isComplete
       }
+      this.lastPrefetchAt = Date.now()
 
       // Load chat for the prefetched dates
-      this.loadChat(datesToFetch)
+      void this.loadChat(datesToFetch)
 
       return true
     })
   }
 
   private shouldLoadNewData(batchedData: TwitchMessage[][]): boolean {
-    // Check if the current chat data is already cached
-    const currentData = this.currentChatData
-    if (currentData.length > 0) {
-      const firstMessagesData = batchedData[0]!
-      const lastMessagesData = batchedData[batchedData.length - 1]!
-      const firstMessage = firstMessagesData[0]!
-      const lastMessage = lastMessagesData[lastMessagesData.length - 1]!
-      // Loaded data is consecutive, so we only need to check if the first and last messages are in the current data
-      return !(
-        isMessageInMessages(currentData, firstMessage) &&
-        isMessageInMessages(currentData, lastMessage)
+    // Empty padded days are valid. Compare the whole sequence so backfilled
+    // messages are visible even when the first and last messages stay unchanged.
+    const count = batchedData.reduce((total, batch) => total + batch.length, 0)
+    if (count !== this.currentChatData.length) return true
+    let index = 0
+    return batchedData.some((batch) =>
+      batch.some((message) => this.currentChatData[index++]?.getId() !== message.getId())
+    )
+  }
+
+  private publishChatBatches(batches: TwitchMessage[][]): void {
+    // Playback polls often. Day arrays are replaced on refresh, so their identity
+    // detects new data without scanning a full recording on every tick.
+    if (
+      this.publishedBatches?.messages === this.currentChatData &&
+      this.publishedBatches.batches.length === batches.length &&
+      batches.every((batch, index) => batch === this.publishedBatches?.batches[index])
+    )
+      return
+    if (this.shouldLoadNewData(batches)) {
+      this.currentChatData = this.mergeMessageArrays(this.currentChatData, batches.flat())
+      console.assert(
+        isSorted(this.currentChatData, (a, b) => a.timestamp - b.timestamp),
+        'Chat messages are not sorted'
       )
     }
-    return true
+    this.publishedBatches = { batches, messages: this.currentChatData }
   }
 
   public getLoadedMessages(): TwitchMessage[] {
@@ -547,8 +519,11 @@ export class ChatService {
     endTime: number
   ): Promise<TwitchMessage[]> {
     if (this.currentPotPlayerInfo === null) return []
+    const generation = this.selectionGeneration
+    const info = this.currentPotPlayerInfo
 
-    await this.prefetchMessagesForTime(this.currentPotPlayerInfo.channel, startTime, endTime)
+    await this.prefetchMessagesForTime(info.channel, startTime, endTime)
+    if (generation !== this.selectionGeneration || info !== this.currentPotPlayerInfo) return []
 
     return getMessagesBetween(this.currentChatData, startTime, endTime)
   }
@@ -559,12 +534,15 @@ export class ChatService {
     afterTime: number
   ): Promise<TwitchMessage[]> {
     if (this.currentPotPlayerInfo === null) return []
+    const generation = this.selectionGeneration
+    const info = this.currentPotPlayerInfo
 
     await this.prefetchMessagesForTime(
       this.currentPotPlayerInfo.channel,
       this.currentPotPlayerInfo.startTime + currentVideoTime - beforeTime,
       this.currentPotPlayerInfo.startTime + currentVideoTime + afterTime
     )
+    if (generation !== this.selectionGeneration || info !== this.currentPotPlayerInfo) return []
 
     const startTime = this.currentPotPlayerInfo.startTime + currentVideoTime - beforeTime
     const endTime = this.currentPotPlayerInfo.startTime + currentVideoTime + afterTime
@@ -576,12 +554,15 @@ export class ChatService {
     next?: boolean
   ): Promise<TwitchMessage[]> {
     if (this.currentPotPlayerInfo === null) return []
+    const generation = this.selectionGeneration
+    const info = this.currentPotPlayerInfo
 
     await this.prefetchMessagesForTime(
       this.currentPotPlayerInfo.channel,
       this.currentPotPlayerInfo.startTime + currentVideoTime - ChatService.prefetchTimePadding,
       this.currentPotPlayerInfo.startTime + currentVideoTime
     )
+    if (generation !== this.selectionGeneration || info !== this.currentPotPlayerInfo) return []
 
     return getMessagesForTime(
       this.currentChatData,
@@ -594,6 +575,7 @@ export class ChatService {
   public clearCache(): void {
     this.chatCache.clear()
     this.lastPrefetchRange = null
+    this.publishedBatches = null
   }
 
   public clearInvalidCache(): void {
@@ -603,5 +585,6 @@ export class ChatService {
       if (!messages || messages.length === 0) this.chatCache.delete(key)
     }
     this.lastPrefetchRange = null
+    this.publishedBatches = null
   }
 }
