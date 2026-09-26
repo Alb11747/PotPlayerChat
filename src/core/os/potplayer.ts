@@ -95,6 +95,10 @@ export async function getPlaylists(): Promise<{ name: string; url: string }[]> {
   }
   const files = await readdir(path.join(appData, 'PotPlayerMini64', 'Playlist'), {
     withFileTypes: true
+  }).catch((error: NodeJS.ErrnoException) => {
+    // Portable/fresh installations can have registry history but no playlists.
+    if (error.code === 'ENOENT') return []
+    throw error
   })
   const playlistFiles = files.filter((file) => file.isFile() && file.name.endsWith('.dpl'))
   const playlists: Awaited<ReturnType<typeof getPlaylists>> = []

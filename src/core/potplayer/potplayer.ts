@@ -14,9 +14,22 @@ const titleCache: Map<string, { channel: string; startTime: number; endTime?: nu
 
 const configKey = 'cache:title'
 let config: Conf | null = null
+const ongoingRecordingWindowMs = 2 * 24 * 60 * 60 * 1000
+
+function isStreamPossiblyRunning(startTime: number): boolean {
+  return Date.now() - startTime < ongoingRecordingWindowMs
+}
 
 async function getVideoEndTime(hwnd: HWND, startTime: number): Promise<number | null> {
-  const videoDuration = await getTotalVideoTime(hwnd)
+  let videoDuration: number
+  try {
+    videoDuration = await getTotalVideoTime(hwnd)
+  } catch (error) {
+    // Missing metadata keeps the manager's recovery/retry path active while the
+    // player is temporarily unavailable or unresponsive.
+    console.warn('Could not read PotPlayer video duration:', error)
+    return null
+  }
   if (!Number.isFinite(videoDuration) || videoDuration <= 0) {
     console.warn('Invalid PotPlayer video duration:', videoDuration)
     return null
@@ -50,22 +63,27 @@ export async function getPotplayerExtraInfo<
     cachedInfo = null
   }
   if (cachedInfo) {
-    if (cachedInfo.endTime === undefined) {
-      const endTime = await getVideoEndTime(instance.hwnd, cachedInfo.startTime)
-      if (endTime === null) return null
-      cachedInfo.endTime = endTime
-      titleCache.set(currentTitle, cachedInfo)
-      config?.set(configKey, Object.fromEntries(titleCache.entries()))
+    const possiblyRunning = isStreamPossiblyRunning(cachedInfo.startTime)
+    let endTime = cachedInfo.endTime
+    if (possiblyRunning || endTime === undefined) {
+      endTime = (await getVideoEndTime(instance.hwnd, cachedInfo.startTime)) ?? undefined
+      if (endTime === undefined) return null
+      // A growing recording's duration is only valid for this request, including
+      // when an older app version persisted a recent end time.
+      const cachedEndTime = possiblyRunning ? undefined : endTime
+      if (cachedInfo.endTime !== cachedEndTime) {
+        cachedInfo.endTime = cachedEndTime
+        titleCache.set(currentTitle, cachedInfo)
+        config?.set(configKey, Object.fromEntries(titleCache.entries()))
+      }
     }
     return {
       ...instance,
       channel: cachedInfo.channel,
       startTime: cachedInfo.startTime,
-      endTime: cachedInfo.endTime
+      endTime
     }
   }
-
-  const now = Date.now()
 
   function cacheTitleInfo(
     title: string,
@@ -73,11 +91,10 @@ export async function getPotplayerExtraInfo<
     startTime: number,
     endTime?: number
   ): void {
-    const isStreamPossiblyRunning = now - startTime < 2 * 24 * 60 * 60 * 1000
     const cacheData = {
       channel,
       startTime,
-      endTime: !isStreamPossiblyRunning ? endTime : undefined
+      endTime: !isStreamPossiblyRunning(startTime) ? endTime : undefined
     }
     const existing = titleCache.get(title)
     if (

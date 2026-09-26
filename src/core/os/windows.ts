@@ -12,30 +12,39 @@ if (!initializedBoxed.initialized) {
   initializedBoxed.initialized = true
 
   // koffi.alias('HWND', koffi.pointer('HANDLE', koffi.opaque()))
-  koffi.alias('HWND', 'uint64_t') // Opaque pointers can't be used with ipc, so we use uint64_t instead
+  koffi.alias('HWND', 'uintptr_t') // Opaque pointers can't be used with IPC
 
   koffi.alias('DWORD', 'uint32_t')
   koffi.alias('UINT', 'uint32_t')
   koffi.alias('BOOL', 'int32_t')
-  koffi.alias('LRESULT', 'int')
-  koffi.alias('WPARAM', 'uint32_t')
-  koffi.alias('LPARAM', 'void *')
+  koffi.alias('LRESULT', 'intptr_t')
+  koffi.alias('WPARAM', 'uintptr_t')
+  koffi.alias('LPARAM', 'intptr_t')
   koffi.alias('LPCSTR', 'string')
   koffi.alias('LPSTR', 'string')
   koffi.alias('LPWSTR', 'string')
 }
 
-const SendMessageW = promisify(
-  user32.func('LRESULT __stdcall SendMessageW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)')
-    .async
-)
-export function sendMessage(
+export async function sendMessage(
   hwnd: HWND,
   msg: number,
   wParam: number,
   lParam: number
 ): Promise<number> {
-  return SendMessageW(hwnd, msg, wParam, lParam)
+  const result = Buffer.alloc(koffi.sizeof('intptr_t'))
+  const succeeded = await SendMessageTimeoutW(
+    hwnd,
+    msg,
+    wParam,
+    lParam,
+    SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT,
+    250,
+    result
+  )
+  // The API status is separate from the signed message result: zero is a valid
+  // playback position and -1 is PotPlayer's stopped status.
+  if (!succeeded) throw new Error('PotPlayer window message failed or timed out')
+  return result.length === 8 ? Number(result.readBigInt64LE()) : result.readInt32LE()
 }
 
 const GetForegroundWindow = promisify(user32.func('HWND __stdcall GetForegroundWindow()').async)
@@ -54,12 +63,19 @@ const SendMessageTimeoutW = promisify(
     'LRESULT __stdcall SendMessageTimeoutW(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam, UINT fuFlags, UINT uTimeout, uintptr_t *lpdwResult)'
   ).async
 )
+// WM_GETTEXT receives a buffer address rather than an integer LPARAM.
+const SendWindowTextTimeoutW = promisify(
+  user32.func(
+    'LRESULT __stdcall SendMessageTimeoutW(HWND hWnd, UINT Msg, WPARAM wParam, void *lParam, UINT fuFlags, UINT uTimeout, uintptr_t *lpdwResult)'
+  ).async
+)
 const GetClassNameW = promisify(
   user32.func('int __stdcall GetClassNameW(HWND hWnd, LPWSTR lpClassName, int nMaxCount)').async
 )
 const titleBufferSize = 1024
 const WM_GETTEXT = 0x000d
 const SMTO_ABORTIFHUNG = 0x0002
+const SMTO_ERRORONEXIT = 0x0020
 
 function readWindowTextBuffer(buffer: Buffer, unicode: boolean): string {
   return buffer.toString(unicode ? 'utf16le' : 'utf8').replace(/\0.*$/s, '')
@@ -81,9 +97,9 @@ export async function getWindowText(hwnd: HWND, unicode: boolean = false): Promi
  */
 export async function getLiveWindowText(hwnd: HWND, timeoutMs = 250): Promise<string> {
   const buffer = Buffer.alloc(titleBufferSize * 2)
-  const result = Buffer.alloc(8)
+  const result = Buffer.alloc(koffi.sizeof('intptr_t'))
   try {
-    const succeeded = await SendMessageTimeoutW(
+    const succeeded = await SendWindowTextTimeoutW(
       hwnd,
       WM_GETTEXT,
       titleBufferSize,

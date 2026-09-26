@@ -1,5 +1,5 @@
 import type { HWND } from '@/types/globals'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const osMocks = vi.hoisted(() => ({
   getPlaylists: vi.fn(),
@@ -15,6 +15,7 @@ const hwnd = 1 as unknown as HWND
 const duration = 60 * 60 * 1000
 
 describe('getPotplayerExtraInfo', () => {
+  afterEach(() => vi.useRealTimers())
   beforeEach(() => {
     clearTitleCache()
     osMocks.getPlaylists.mockReset()
@@ -37,6 +38,90 @@ describe('getPotplayerExtraInfo', () => {
     })
     expect(osMocks.getPlaylists).not.toHaveBeenCalled()
     expect(osMocks.getStreamHistory).not.toHaveBeenCalled()
+  })
+
+  it('refreshes growing recordings on every cache hit without persisting their end time', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-25T23:00:00Z'))
+    const title = '[2026-09-25T22-00-00Z] [growing_stream] Stream title.mp4'
+    const startTime = Date.parse('2026-09-25T22:00:00Z')
+    const set = vi.fn()
+    initCache({ get: vi.fn(), set, delete: vi.fn() } as never)
+    osMocks.getTotalVideoTime
+      .mockResolvedValueOnce(duration)
+      .mockResolvedValueOnce(duration * 2)
+      .mockResolvedValueOnce(duration * 3)
+
+    for (let index = 1; index <= 3; index++) {
+      expect((await getPotplayerExtraInfo({ hwnd, title }))?.endTime).toBe(
+        startTime + duration * index
+      )
+      expect(set.mock.lastCall?.[1][title].endTime).toBeUndefined()
+    }
+    expect(osMocks.getTotalVideoTime).toHaveBeenCalledTimes(3)
+    expect(set).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes a recent persisted end time and caches the final duration after two days', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-25T23:00:00Z'))
+    const title = 'Recent cached recording.mp4'
+    const startTime = Date.parse('2026-09-25T22:00:00Z')
+    const set = vi.fn()
+    initCache({
+      get: vi.fn().mockReturnValue({
+        [title]: { channel: 'growing_stream', startTime, endTime: startTime + 1000 }
+      }),
+      set,
+      delete: vi.fn()
+    } as never)
+
+    expect((await getPotplayerExtraInfo({ hwnd, title }))?.endTime).toBe(startTime + duration)
+    expect(set.mock.lastCall?.[1][title].endTime).toBeUndefined()
+    vi.setSystemTime(new Date(startTime + 2 * 24 * 60 * 60 * 1000))
+    osMocks.getTotalVideoTime.mockResolvedValue(duration * 2)
+    expect((await getPotplayerExtraInfo({ hwnd, title }))?.endTime).toBe(startTime + duration * 2)
+    expect(set.mock.lastCall?.[1][title].endTime).toBe(startTime + duration * 2)
+    await getPotplayerExtraInfo({ hwnd, title })
+    expect(osMocks.getTotalVideoTime).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not return a stale recent duration when refreshing it fails', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-25T23:00:00Z'))
+    const title = 'Recent cached recording.mp4'
+    const startTime = Date.parse('2026-09-25T22:00:00Z')
+    initCache({
+      get: vi.fn().mockReturnValue({
+        [title]: { channel: 'growing_stream', startTime, endTime: startTime + 1000 }
+      }),
+      set: vi.fn(),
+      delete: vi.fn()
+    } as never)
+    osMocks.getTotalVideoTime.mockResolvedValue(0)
+
+    expect(await getPotplayerExtraInfo({ hwnd, title })).toBeNull()
+    osMocks.getTotalVideoTime.mockRejectedValue(new Error('timed out'))
+    expect(await getPotplayerExtraInfo({ hwnd, title })).toBeNull()
+  })
+
+  it('returns missing metadata after a native timeout and recovers on the next lookup', async () => {
+    const title = '[2023-04-17T22-30-07Z] [fobm4ster] Stream title.mp4'
+    const error = new Error('PotPlayer window message failed or timed out')
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    osMocks.getTotalVideoTime.mockRejectedValueOnce(error).mockResolvedValueOnce(duration)
+
+    try {
+      expect(await getPotplayerExtraInfo({ hwnd, title })).toBeNull()
+      expect(warning).toHaveBeenCalledWith('Could not read PotPlayer video duration:', error)
+      expect(await getPotplayerExtraInfo({ hwnd, title })).toMatchObject({
+        channel: 'fobm4ster',
+        endTime: Date.parse('2023-04-17T23:30:07Z')
+      })
+      expect(osMocks.getTotalVideoTime).toHaveBeenCalledTimes(2)
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
