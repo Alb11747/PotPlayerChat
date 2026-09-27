@@ -135,8 +135,8 @@ export namespace TwitchUserService {
         saveUserIdCache()
 
         return userId
-      } catch {
-        userIdCache.set(username, null)
+      } catch (error) {
+        console.warn(`Failed to fetch Twitch user ID for ${username}:`, error)
         return null
       }
     })
