@@ -20,14 +20,11 @@ function info(startTime = noon, channel = 'channel'): PotPlayerInfo {
     title: 'recording'
   }
 }
-function service(api = {} as WindowApi): ChatService {
-  return new ChatService(
-    api,
-    { state: 'idle', errorMessage: '' },
-    {
-      chat: { justlogUrl: 'https://logs.example.test', chatMessageLimit: 100 }
-    }
-  )
+function service(
+  api = {} as WindowApi,
+  settings = { chat: { justlogUrl: 'https://logs.example.test', chatMessageLimit: 100 } }
+): ChatService {
+  return new ChatService(api, { state: 'idle', errorMessage: '' }, settings)
 }
 function message(id: string, time: number): TwitchChatMessage {
   return new TwitchChatMessage('', {}, id, time, 'channel', 'alice', id)
@@ -53,6 +50,140 @@ afterEach(() => {
 })
 
 describe('playback chat loading', () => {
+  it('replaces historical cache and rows when the source changes without reselection', async () => {
+    const settings = { chat: { justlogUrl: 'https://old.test', chatMessageLimit: 100 } }
+    const chat = service({} as WindowApi, settings)
+    const old = message('old', noon - day)
+    const fresh = message('fresh', noon - day)
+    const fetch = vi
+      .spyOn(JustLogAPI.prototype, 'getChannelLogsByDate')
+      .mockResolvedValueOnce({ messages: [old] })
+      .mockResolvedValue({ messages: [fresh] })
+    await chat.updateVideoInfo(info(noon - day), 0)
+    const oldColors = chat.usernameColorTimelineMap
+    settings.chat.justlogUrl = 'https://new.test'
+    expect(chat.getLoadedMessages()).toEqual([])
+    expect(chat.usernameColorTimelineMap).not.toBe(oldColors)
+    expect(chat.loadChatCached()).toBe(false)
+    await chat.loadChat()
+    expect(chat.getLoadedMessages()).toEqual([fresh])
+    expect(fetch.mock.calls.map(([, options]) => options?.baseUrl)).toEqual([
+      'https://old.test',
+      'https://new.test'
+    ])
+  })
+
+  it('allows the new source to load while an old daily request is pending and discards its result', async () => {
+    const settings = { chat: { justlogUrl: 'https://old.test', chatMessageLimit: 100 } }
+    const chat = service({} as WindowApi, settings)
+    const pending = deferred<ChatLog>()
+    const fresh = message('fresh', noon)
+    vi.spyOn(JustLogAPI.prototype, 'getChannelLogsByDate')
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ messages: [fresh] })
+    const oldLoad = chat.updateVideoInfo(info(), 0)
+    settings.chat.justlogUrl = 'https://new.test'
+    await chat.loadChat()
+    expect(chat.getLoadedMessages()).toEqual([fresh])
+    pending.resolve({ messages: [message('old', noon)] })
+    await oldLoad
+    expect(chat.getLoadedMessages()).toEqual([fresh])
+    expect(chat.loadChatCached()).toBe(true)
+    expect(chat.getLoadedMessages()).toEqual([fresh])
+  })
+
+  it('detects a source change when a daily response completes before the next playback query', async () => {
+    const settings = { chat: { justlogUrl: 'https://old.test', chatMessageLimit: 100 } }
+    const chat = service({} as WindowApi, settings)
+    const pending = deferred<ChatLog>()
+    vi.spyOn(JustLogAPI.prototype, 'getChannelLogsByDate').mockReturnValue(pending.promise)
+    const metadata = vi.spyOn(chat, 'updateMessageData')
+    const load = chat.updateVideoInfo(info(), 0)
+    settings.chat.justlogUrl = 'https://new.test'
+    pending.resolve({ messages: [message('stale', noon)] })
+    await load
+    expect(chat.currentChatData).toEqual([])
+    expect(chat.state.state).toBe('idle')
+    expect(chat.loadChatCached()).toBe(false)
+    expect(metadata).not.toHaveBeenCalled()
+  })
+
+  it.each(['between', 'around', 'time', 'range'])(
+    'discards an in-flight %s query when settings change without another service call',
+    async (queryType) => {
+      const settings = { chat: { justlogUrl: 'https://old.test', chatMessageLimit: 100 } }
+      const chat = service({} as WindowApi, settings)
+      await chat.updateVideoInfo(info(), -1)
+      const pending = deferred<ChatLog>()
+      vi.spyOn(JustLogAPI.prototype, 'getChannelLogs').mockReturnValue(pending.promise)
+      const daily = vi.spyOn(JustLogAPI.prototype, 'getChannelLogsByDate')
+      const query =
+        queryType === 'between'
+          ? chat.getMessagesBetweenTimes(noon, noon + 1000)
+          : queryType === 'around'
+            ? chat.getMessagesAroundTime(1000, 1000, 1000)
+            : queryType === 'time'
+              ? chat.getMessagesForTime(1000)
+              : chat.getMessagesInRange(noon, noon + 1000)
+      settings.chat.justlogUrl = 'https://new.test'
+      pending.resolve({ messages: [message('stale', noon)] })
+      if (queryType === 'range') await expect(query).rejects.toMatchObject({ name: 'AbortError' })
+      else await expect(query).resolves.toEqual([])
+      expect(chat.getLoadedMessages()).toEqual([])
+      expect(daily).not.toHaveBeenCalled()
+    }
+  )
+
+  it('clears a successful prefetch range when the source changes', async () => {
+    const settings = { chat: { justlogUrl: 'https://old.test', chatMessageLimit: 100 } }
+    const chat = service({} as WindowApi, settings)
+    await chat.updateVideoInfo(info(noon - day), -1)
+    const range = vi
+      .spyOn(JustLogAPI.prototype, 'getChannelLogs')
+      .mockResolvedValueOnce({ messages: [message('old', noon - day)] })
+      .mockResolvedValue({ messages: [message('fresh', noon - day)] })
+    // Keep daily backfill pending so the next query exercises prefetch suppression.
+    vi.spyOn(JustLogAPI.prototype, 'getChannelLogsByDate').mockReturnValue(
+      deferred<ChatLog>().promise
+    )
+    await chat.getMessagesBetweenTimes(noon - day, noon - day + 1000)
+    settings.chat.justlogUrl = 'https://new.test'
+    const result = await chat.getMessagesBetweenTimes(noon - day, noon - day + 1000)
+    expect(result.map((message) => message.getId())).toEqual(['fresh'])
+    expect(range.mock.calls.map(([, options]) => options?.baseUrl)).toEqual([
+      'https://old.test',
+      'https://new.test'
+    ])
+  })
+
+  it('refreshes a daily response started before midnight even when it completes the next day', async () => {
+    const chat = service()
+    vi.setSystemTime(Date.parse('2026-09-25T23:59:59Z'))
+    const pending = deferred<ChatLog>()
+    const early = message('early', noon)
+    const late = message('late', Date.parse('2026-09-25T23:59:59.500Z'))
+    const fetch = vi
+      .spyOn(JustLogAPI.prototype, 'getChannelLogsByDate')
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ messages: [early, late] })
+    const load = chat.updateVideoInfo(info(), 0)
+    vi.setSystemTime(Date.parse('2026-09-26T00:00:01Z'))
+    pending.resolve({ messages: [early] })
+    await load
+    await vi.advanceTimersByTimeAsync(ChatService.incompleteRefreshInterval)
+    await chat.loadChat()
+    expect(chat.getLoadedMessages()).toEqual([early])
+    expect(fetch).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(ChatService.incompleteRefreshInterval)
+    await chat.loadChat()
+    expect(chat.getLoadedMessages()).toEqual([early, late])
+    expect(fetch).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(ChatService.incompleteRefreshInterval)
+    await chat.loadChat()
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
   it('accepts an empty padded day before nonempty data on repeated loads', async () => {
     const chat = service()
     const start = Date.parse('2026-09-24T00:30:00Z')

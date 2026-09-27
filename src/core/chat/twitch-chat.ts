@@ -43,6 +43,7 @@ export class ChatService {
   private api: WindowApi
   private justLogApi: JustLogAPI
   private settings: { chat: ChatSettings }
+  private sourceUrl: string
 
   public usernameColorTimelineMap: TimelineMap<string, string> = new TimelineMap()
   public currentPotPlayerInfo: PotPlayerInfo | null = null
@@ -75,14 +76,48 @@ export class ChatService {
     this.api = api
     this.state = state
     this.settings = settings
+    this.sourceUrl = settings.chat.justlogUrl
 
     this.justLogApi = new JustLogAPI()
+  }
+
+  private syncSource(): void {
+    const sourceUrl = this.settings.chat.justlogUrl
+    if (sourceUrl === this.sourceUrl) return
+    this.sourceUrl = sourceUrl
+    ++this.selectionGeneration
+    clearTimeout(this.loadChatTimer)
+    this.clearCache()
+    this.currentChatData = []
+    this.usernameColorTimelineMap = new TimelineMap()
+    this.state.state = 'idle'
+    this.state.errorMessage = ''
+  }
+
+  private captureRequestContext(): {
+    info: PotPlayerInfo | null
+    baseUrl: string
+    isCurrent: () => boolean
+  } {
+    this.syncSource()
+    const generation = this.selectionGeneration
+    const info = this.currentPotPlayerInfo
+    return {
+      info,
+      baseUrl: this.sourceUrl,
+      isCurrent: () => {
+        // Settings are mutable; a source change need not reselect the recording.
+        this.syncSource()
+        return generation === this.selectionGeneration && info === this.currentPotPlayerInfo
+      }
+    }
   }
 
   public async updateVideoInfo(
     newPotPlayerInfo: PotPlayerInfo | null,
     loadChatDelay: number = 1000
   ): Promise<boolean> {
+    this.syncSource()
     const generation = ++this.selectionGeneration
     clearTimeout(this.loadChatTimer)
     this.lastPrefetchRange = null
@@ -107,6 +142,7 @@ export class ChatService {
   }
 
   public loadChatCached(): boolean {
+    this.syncSource()
     if (!this.currentPotPlayerInfo) {
       console.warn('No PotPlayer info available for chat loading.')
       return false
@@ -156,10 +192,7 @@ export class ChatService {
   }
 
   async loadChat(loadDates: Date[] | null = null): Promise<void> {
-    const generation = this.selectionGeneration
-    const info = this.currentPotPlayerInfo
-    const isCurrent = (): boolean =>
-      generation === this.selectionGeneration && info === this.currentPotPlayerInfo
+    const { info, baseUrl, isCurrent } = this.captureRequestContext()
     const { hwnd, channel, startTime: videoStartTime, endTime } = info ?? {}
     if (!hwnd || !channel || !videoStartTime) {
       this.state.state = 'no-potplayer-info'
@@ -194,6 +227,7 @@ export class ChatService {
             const cached = this.chatCache.get(cacheKey)
             if (this.isCacheFresh(cacheKey)) return cached?.messages ?? []
             try {
+              const requestStartedAt = new Date()
               const data = await logTime(
                 `Fetching chat data for ${channel} on ${date.toISOString()}`,
                 () =>
@@ -204,7 +238,7 @@ export class ChatService {
                       month: date.getUTCMonth() + 1,
                       day: date.getUTCDate()
                     },
-                    { baseUrl: this.settings.chat.justlogUrl }
+                    { baseUrl }
                   )
               )
               if (!isCurrent()) return []
@@ -214,7 +248,8 @@ export class ChatService {
               this.updateMessageData(messages)
               this.chatCache.set(cacheKey, {
                 messages,
-                complete: !this.isSameUTCDate(date, new Date()),
+                // A request started before midnight cannot certify that entire day.
+                complete: !this.isSameUTCDate(date, requestStartedAt),
                 fetchedAt: Date.now()
               })
               return messages
@@ -284,7 +319,7 @@ export class ChatService {
     const year = date.getUTCFullYear()
     const month = date.getUTCMonth() + 1 // Months are 0-indexed
     const day = date.getUTCDate()
-    return `${channel}:${year}-${month}-${day}`
+    return JSON.stringify([this.sourceUrl, channel, `${year}-${month}-${day}`])
   }
 
   private isSameUTCDate(d1: Date, d2: Date): boolean {
@@ -296,6 +331,7 @@ export class ChatService {
   }
 
   public updateMessageData(messages: TwitchMessage[]): void {
+    this.syncSource()
     // Update the username color cache
     for (const msg of messages) {
       if (msg.type !== 'chat' || !msg.username || !msg.color) continue
@@ -318,6 +354,7 @@ export class ChatService {
     messages: readonly TwitchMessage[],
     signal?: AbortSignal
   ): Promise<void> {
+    const { isCurrent } = this.captureRequestContext()
     const work = new CooperativeWork(signal)
     const colors = new TimelineMap<string, string>()
     const previousColors = new Map<string, string>()
@@ -339,11 +376,13 @@ export class ChatService {
       if (pause) await pause
     }
     for (const [channel, id] of roomIds) {
+      if (!isCurrent()) return
       TwitchUserService.userIdCache.set(channel, id)
       const pause = work.checkpoint()
       if (pause) await pause
     }
     work.throwIfAborted()
+    if (!isCurrent()) return
     this.usernameColorTimelineMap = colors
   }
 
@@ -364,10 +403,7 @@ export class ChatService {
     startTime: number,
     endTime: number
   ): Promise<boolean> {
-    const generation = this.selectionGeneration
-    const info = this.currentPotPlayerInfo
-    const isCurrent = (): boolean =>
-      generation === this.selectionGeneration && info === this.currentPotPlayerInfo
+    const { baseUrl, isCurrent } = this.captureRequestContext()
     if (endTime - startTime > 8 * 60 * 60 * 1000) return false // Avoid fetching too large ranges
 
     const padding = ChatService.prefetchTimePadding
@@ -390,7 +426,8 @@ export class ChatService {
       this.loadChatCached()
       return false
     }
-    return this.fetchLock.acquire(`${channel}:prefetch`, async (): Promise<boolean> => {
+    const prefetchKey = JSON.stringify([baseUrl, channel, 'prefetch'])
+    return this.fetchLock.acquire(prefetchKey, async (): Promise<boolean> => {
       if (!isCurrent()) return false
       if (isCached()) return false
 
@@ -421,7 +458,7 @@ export class ChatService {
               fromTime: startDate,
               toTime: endDate
             },
-            { baseUrl: this.settings.chat.justlogUrl }
+            { baseUrl }
           )
       )
       if (!isCurrent()) return false
@@ -487,6 +524,7 @@ export class ChatService {
   }
 
   public getLoadedMessages(): TwitchMessage[] {
+    this.syncSource()
     return this.currentChatData
   }
 
@@ -497,7 +535,7 @@ export class ChatService {
     signal?: AbortSignal
   ): Promise<TwitchMessage[]> {
     signal?.throwIfAborted()
-    const info = this.currentPotPlayerInfo
+    const { info, baseUrl, isCurrent } = this.captureRequestContext()
     if (!info) return []
 
     const data = await this.justLogApi.getChannelLogs(
@@ -506,10 +544,11 @@ export class ChatService {
         fromTime: new Date(startTime),
         toTime: new Date(endTime)
       },
-      { baseUrl: this.settings.chat.justlogUrl }
+      { baseUrl }
     )
     // JustLog does not accept an AbortSignal; never publish a cancelled response.
     signal?.throwIfAborted()
+    if (!isCurrent()) throw new DOMException('Chat source or recording changed', 'AbortError')
     if (data === null) throw new Error('Failed to load chat range')
     return deduplicateMessages(data.messages).sort((a, b) => a.timestamp - b.timestamp)
   }
@@ -518,12 +557,11 @@ export class ChatService {
     startTime: number,
     endTime: number
   ): Promise<TwitchMessage[]> {
-    if (this.currentPotPlayerInfo === null) return []
-    const generation = this.selectionGeneration
-    const info = this.currentPotPlayerInfo
+    const { info, isCurrent } = this.captureRequestContext()
+    if (info === null) return []
 
     await this.prefetchMessagesForTime(info.channel, startTime, endTime)
-    if (generation !== this.selectionGeneration || info !== this.currentPotPlayerInfo) return []
+    if (!isCurrent()) return []
 
     return getMessagesBetween(this.currentChatData, startTime, endTime)
   }
@@ -533,19 +571,18 @@ export class ChatService {
     beforeTime: number,
     afterTime: number
   ): Promise<TwitchMessage[]> {
-    if (this.currentPotPlayerInfo === null) return []
-    const generation = this.selectionGeneration
-    const info = this.currentPotPlayerInfo
+    const { info, isCurrent } = this.captureRequestContext()
+    if (info === null) return []
 
     await this.prefetchMessagesForTime(
-      this.currentPotPlayerInfo.channel,
-      this.currentPotPlayerInfo.startTime + currentVideoTime - beforeTime,
-      this.currentPotPlayerInfo.startTime + currentVideoTime + afterTime
+      info.channel,
+      info.startTime + currentVideoTime - beforeTime,
+      info.startTime + currentVideoTime + afterTime
     )
-    if (generation !== this.selectionGeneration || info !== this.currentPotPlayerInfo) return []
+    if (!isCurrent()) return []
 
-    const startTime = this.currentPotPlayerInfo.startTime + currentVideoTime - beforeTime
-    const endTime = this.currentPotPlayerInfo.startTime + currentVideoTime + afterTime
+    const startTime = info.startTime + currentVideoTime - beforeTime
+    const endTime = info.startTime + currentVideoTime + afterTime
     return getMessagesBetween(this.currentChatData, startTime, endTime)
   }
 
@@ -553,20 +590,19 @@ export class ChatService {
     currentVideoTime: number,
     next?: boolean
   ): Promise<TwitchMessage[]> {
-    if (this.currentPotPlayerInfo === null) return []
-    const generation = this.selectionGeneration
-    const info = this.currentPotPlayerInfo
+    const { info, isCurrent } = this.captureRequestContext()
+    if (info === null) return []
 
     await this.prefetchMessagesForTime(
-      this.currentPotPlayerInfo.channel,
-      this.currentPotPlayerInfo.startTime + currentVideoTime - ChatService.prefetchTimePadding,
-      this.currentPotPlayerInfo.startTime + currentVideoTime
+      info.channel,
+      info.startTime + currentVideoTime - ChatService.prefetchTimePadding,
+      info.startTime + currentVideoTime
     )
-    if (generation !== this.selectionGeneration || info !== this.currentPotPlayerInfo) return []
+    if (!isCurrent()) return []
 
     return getMessagesForTime(
       this.currentChatData,
-      this.currentPotPlayerInfo.startTime + currentVideoTime,
+      info.startTime + currentVideoTime,
       this.settings.chat.chatMessageLimit,
       next
     )
