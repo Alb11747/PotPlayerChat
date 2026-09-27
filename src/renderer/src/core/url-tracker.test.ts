@@ -1,9 +1,33 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UrlTracker } from './url-tracker'
+import { createDefaultSettings, hydrateSettings } from '../state/settings-model'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('URL tracker retry', () => {
+  it('uses hydrated, edited, and reset resolver settings in an existing tracker', async () => {
+    const getLinkPreview = vi.fn().mockResolvedValue({ status: 200, link: 'page' })
+    vi.stubGlobal('window', { api: { getLinkPreview } })
+    const settings = createDefaultSettings()
+    const tracker = new UrlTracker(() => settings.chat)
+    Object.assign(
+      settings,
+      hydrateSettings({
+        chat: { chatterinoBaseUrl: 'https://saved.example/resolver' }
+      })
+    )
+    await tracker.getPreview('https://example.com/saved')
+    settings.chat.chatterinoBaseUrl = 'https://edited.example/resolver'
+    await tracker.getPreview('https://example.com/edited')
+    Object.assign(settings, createDefaultSettings())
+    await tracker.getPreview('https://example.com/reset')
+    expect(getLinkPreview.mock.calls.map((call) => call[1])).toEqual([
+      'https://saved.example/resolver',
+      'https://edited.example/resolver',
+      createDefaultSettings().chat.chatterinoBaseUrl
+    ])
+  })
+
   it('scopes layout notifications to changed dimensions and failures, excluding URL history', async () => {
     vi.stubGlobal('window', {
       api: { addUrlSeen: vi.fn(), addUrlClicked: vi.fn() }

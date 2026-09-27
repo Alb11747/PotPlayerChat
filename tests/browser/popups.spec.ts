@@ -19,6 +19,25 @@ for (const scenario of ['initial', 'late', 'missing']) {
 }
 
 for (const popup of ['search', 'user']) {
+  for (const offset of [1, -1]) {
+    test(`${popup} renders the captured ${offset > 0 ? 'positive' : 'negative'} global and session offsets`, async ({
+      page
+    }) => {
+      await page.goto(
+        `/?popup=${popup}&globalOffset=${offset * 10_000}&sessionOffset=${offset * 5_000}`
+      )
+      const row = page.locator('[data-transcript-key="popup-600"]')
+      await expect(row).toBeVisible()
+      await expect(row.locator('[data-message-part="time"]')).toHaveText(
+        offset > 0 ? '[9:45]' : '[10:15]'
+      )
+      await page.evaluate(() => window.resolveFixtureHistory!())
+      await expect(row.locator('[data-message-part="time"]')).toHaveText(
+        offset > 0 ? '[9:45]' : '[10:15]'
+      )
+    })
+  }
+
   test(`${popup} keeps the user's position when late history arrives`, async ({ page }) => {
     await page.goto(`/?popup=${popup}`)
     const viewport = page.locator('.virtual-transcript')

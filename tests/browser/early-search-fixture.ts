@@ -18,6 +18,7 @@ const messages = ['needle alpha', 'needle beta', 'ordinary message'].map(
     )
 )
 const context: SearchContext = {
+  timestampOffset: 0,
   potplayerInfo: { hwnd: 1 as HWND, pid: 1, title: 'Fixture', channel: 'fixture', startTime },
   initialMessages: messages,
   loadedMessages: messages,

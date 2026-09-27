@@ -58,6 +58,9 @@
         )
       : messages[focusedIndex]!,
     focusedMessage: messages[focusedIndex]!,
+    timestampOffset:
+      Number(new URLSearchParams(location.search).get('globalOffset') ?? 0) +
+      Number(new URLSearchParams(location.search).get('sessionOffset') ?? 0),
     potplayerInfo: {
       hwnd: {} as HWND,
       pid: 1,

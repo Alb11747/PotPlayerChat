@@ -25,6 +25,7 @@ function createContext(): UserWindowContext {
   return {
     username: 'Alice',
     clickedMessage,
+    timestampOffset: 0,
     potplayerInfo: {
       hwnd: 1n as unknown as HWND,
       pid: 1,

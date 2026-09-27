@@ -32,6 +32,8 @@ export interface SharedSearchData {
 }
 
 export type SearchContext = SearchOptions & {
+  /** Combined global and session offset captured from the opening recording. */
+  timestampOffset: number
   preview?: SearchPreview
   initialMessages: readonly TwitchMessage[]
   loadedMessages: readonly TwitchMessage[]

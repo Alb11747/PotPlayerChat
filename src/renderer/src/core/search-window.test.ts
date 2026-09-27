@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function createContext(): SearchContext {
   return {
+    timestampOffset: 0,
     potplayerInfo: {
       hwnd: 1n as unknown as HWND,
       pid: 1,

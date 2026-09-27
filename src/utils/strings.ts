@@ -127,7 +127,9 @@ export function formatTime(
 ): string {
   const totalDuration =
     endTime !== undefined && startTime !== undefined ? endTime - startTime : undefined
-  elapsedTime ??= startTime != null ? timeMs + offset - startTime : undefined
+  // Playback selects chat at video time plus the synchronization offset, so
+  // converting a chat timestamp back to video time must subtract that offset.
+  elapsedTime ??= startTime != null ? timeMs - offset - startTime : undefined
   if (
     elapsedTime === undefined ||
     elapsedTime < 0 ||

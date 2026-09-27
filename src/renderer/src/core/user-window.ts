@@ -10,6 +10,8 @@ import {
 } from './popup-window'
 
 export type UserWindowContext = {
+  /** Combined global and session offset captured from the opening recording. */
+  timestampOffset: number
   username: string
   clickedMessage: TwitchMessage
   potplayerInfo: PotPlayerInfo

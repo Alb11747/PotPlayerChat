@@ -12,6 +12,7 @@ function row(timestamp: number): TwitchChatMessage {
 }
 function context(): SearchContext {
   return {
+    timestampOffset: 0,
     potplayerInfo: {
       hwnd: 1n as unknown as HWND,
       pid: 1,
@@ -27,6 +28,45 @@ function context(): SearchContext {
 }
 
 describe('popup history range capture', () => {
+  it.each([15_000, -15_000])(
+    'preserves opening offset %i across nested popup contexts',
+    (offset) => {
+      const source = { ...context(), timestampOffset: offset }
+      let token = ''
+      const hostWindow = {
+        location: { href: 'https://potplayerchat.test/index.html' },
+        open: (url?: string | URL): Window => {
+          token = new URL(String(url)).hash.slice(1)
+          return {} as Window
+        }
+      }
+      const searches = new SearchContextRegistry()
+      const users = new UserContextRegistry()
+      openSearchPopup({ ...source }, hostWindow as never, searches)
+      const search = searches.take(token)!
+      source.timestampOffset = 90_000
+      openUserPopup(
+        {
+          ...search,
+          initialMessages: [...search.initialMessages],
+          loadedMessages: [...search.loadedMessages],
+          username: 'alice',
+          clickedMessage: search.initialMessages[0]!,
+          searchUsername: vi.fn()
+        },
+        hostWindow as never,
+        users
+      )
+      const user = users.take(token)!
+      openSearchPopup({ ...user }, hostWindow as never, searches)
+      expect([
+        search.timestampOffset,
+        user.timestampOffset,
+        searches.take(token)!.timestampOffset
+      ]).toEqual([offset, offset, offset])
+    }
+  )
+
   it('uses the captured focus or visible history without expanding to future loaded messages', () => {
     expect(capturePopupSearchRange(context())).toEqual({ startTime: 100, endTime: HOUR + 100 })
     expect(capturePopupSearchRange({ ...context(), focusedMessage: row(2 * HOUR) })).toEqual({

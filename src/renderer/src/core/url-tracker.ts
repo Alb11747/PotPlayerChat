@@ -55,7 +55,10 @@ export class UrlTracker {
     return this.cacheState.get('version') ?? 0
   }
 
-  constructor(private settings: { chatterinoBaseUrl: string }) {}
+  // Hydration and reset replace settings categories; resolve the current category at request time.
+  constructor(
+    private settings: { chatterinoBaseUrl: string } | (() => { chatterinoBaseUrl: string })
+  ) {}
 
   /**
    * Fetch link preview data for a URL
@@ -77,7 +80,8 @@ export class UrlTracker {
       this.loadingUrls.add(url)
       try {
         // Use IPC to fetch from main process (avoids CORS)
-        const data = await window.api.getLinkPreview(url, this.settings.chatterinoBaseUrl, {
+        const settings = typeof this.settings === 'function' ? this.settings() : this.settings
+        const data = await window.api.getLinkPreview(url, settings.chatterinoBaseUrl, {
           refresh
         })
         if (generation !== this.generation) return null

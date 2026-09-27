@@ -37,6 +37,8 @@ declare global {
   interface Window {
     transcriptTest: TranscriptFixture
     fixtureReady?: boolean
+    fixtureHoldMessages?: () => void
+    fixtureReleaseMessages?: () => void
     fixtureUsername?: string
     fixtureUsernameAlt?: boolean
     fixtureUrl?: string

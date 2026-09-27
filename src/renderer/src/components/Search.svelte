@@ -24,7 +24,7 @@
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
-  const urlTracker = new UrlTracker(settings.chat)
+  const urlTracker = new UrlTracker(() => settings.chat)
   // The context captures one recording and its source-owned caches for this popup's lifetime.
   const sharedData = untrack(() => context.sharedData ?? new SharedSearchDataCache())
   const searchRange = untrack(() => capturePopupSearchRange(context))
@@ -518,6 +518,7 @@
         bind:this={vlistRef}
         data={filteredMessages}
         {urlTracker}
+        timestampOffset={context.timestampOffset}
         videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
         videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
         searchQuery={searchPattern}
@@ -553,6 +554,7 @@
               <ChatMessage
                 {presentationStore}
                 message={msg}
+                timestampOffset={context.timestampOffset}
                 videoStartTime={chatService?.currentPotPlayerInfo?.startTime}
                 videoEndTime={chatService?.currentPotPlayerInfo?.endTime}
                 {urlTracker}

@@ -1,6 +1,56 @@
 import { expect, test } from '@playwright/test'
 import type {} from './fixture'
 
+test('changing the log source leaves a captured history view without a playback event', async ({
+  page
+}) => {
+  await page.goto('/?main')
+  await expect(page.getByRole('button', { name: 'Search chat', exact: true })).toBeEnabled()
+  // Consume the real opening context without needing another browser window for this callback test.
+  await page.evaluate(() => {
+    window.open = (url) => {
+      const token = new URL(String(url)).hash.slice(1)
+      window.fixtureSearchContext = window.potPlayerChatPopup!.takeContext(
+        token
+      ) as typeof window.fixtureSearchContext
+      return window
+    }
+  })
+  await page.getByRole('button', { name: 'Search chat', exact: true }).click()
+  await page.evaluate(() => {
+    const context = window.fixtureSearchContext!
+    context.focusMessage(context.initialMessages[0]!)
+  })
+  await expect(page.locator('[data-transcript-key="main-0"]')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Return to playback', exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    window.fixtureHoldMessages!()
+    window.fixturePlayers!.time(1000001)
+  })
+  await page.waitForFunction(() => Boolean(window.fixtureReleaseMessages))
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click()
+  const sourceInput = page.getByLabel('JustLog URL:', { exact: true })
+  const originalSource = await sourceInput.inputValue()
+  await sourceInput.fill('https://other-logs.example.test')
+  await page.getByRole('button', { name: 'Return to chat', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Return to playback', exact: true })
+  ).not.toBeVisible()
+  await expect(page.locator('[data-transcript-key="main-199"]')).toBeVisible()
+  // Switching back must not make the original pending request current again.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click()
+  await sourceInput.fill(originalSource)
+  await page.getByRole('button', { name: 'Return to chat', exact: true }).click()
+  await expect(page.locator('[data-transcript-key="main-199"]')).toBeVisible()
+  await page.evaluate(async () => {
+    window.fixtureReleaseMessages!()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  })
+  await expect(page.locator('[data-transcript-key="main-199"]')).toBeVisible()
+})
+
 test('playback retains the final logged message across repeated time updates', async ({ page }) => {
   await page.goto('/?main')
   const last = page.locator('[data-transcript-key="main-199"]')

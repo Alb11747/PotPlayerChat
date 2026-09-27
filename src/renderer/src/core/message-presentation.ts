@@ -206,7 +206,7 @@ export class MessagePresentationStore {
     const elapsed =
       options.elapsedTime ??
       (options.videoStartTime !== undefined
-        ? message.timestamp + options.timestampOffset - options.videoStartTime
+        ? message.timestamp - options.timestampOffset - options.videoStartTime
         : undefined)
     const duration =
       options.videoEndTime !== undefined && options.videoStartTime !== undefined

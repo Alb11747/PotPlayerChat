@@ -5,6 +5,7 @@ import { createDefaultSettings } from '../state/settings-model'
 import { MessagePresentationStore, presentationOptions } from './message-presentation'
 import { TwitchUserService, TwitchBadgeService, TwitchEmoteService } from '@/core/chat/twitch-api'
 import { TimelineMap } from '@/utils/datastructs'
+import { settings } from '../state/settings.svelte'
 
 vi.mock('../state/settings.svelte', () => ({ settings: createDefaultSettings() }))
 vi.mock('../state/config', () => ({ default: {} }))
@@ -40,6 +41,49 @@ beforeEach(() => {
 })
 
 describe('shared message presentation', () => {
+  it.each([
+    [10_000, 5_000, '[0:45]'],
+    [-10_000, -5_000, '[1:15]'],
+    [10_000, -5_000, '[0:55]'],
+    [-10_000, 5_000, '[1:05]']
+  ] as const)(
+    'matches main elapsed time with captured global %i and session %i offsets',
+    (globalOffset, sessionOffset, expected) => {
+      const originalGlobal = settings.chat.timestampOffset
+      const originalSession = settings.chat._sessionTimestampOffset
+      try {
+        settings.chat.timestampOffset = globalOffset
+        settings.chat._sessionTimestampOffset = sessionOffset
+        const main = presentationOptions({
+          showTimestamps: true,
+          absoluteTimestamps: false,
+          videoStartTime: 10_000,
+          videoEndTime: 130_000,
+          elapsedTime: 60_000 - globalOffset - sessionOffset
+        })
+        const item = message('timestamp regression', 'offset', 70_000)
+        const mainStore = new MessagePresentationStore()
+        const renderedMain = mainStore.get(item, main)
+        expect(renderedMain.timestamp).toBe(expected)
+
+        // The child renderer and later parent settings differ from the opening snapshot.
+        settings.chat.timestampOffset = 100_000
+        settings.chat._sessionTimestampOffset = 0
+        const popup = presentationOptions({
+          ...main,
+          elapsedTime: undefined,
+          timestampOffset: globalOffset + sessionOffset
+        })
+        expect(new MessagePresentationStore().get(item, popup).timestamp).toBe(expected)
+        // Layout and mounted-row paths must agree on the cache key as well as the text.
+        expect(mainStore.get(item, popup)).toBe(renderedMain)
+      } finally {
+        settings.chat.timestampOffset = originalGlobal
+        settings.chat._sessionTimestampOffset = originalSession
+      }
+    }
+  )
+
   it('shares warm preview assets without fetching or sharing mutable store containers', async () => {
     const emote = new TwitchEmote(new Channel(new EmoteFetcher(), 12), '123', {
       code: 'Kappa',

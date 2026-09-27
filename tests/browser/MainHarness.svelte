@@ -19,7 +19,21 @@
       )
   )
   ChatService.prototype.updateVideoInfo = async () => true
-  ChatService.prototype.getMessagesForTime = async () => [...messages]
+  let holdNextRead = false
+  window.fixtureHoldMessages = () => {
+    holdNextRead = true
+  }
+  ChatService.prototype.getMessagesForTime = async () => {
+    if (holdNextRead) {
+      holdNextRead = false
+      await new Promise<void>((resolve) => {
+        window.fixtureReleaseMessages = resolve
+      })
+      // A source-invalidated service request returns no rows.
+      return []
+    }
+    return [...messages]
+  }
   onMount(() => {
     void settingsReady.then(() => {
       settings.interface.enableInlineImagePreviews = true

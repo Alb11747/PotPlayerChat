@@ -35,7 +35,7 @@
   const chatService = new ChatService(window.api, loadingState, settings)
   const sharedSearchData = new SharedSearchDataCache()
   const videoTimeHistory = new CurrentVideoTimeHistory()
-  const urlTracker = new UrlTracker(settings.chat)
+  const urlTracker = new UrlTracker(() => settings.chat)
 
   type SelectedPotplayerInfo = PotPlayerInfo | (PotPlayerInstance & Partial<PotPlayerInfo>)
   let selectedPotplayerInfo: SelectedPotplayerInfo | null = $state(null)
@@ -278,21 +278,36 @@
   })
 
   let chatIntervalId: ReturnType<typeof setTimeout> | null = null
+  let chatSourceGeneration = 0
   async function updateChatMessages(potplayerInfo?: SelectedPotplayerInfo | null): Promise<void> {
     const selectionNonce = potPlayerSelectionNonce
+    const source = settings.chat.justlogUrl
+    const sourceGeneration = chatSourceGeneration
     if (chatIntervalId) clearTimeout(chatIntervalId)
     chatIntervalId = null
 
     if (!potplayerInfo && changingPotPlayerPromise) potplayerInfo = await changingPotPlayerPromise
     if (!potplayerInfo) potplayerInfo = selectedPotplayerInfo
-    if (selectionNonce !== potPlayerSelectionNonce || !potplayerInfo?.startTime) return
+    if (
+      selectionNonce !== potPlayerSelectionNonce ||
+      source !== settings.chat.justlogUrl ||
+      sourceGeneration !== chatSourceGeneration ||
+      !potplayerInfo?.startTime
+    )
+      return
 
     const predictedTime = videoTimeHistory.getPredictedCurrentVideoTime()
     if (predictedTime === null) return
     const timestampOffset = settings.chat.timestampOffset + settings.chat._sessionTimestampOffset
     const effectiveTime = predictedTime + timestampOffset
     const fetchedMessages = await chatService.getMessagesForTime(effectiveTime, true)
-    if (selectionNonce !== potPlayerSelectionNonce || viewingHistory) return
+    if (
+      selectionNonce !== potPlayerSelectionNonce ||
+      source !== settings.chat.justlogUrl ||
+      sourceGeneration !== chatSourceGeneration ||
+      viewingHistory
+    )
+      return
     if (!fetchedMessages || fetchedMessages.length === 0) {
       messages = []
       return
@@ -328,6 +343,24 @@
   $effect(() => {
     // Trigger reactivity when chat service state changes
     if (loadingState.state) untrack(() => updateChatMessages())
+  })
+
+  let previousLogSource = untrack(() => settings.chat.justlogUrl)
+  $effect(() => {
+    const source = settings.chat.justlogUrl
+    if (source === previousLogSource) return
+    previousLogSource = source
+    untrack(() => {
+      const generation = ++chatSourceGeneration
+      // Historical rows are a separate snapshot and must not survive a source change.
+      viewingHistory = false
+      navigationGeneration++
+      scrollToBottom = true
+      messages = []
+      void chatService.loadChat().then(() => {
+        if (generation === chatSourceGeneration) void updateChatMessages()
+      })
+    })
   })
 
   function onCurrentTime(time: number): void {
@@ -434,6 +467,7 @@
   }
 
   type PopupSource = {
+    timestampOffset: number
     potplayerInfo: PotPlayerInfo
     initialMessages: TwitchMessage[]
     loadedMessages: TwitchMessage[]
@@ -448,6 +482,7 @@
     const previewMessages = selectSearchPreview(messages, chatService.currentChatData, focused)
     return {
       potplayerInfo: player,
+      timestampOffset: settings.chat.timestampOffset + settings.chat._sessionTimestampOffset,
       initialMessages: messages,
       loadedMessages: chatService.currentChatData,
       preview: {

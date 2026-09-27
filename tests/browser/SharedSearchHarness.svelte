@@ -117,6 +117,7 @@
       window.fixturePreparationCalls = 0
       window.fixtureSharedOpenedAt = performance.timeOrigin + performance.now()
       const popup = openSearchPopup({
+        timestampOffset: 0,
         potplayerInfo: capturedRecording,
         focusedMessage: messages[focusedIndex],
         initialMessages,

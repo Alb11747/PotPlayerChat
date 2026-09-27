@@ -30,6 +30,7 @@
     videoStartTime?: number
     videoEndTime?: number
     elapsedTime?: number
+    timestampOffset?: number
     urlTracker: UrlTracker
     usernameColorTimelineMap?: Pick<TimelineMap<string, string>, 'get'>
     searchQuery?: string | RegExp
@@ -49,6 +50,7 @@
     videoStartTime,
     videoEndTime,
     elapsedTime,
+    timestampOffset,
     urlTracker,
     usernameColorTimelineMap,
     searchQuery,
@@ -103,6 +105,7 @@
       videoStartTime,
       videoEndTime,
       elapsedTime,
+      ...(timestampOffset !== undefined ? { timestampOffset } : {}),
       searchQuery,
       enableEmotes,
       enableBadges,

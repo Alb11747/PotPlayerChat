@@ -27,6 +27,7 @@
     urlTracker,
     videoStartTime,
     videoEndTime,
+    timestampOffset,
     getElapsedTime,
     searchQuery,
     initialPosition,
@@ -46,6 +47,7 @@
     urlTracker: UrlTracker
     videoStartTime?: number
     videoEndTime?: number
+    timestampOffset?: number
     getElapsedTime?: (message: T) => number | undefined
     searchQuery?: string | RegExp
     initialPosition?: { index: number; options?: TranscriptScrollOptions }
@@ -85,7 +87,14 @@
   let preparedContext = $state.raw<C | undefined>(undefined)
   let preparationRevision = 0
   let cleanupController: AbortController | undefined
-  const options = $derived(presentationOptions({ videoStartTime, videoEndTime, searchQuery }))
+  const options = $derived(
+    presentationOptions({
+      videoStartTime,
+      videoEndTime,
+      searchQuery,
+      ...(timestampOffset !== undefined ? { timestampOffset } : {})
+    })
+  )
   const inlinePreviews = $derived(settings.interface.enableInlineImagePreviews)
   const layoutVersion = $derived(
     JSON.stringify([
