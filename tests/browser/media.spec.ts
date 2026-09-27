@@ -230,7 +230,7 @@ test('native messages resolve delayed and failed previews without moving the rea
     }
     return values
   }, before)
-  expect(Math.max(...drifts)).toBeLessThanOrEqual(1)
+  expect(Math.max(...drifts), `Reader drift by frame: ${drifts.join(', ')}`).toBeLessThanOrEqual(1)
   expect(errors).toEqual([])
   await expect(page.locator('.inline-image-preview').first()).toBeVisible()
   expect(
@@ -313,6 +313,52 @@ test('following pins late media content changes before the next resize delivery'
   })
   expect(gap).toBeLessThanOrEqual(1)
   expect(await page.evaluate(() => window.transcriptTest.state().following)).toBe(true)
+})
+
+test('reading anchors survive late media changes above the viewport before the next frame', async ({
+  page
+}) => {
+  await page.route('https://**/*', async (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="28"></svg>'
+    })
+  )
+  await page.goto('/?media')
+  await page.waitForFunction(() => window.fixtureReady)
+  await page.evaluate(() => {
+    window.resolveFixtureMedia!()
+    window.transcriptTest.list().scrollToIndex(105)
+  })
+  const image = page.locator('[data-message-id="message-105"] .inline-image-preview').first()
+  await expect(image).toBeVisible()
+  // Load the preview, then move it fully above the reader despite subpixel rounding.
+  await page.evaluate(() => window.transcriptTest.list().scrollToIndex(106, { offset: 10 }))
+  await frames(page, 8)
+  await page.locator('.virtual-transcript').dispatchEvent('pointerdown')
+  const drift = await image.evaluate(async (image) => {
+    const row = document.querySelector('[data-message-id="message-106"]')!
+    const before = row.getBoundingClientRect().top
+    // Reproduce a decode continuation after ResizeObserver already delivered.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+    image.style.height = `${image.getBoundingClientRect().height + 50}px`
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    return Math.abs(row.getBoundingClientRect().top - before)
+  })
+  expect(drift).toBeLessThanOrEqual(1)
+  expect(await page.evaluate(() => window.transcriptTest.state().following)).toBe(false)
+  await frames(page)
+  const pendingInputDrift = await image.evaluate(async (image) => {
+    const viewport = document.querySelector('.virtual-transcript')!
+    // Native movement can precede its scroll event. A harmless media mutation
+    // must not restore the old anchor while that input is still pending.
+    viewport.scrollTop += 20
+    const intended = viewport.scrollTop
+    image.setAttribute('title', 'Decoded preview')
+    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    return Math.abs(viewport.scrollTop - intended)
+  })
+  expect(pendingInputDrift).toBeLessThanOrEqual(1)
 })
 
 test('resolved badges, cheers, and overlays retain their boxes after repeated cache clearing', async ({

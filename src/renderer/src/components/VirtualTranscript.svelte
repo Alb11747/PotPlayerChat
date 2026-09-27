@@ -329,6 +329,27 @@
       : Math.max(0, Math.min(scrollTop, geometry.total - height))
   }
 
+  function restoreReadingPosition(): void {
+    if (following || navigation || !anchor) return
+    // Native input may move before its scroll event updates the reading anchor.
+    if (inputActive && viewport.scrollTop !== lastNativeTop) return
+    const element = elements.get(anchor.key)
+    if (!element) return
+    const top = viewport.getBoundingClientRect().top
+    const part =
+      fragment &&
+      element.querySelector<HTMLElement>(`[data-message-part="${CSS.escape(fragment.part)}"]`)
+    const rect =
+      fragment &&
+      part?.textContent === fragment.text &&
+      textRange(part, fragment.offset)?.getBoundingClientRect()
+    const correction =
+      rect && rect.height > 0
+        ? rect.top - top - fragment!.top
+        : element.getBoundingClientRect().top - top + anchor.offset
+    if (Math.abs(correction) > 0.01) setScroll(viewport.scrollTop + correction)
+  }
+
   function measureMountedRows(): boolean {
     const heights: [number, number][] = []
     for (const [key, element] of elements) {
@@ -536,9 +557,11 @@
     for (const node of elements.values()) observer.observe(node)
     // Decoding can update a mounted message after this frame's ResizeObserver
     // delivery. Pin that DOM change in its own microtask instead of waiting for
-    // the next frame; ResizeObserver still owns geometry and reader anchoring.
+    // the next frame. Restore the existing reader anchor too; ResizeObserver
+    // still owns geometry measurement, and input alone captures a new anchor.
     const contentObserver = new MutationObserver(() => {
       if (following) setScroll(viewport.scrollHeight)
+      else restoreReadingPosition()
     })
     contentObserver.observe(viewport, {
       subtree: true,
