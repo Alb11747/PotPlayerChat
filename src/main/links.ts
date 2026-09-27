@@ -34,6 +34,30 @@ let urlOpenedSet: ScalableBloomFilter | null = null
 let config: Conf | null = null
 const lock = new AsyncLock()
 
+async function getYouTubeTooltip(url: string): Promise<string | undefined> {
+  const hostname = new URL(url).hostname.toLowerCase()
+  if (hostname !== 'youtu.be' && hostname !== 'youtube.com' && !hostname.endsWith('.youtube.com'))
+    return undefined
+
+  try {
+    // The generic resolver omits the channel and may shorten YouTube text.
+    // oEmbed supplies the full title and channel without an API key.
+    const response = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+      { signal: AbortSignal.timeout(3000) }
+    )
+    if (!response.ok) return undefined
+    const data = await response.json()
+    if (typeof data.title !== 'string' || typeof data.author_name !== 'string') return undefined
+    const escape = (text: string): string =>
+      text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    return `<div><b>${escape(data.title)}</b><br>Channel: ${escape(data.author_name)}</div>`
+  } catch (error) {
+    console.debug('YouTube metadata unavailable; using resolver details:', error)
+    return undefined
+  }
+}
+
 export function isUrlSeen(url: string): boolean {
   return urlSeenSet?.has(url) ?? false
 }
@@ -114,7 +138,7 @@ export async function getLinkPreview(
       const linkPreview: LinkPreview = {
         status: data.status || 200,
         thumbnail: data.thumbnail,
-        tooltip: decodeURIComponent(data.tooltip || ''),
+        tooltip: (await getYouTubeTooltip(url)) ?? decodeURIComponent(data.tooltip || ''),
         link: data.link || url
       }
 

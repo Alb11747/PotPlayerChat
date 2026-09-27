@@ -178,7 +178,7 @@
         <div class="preview-loading-content">Loading preview…</div>
       {:else if previewState.urlTrackerInstance.hasPreview(previewState.url)}
         {#if preview && 200 <= preview.status && preview.status < 300}
-          <div class="p-2 flex-1">
+          <div class="preview-content p-2 flex-1">
             {#if preview.thumbnail}
               {#if previewState?.urlTrackerInstance?.isFailedUrl(previewState.url) === false}
                 <img
@@ -326,7 +326,7 @@
     width: fit-content;
     height: fit-content;
     max-width: min(400px, calc(100vw - 32px));
-    max-height: 250px;
+    max-height: min(250px, 40vh);
     object-fit: contain;
     margin-left: auto;
     margin-right: auto;
@@ -337,7 +337,13 @@
     font-size: 12px;
     line-height: 1.4;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     padding: 2px 0;
+  }
+
+  .preview-content {
+    min-width: 0;
+    max-width: min(480px, calc(100vw - 10px));
   }
 
   :global(.preview-url) {

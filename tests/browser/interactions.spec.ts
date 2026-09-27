@@ -41,6 +41,11 @@ test('native text copies and message links, usernames, emotes, and previews keep
   expect(await page.evaluate(() => window.fixtureUsernameAlt)).toBe(true)
   expect(await page.evaluate(() => window.fixtureUsername)).toBe('viewer102')
   const link = page.locator('[data-message-id="message-105"] .chat-url').first()
+  await link.click()
+  expect(await page.evaluate(() => window.fixtureUrl)).toBe('https://fixture.test/105')
+  await page.evaluate(() => {
+    window.fixtureUrl = undefined
+  })
   await link.focus()
   await page.keyboard.press('Enter')
   expect(await page.evaluate(() => window.fixtureUrl)).toBe('https://fixture.test/105')
@@ -57,6 +62,14 @@ test('native text copies and message links, usernames, emotes, and previews keep
   await page.keyboard.press('Control+Enter')
   expect(await page.evaluate(() => window.fixturePopup)).toContain('/preview.html#')
   const inline = page.locator('[data-message-id="message-105"] .inline-image-preview-link').first()
+  await page.evaluate(() => {
+    window.fixtureUrl = undefined
+  })
+  await inline.locator('img').click()
+  expect(await page.evaluate(() => window.fixtureUrl)).toBe('https://fixture.test/105')
+  await page.evaluate(() => {
+    window.fixtureUrl = undefined
+  })
   await inline.focus()
   await page.keyboard.press('Enter')
   expect(await page.evaluate(() => window.fixtureUrl)).toBe('https://fixture.test/105')

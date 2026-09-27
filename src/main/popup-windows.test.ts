@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { BrowserWindowConstructorOptions, Rectangle } from 'electron'
+import { shell } from 'electron'
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: true } }))
 const { display } = vi.hoisted(() => ({
   display: {
@@ -8,6 +9,7 @@ const { display } = vi.hoisted(() => ({
   }
 }))
 vi.mock('electron', () => ({
+  shell: { openExternal: vi.fn().mockResolvedValue(undefined) },
   screen: {
     getAllDisplays: () => [display],
     getDisplayMatching: () => display,
@@ -17,6 +19,7 @@ vi.mock('electron', () => ({
 import { getPopupKind, initPopupWindows } from './popup-windows'
 
 beforeEach(() => {
+  vi.mocked(shell.openExternal).mockClear()
   display.workArea = { x: 0, y: 0, width: 1920, height: 1040 }
   vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
 })
@@ -78,6 +81,44 @@ function createPopup(
 }
 
 describe('owned native popup routes', () => {
+  it('routes native web navigation and external popups to the browser', () => {
+    const source = mockWindow({ x: 100, y: 100, width: 600, height: 800 })
+    initPopupWindows(source as never)
+    const navigate = source.webContents.on.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )![1]
+    const event = { preventDefault: vi.fn() }
+    navigate(event, 'https://youtube.com/watch?v=video')
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(shell.openExternal).toHaveBeenCalledWith('https://youtube.com/watch?v=video')
+    expect(
+      source.webContents.setWindowOpenHandler.mock.calls[0]![0]({
+        url: 'https://example.com/image.png'
+      })
+    ).toEqual({ action: 'deny' })
+    expect(shell.openExternal).toHaveBeenCalledWith('https://example.com/image.png')
+    const { popup } = createPopup(source, 'preview')
+    const popupNavigate = popup.webContents.on.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )![1]
+    popupNavigate(event, 'https://example.com/from-preview')
+    expect(shell.openExternal).toHaveBeenCalledWith('https://example.com/from-preview')
+  })
+
+  it.each(['javascript:alert(1)', 'file:///private/file', 'invalid'])(
+    'blocks non-web native navigation: %s',
+    (url) => {
+      const source = mockWindow({ x: 100, y: 100, width: 600, height: 800 })
+      initPopupWindows(source as never)
+      const navigate = source.webContents.on.mock.calls.find(
+        ([event]) => event === 'will-navigate'
+      )![1]
+      const event = { preventDefault: vi.fn() }
+      navigate(event, url)
+      expect(event.preventDefault).toHaveBeenCalledOnce()
+      expect(shell.openExternal).not.toHaveBeenCalled()
+    }
+  )
   const expected = {
     search: 'file:///app/search.html',
     user: 'file:///app/user.html',

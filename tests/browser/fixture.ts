@@ -191,6 +191,7 @@ Object.defineProperty(window, 'api', {
         if (key === 'offAppearanceChanged')
           return (listener: (value: AppearancePreferences) => void) =>
             appearanceListeners.delete(listener)
+        if (key === 'sanitizeHtml') return async (html: string) => html
         if (key === 'getLinkPreview')
           return async (url: string) => {
             await mediaReady
@@ -198,7 +199,12 @@ Object.defineProperty(window, 'api', {
               ? { status: 404, link: url }
               : url.includes('empty')
                 ? { status: 200, link: url }
-                : { status: 200, link: url, thumbnail: `${url}.svg` }
+                : {
+                    status: 200,
+                    link: url,
+                    thumbnail: `${url}.svg`,
+                    tooltip: new URLSearchParams(location.search).get('tooltip') ?? undefined
+                  }
           }
         return async () => undefined
       }

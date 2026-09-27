@@ -1,5 +1,5 @@
 import { is } from '@electron-toolkit/utils'
-import type { BrowserWindow } from 'electron'
+import { shell, type BrowserWindow } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import icon from '../../resources/icon.png?asset'
@@ -36,7 +36,10 @@ export function initPopupWindows(source: BrowserWindow): void {
   }
   source.webContents.setWindowOpenHandler(({ url }) => {
     const kind = getPopupKind(url, urls)
-    if (!kind) return { action: 'deny' }
+    if (!kind) {
+      openExternalLink(url)
+      return { action: 'deny' }
+    }
     const bounds = source.getBounds()
     const placement = getWindowPlacement(
       {
@@ -61,6 +64,12 @@ export function initPopupWindows(source: BrowserWindow): void {
       }
     }
   })
+  // Native anchor navigation can bypass the renderer's explicit openUrl IPC
+  // (for example middle-click or a link in generated markup).
+  source.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault()
+    openExternalLink(url)
+  })
   source.webContents.on('did-create-window', (popup, { url }) => {
     if (!getPopupKind(url, urls)) return
     initPopupWindows(popup)
@@ -72,5 +81,17 @@ export function initPopupWindows(source: BrowserWindow): void {
     popup.once('closed', () => {
       if (!source.isDestroyed()) source.focus()
     })
+  })
+}
+
+function openExternalLink(url: string): void {
+  try {
+    const protocol = new URL(url).protocol
+    if (protocol !== 'http:' && protocol !== 'https:') return
+  } catch {
+    return
+  }
+  void shell.openExternal(url).catch((error) => {
+    console.error('Unable to open external link:', error)
   })
 }
