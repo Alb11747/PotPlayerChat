@@ -89,7 +89,8 @@ When no key is supplied, the app falls back to a built-in public client id.
 
 ## Development Notes
 
-- Lint and format are enforced in pre-commit via Husky + lint-staged.
+- Run lint and format explicitly with `pnpm run lint` and `pnpm run format`; Git hooks are not installed.
+- Before committing, run `pnpm run typecheck` and ensure it passes.
 - Some dependencies are patched via `pnpm.patchedDependencies`.
 - There is currently no dedicated test script wired in `package.json`.
 

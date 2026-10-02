@@ -282,7 +282,7 @@ Design implication:
 - Build system: `electron-vite`.
 - Package manager: `pnpm`.
 - Type checks: node + web TS configs + `svelte-check`.
-- Lint/format: ESLint + Prettier with Husky/lint-staged pre-commit.
+- Lint/format: ESLint + Prettier via explicit `pnpm run lint` and `pnpm run format` commands; no automatic Git hooks.
 - Packaging: `electron-builder` (`build:win`, plus unpack mode).
 - Some dependencies are patched via `patches/` and `pnpm.patchedDependencies`.
 
