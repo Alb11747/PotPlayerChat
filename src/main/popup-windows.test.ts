@@ -81,6 +81,22 @@ function createPopup(
 }
 
 describe('owned native popup routes', () => {
+  it.each(['search', 'user', 'preview'])(
+    'allows initial %s popup navigation after installing child handlers',
+    (kind) => {
+      const source = mockWindow({ x: 100, y: 100, width: 600, height: 800 })
+      initPopupWindows(source as never)
+      const { popup } = createPopup(source, kind)
+      const navigate = popup.webContents.on.mock.calls.find(
+        ([event]) => event === 'will-navigate'
+      )![1]
+      const event = { preventDefault: vi.fn() }
+      navigate(event, `http://localhost:5173/${kind}.html#token`)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(shell.openExternal).not.toHaveBeenCalled()
+    }
+  )
+
   it('routes native web navigation and external popups to the browser', () => {
     const source = mockWindow({ x: 100, y: 100, width: 600, height: 800 })
     initPopupWindows(source as never)

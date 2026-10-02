@@ -67,6 +67,9 @@ export function initPopupWindows(source: BrowserWindow): void {
   // Native anchor navigation can bypass the renderer's explicit openUrl IPC
   // (for example middle-click or a link in generated markup).
   source.webContents.on('will-navigate', (event, url) => {
+    // window.open's initial navigation occurs after did-create-window installs
+    // this handler on the child. Let allowlisted popup pages finish loading.
+    if (getPopupKind(url, urls)) return
     event.preventDefault()
     openExternalLink(url)
   })
