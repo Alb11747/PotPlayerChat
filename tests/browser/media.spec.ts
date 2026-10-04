@@ -355,7 +355,10 @@ test('reading anchors survive late media changes above the viewport before the n
     viewport.scrollTop += 20
     const intended = viewport.scrollTop
     image.setAttribute('title', 'Decoded preview')
-    await new Promise<void>((resolve) => queueMicrotask(resolve))
+    // Let both measured-layout tick continuations finish before the browser
+    // delivers the native scroll. A one-microtask sample misses a late reset.
+    for (let step = 0; step < 4; step++)
+      await new Promise<void>((resolve) => queueMicrotask(resolve))
     return Math.abs(viewport.scrollTop - intended)
   })
   expect(pendingInputDrift).toBeLessThanOrEqual(1)

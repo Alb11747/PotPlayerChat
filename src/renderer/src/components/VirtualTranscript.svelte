@@ -381,6 +381,12 @@
 
   async function settleLayout(): Promise<void> {
     if (disposed || !viewport || viewport.clientHeight === 0) return
+    // Native input can move the viewport before its scroll event captures the
+    // new anchor. Let that event arrive before settling a late content change.
+    if (inputActive && viewport.scrollTop !== lastNativeTop) {
+      queueLayout()
+      return
+    }
     if (settling) {
       settleAgain = true
       return
@@ -393,6 +399,13 @@
       // pass also measures newly mounted rows after a distant navigation.
       for (let pass = 0; pass < 2; pass++) {
         measureMountedRows()
+        // Correct late content changes only after their heights are recorded.
+        // Otherwise a tall new overscan row can be removed by the correction,
+        // revert to its estimate, and trigger the opposite correction forever.
+        if (pass === 0) {
+          if (following) setScroll(viewport.scrollHeight)
+          else restoreReadingPosition()
+        }
         scrollTop = layoutTarget()
         await tick()
         if (disposed || generation !== currentGeneration) return
@@ -555,13 +568,18 @@
     })
     observer.observe(viewport)
     for (const node of elements.values()) observer.observe(node)
-    // Decoding can update a mounted message after this frame's ResizeObserver
-    // delivery. Pin that DOM change in its own microtask instead of waiting for
-    // the next frame. Restore the existing reader anchor too; ResizeObserver
-    // still owns geometry measurement, and input alone captures a new anchor.
-    const contentObserver = new MutationObserver(() => {
-      if (following) setScroll(viewport.scrollHeight)
-      else restoreReadingPosition()
+    // Decoding can change mounted content after ResizeObserver has delivered.
+    // Ignore the virtualizer's row mounts/removals and spacer styles: restoring
+    // from those mutations before measuring can oscillate between row ranges.
+    // The measured pass coalesces content changes and pins them before paint.
+    const contentObserver = new MutationObserver((records) => {
+      const contentChanged = records.some((record) => {
+        const element =
+          record.target instanceof Element ? record.target : record.target.parentElement
+        const row = element?.closest<HTMLElement>('[data-transcript-key]')
+        return row && elements.get(row.dataset['transcriptKey']!) === row
+      })
+      if (contentChanged) void settleLayout()
     })
     contentObserver.observe(viewport, {
       subtree: true,

@@ -169,6 +169,62 @@ test('compaction and growth above the reader preserve the same message offset', 
   }
 })
 
+test('an unmeasured tall row entering leading overscan cannot loop scroll corrections', async ({
+  page
+}) => {
+  await page.evaluate(() => {
+    // Row 92 is outside the mounted range at row 110. Its real height is not
+    // available to geometry until a native scroll brings it into overscan.
+    window.transcriptTest.resize('row-92', 240)
+    window.transcriptTest.list().scrollToIndex(110)
+  })
+  await frame(page)
+  await expect(page.locator('[data-message-id="row-92"]')).toHaveCount(0)
+  expect(await page.evaluate(() => window.transcriptTest.list().getItemSize(92))).toBe(80)
+  const result = await page.evaluate(async () => {
+    const viewport = document.querySelector<HTMLElement>('.virtual-transcript')!
+    const nativeScroll = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop')!
+    let writes = 0
+    let heartbeats = 0
+    // Bound a broken implementation so this regression reports the oscillation
+    // instead of starving Playwright's connection in an infinite microtask loop.
+    Object.defineProperty(viewport, 'scrollTop', {
+      configurable: true,
+      get: () => nativeScroll.get!.call(viewport),
+      set: (top: number) => {
+        writes++
+        if (writes <= 32) nativeScroll.set!.call(viewport, top)
+      }
+    })
+    const timer = window.setInterval(() => heartbeats++, 0)
+    try {
+      viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -800 }))
+      viewport.scrollTop -= 800
+      const reader = document.querySelector('[data-message-id="row-102"]')!
+      const before = reader.getBoundingClientRect().top
+      for (let sample = 0; sample < 8; sample++) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+      }
+      return {
+        writes,
+        heartbeats,
+        height: window.transcriptTest.list().getItemSize(92),
+        drift: Math.abs(reader.getBoundingClientRect().top - before),
+        before,
+        after: reader.getBoundingClientRect().top,
+        offset: viewport.scrollTop
+      }
+    } finally {
+      clearInterval(timer)
+      Reflect.deleteProperty(viewport, 'scrollTop')
+    }
+  })
+  expect(result.writes, JSON.stringify(result)).toBeLessThanOrEqual(16)
+  expect(result.heartbeats).toBeGreaterThan(0)
+  expect(result.height).toBe(240)
+  expect(result.drift, JSON.stringify(result)).toBeLessThanOrEqual(1)
+})
+
 test('equal-length rolling windows and deleted anchors choose surviving messages', async ({
   page
 }) => {
