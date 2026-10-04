@@ -16,12 +16,17 @@ import type { Conf } from 'electron-conf/main'
 
 export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): void {
   const ipcMain = electron.ipcMain
+  function isWindowLive(): boolean {
+    return !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()
+  }
+
   const manager = new PotPlayerInstanceManager({
     discoverInstances: discoverPotPlayerInstances,
     readTitle: async (hwnd) => removeSuffix(await getLiveWindowText(hwnd), ' - PotPlayer'),
     readCurrentTime: getCurrentVideoTime,
     readTotalTime: getTotalVideoTime,
     onInstancesChanged: (instances) => {
+      if (!isWindowLive()) return
       console.debug('Updating PotPlayer instances list')
       mainWindow.webContents.send('potplayerInstancesChanged', instances)
     }
@@ -81,7 +86,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
   let activeWindowUpdateQueued = false
 
   async function updatePotplayerInstances(): Promise<void> {
-    if (!pollingActive) return
+    if (!pollingActive || !isWindowLive()) return
     if (potplayerTimeoutId) clearTimeout(potplayerTimeoutId)
     potplayerTimeoutId = null
     try {
@@ -89,7 +94,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
     } catch (error) {
       console.error('Periodic PotPlayer verification failed:', error)
     } finally {
-      if (pollingActive) {
+      if (pollingActive && isWindowLive()) {
         potplayerTimeoutId = setTimeout(
           updatePotplayerInstances,
           pollingIntervals.potplayerInstances
@@ -99,7 +104,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
   }
 
   async function updateCurrentVideoTime(): Promise<void> {
-    if (!pollingActive) return
+    if (!pollingActive || !isWindowLive()) return
     if (currentTimeUpdateRunning) {
       currentTimeUpdateQueued = true
       return
@@ -109,14 +114,14 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
     currentTimeTimeoutId = null
     try {
       const currentTime = await manager.pollCurrentTime()
-      if (currentTime !== null) {
+      if (currentTime !== null && pollingActive && isWindowLive()) {
         mainWindow.webContents.send('updateCurrentVideoTime', currentTime)
       }
     } catch (error) {
       console.error('Periodic PotPlayer current-time update failed:', error)
     } finally {
       currentTimeUpdateRunning = false
-      if (pollingActive) {
+      if (pollingActive && isWindowLive()) {
         const delayMs = currentTimeUpdateQueued ? 0 : pollingIntervals.videoTime
         currentTimeUpdateQueued = false
         currentTimeTimeoutId = setTimeout(updateCurrentVideoTime, delayMs)
@@ -125,7 +130,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
   }
 
   async function updateActivePotplayerInstance(): Promise<void> {
-    if (!pollingActive) return
+    if (!pollingActive || !isWindowLive()) return
     if (activeWindowUpdateRunning) {
       activeWindowUpdateQueued = true
       return
@@ -135,12 +140,14 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
     activePotplayerTimeoutId = null
     try {
       const focusedWindow = await getForegroundWindow()
-      if (focusedWindow) await manager.noteActiveHwnd(focusedWindow)
+      if (focusedWindow && pollingActive && isWindowLive()) {
+        await manager.noteActiveHwnd(focusedWindow)
+      }
     } catch (error) {
       console.error('Periodic PotPlayer active-window update failed:', error)
     } finally {
       activeWindowUpdateRunning = false
-      if (pollingActive) {
+      if (pollingActive && isWindowLive()) {
         const delayMs = activeWindowUpdateQueued ? 0 : pollingIntervals.activeWindow
         activeWindowUpdateQueued = false
         activePotplayerTimeoutId = setTimeout(updateActivePotplayerInstance, delayMs)
@@ -149,7 +156,7 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
   }
 
   function startPolling(): void {
-    if (pollingActive) return
+    if (pollingActive || !isWindowLive()) return
     pollingActive = true
     void updatePotplayerInstances()
     void updateCurrentVideoTime()
@@ -175,6 +182,8 @@ export function initPotplayerHandlers(mainWindow: BrowserWindow, conf: Conf): vo
   mainWindow.on('hide', stopPolling)
   mainWindow.on('minimize', stopPolling)
   mainWindow.on('close', stopPolling)
+  mainWindow.on('closed', stopPolling)
+  mainWindow.webContents.once('destroyed', stopPolling)
 
   ipcMain.handle('getPotplayers', async () => manager.getInstances())
   ipcMain.handle('getCurrentVideoTime', async (_event, hwnd: HWND) => {
