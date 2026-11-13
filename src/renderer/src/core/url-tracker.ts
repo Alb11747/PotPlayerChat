@@ -9,6 +9,11 @@ export interface LinkPreview {
   link: string
 }
 
+/** Receives plain preview details so search can match loaded previews without fetching. */
+export interface PreviewTextSink {
+  set(url: string, text: string | undefined): void
+}
+
 export class UrlTracker {
   private cache = new SvelteMap<string, LinkPreview>()
   private seenUrls = new SvelteSet<string>()
@@ -47,6 +52,12 @@ export class UrlTracker {
   private cachePreview(url: string, preview: LinkPreview): void {
     const previous = this.cache.get(url)
     this.cache.set(url, preview)
+    this.previewTexts?.set(
+      url,
+      preview.tooltip && preview.status >= 200 && preview.status < 300
+        ? UrlTracker.parseTooltipToText(preview.tooltip)
+        : undefined
+    )
     if (previous?.status !== preview.status || previous?.thumbnail !== preview.thumbnail)
       this.notifyLayout(url)
   }
@@ -57,7 +68,8 @@ export class UrlTracker {
 
   // Hydration and reset replace settings categories; resolve the current category at request time.
   constructor(
-    private settings: { chatterinoBaseUrl: string } | (() => { chatterinoBaseUrl: string })
+    private settings: { chatterinoBaseUrl: string } | (() => { chatterinoBaseUrl: string }),
+    private previewTexts?: PreviewTextSink
   ) {}
 
   /**
@@ -74,6 +86,7 @@ export class UrlTracker {
 
       if (refresh) {
         const hadPreview = this.cache.delete(url)
+        this.previewTexts?.set(url, undefined)
         const hadFailure = this.failedUrls.delete(url)
         if (hadPreview || hadFailure) this.notifyLayout(url)
       }
@@ -146,6 +159,8 @@ export class UrlTracker {
   clearCache(): void {
     this.generation++
     this.cacheState.set('version', this.generation)
+    // The sink may be shared with other windows; forget only this tracker's previews.
+    for (const url of this.cache.keys()) this.previewTexts?.set(url, undefined)
     this.cache.clear()
     this.failedUrls.clear()
     this.loadingUrls.clear()
@@ -243,6 +258,9 @@ export class UrlTracker {
   static parseTooltipToText(tooltip: string): string {
     const parser = new DOMParser()
     const doc = parser.parseFromString(tooltip, 'text/html')
+    // A parsed document is not rendered, so innerText ignores line breaks; keep
+    // them so separate lines, such as a title and its channel, stay separate words.
+    for (const lineBreak of doc.body.querySelectorAll('br')) lineBreak.replaceWith('\n')
     let text = doc.body.innerText || doc.body.textContent || ''
 
     // Clean up extra whitespace but preserve intentional line breaks

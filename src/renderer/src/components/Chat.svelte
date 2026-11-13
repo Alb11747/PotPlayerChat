@@ -35,7 +35,7 @@
   const chatService = new ChatService(window.api, loadingState, settings)
   const sharedSearchData = new SharedSearchDataCache()
   const videoTimeHistory = new CurrentVideoTimeHistory()
-  const urlTracker = new UrlTracker(() => settings.chat)
+  const urlTracker = new UrlTracker(() => settings.chat, sharedSearchData.previewTexts)
 
   type SelectedPotplayerInfo = PotPlayerInfo | (PotPlayerInstance & Partial<PotPlayerInfo>)
   let selectedPotplayerInfo: SelectedPotplayerInfo | null = $state(null)

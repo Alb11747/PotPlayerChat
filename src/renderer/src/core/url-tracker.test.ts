@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UrlTracker } from './url-tracker'
 import { createDefaultSettings, hydrateSettings } from '../state/settings-model'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 describe('URL tracker retry', () => {
   it('uses hydrated, edited, and reset resolver settings in an existing tracker', async () => {
@@ -183,5 +186,39 @@ describe('URL tracker retry', () => {
     expect(getLinkPreview).toHaveBeenCalledTimes(3)
     expect(tracker.isSeenUrl(failed)).toBe(true)
     expect(tracker.isVisitedUrl(other)).toBe(true)
+  })
+})
+
+describe('URL tracker preview text', () => {
+  it('records successful preview details and forgets refreshed or cleared previews', async () => {
+    const url = 'https://youtube.com/watch?v=video'
+    const failed = 'https://example.com/failed'
+    const getLinkPreview = vi.fn(async (requested: string) =>
+      requested === failed
+        ? null
+        : { status: 200, link: requested, tooltip: '<div><b>Title</b><br>Channel: Name</div>' }
+    )
+    vi.stubGlobal('window', { api: { getLinkPreview } })
+    // Node has no DOMParser; stand in for the tooltip conversion.
+    vi.spyOn(UrlTracker, 'parseTooltipToText').mockImplementation((tooltip) =>
+      tooltip.replaceAll('<br>', '\n').replace(/<[^>]+>/g, '')
+    )
+    const texts = new Map<string, string | undefined>()
+    const tracker = new UrlTracker(
+      { chatterinoBaseUrl: 'https://resolver.example/' },
+      {
+        set: (key, text) => (text === undefined ? texts.delete(key) : texts.set(key, text))
+      }
+    )
+    await tracker.getPreview(url)
+    await tracker.getPreview(failed)
+    expect(Object.fromEntries(texts)).toEqual({ [url]: 'Title\nChannel: Name' })
+    getLinkPreview.mockResolvedValueOnce(null)
+    await tracker.getPreview(url, true)
+    expect(texts.size).toBe(0)
+    await tracker.getPreview(url, true)
+    texts.set('https://other.example/', 'from another window')
+    tracker.clearCache()
+    expect(Object.fromEntries(texts)).toEqual({ 'https://other.example/': 'from another window' })
   })
 })

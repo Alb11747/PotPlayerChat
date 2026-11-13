@@ -24,9 +24,10 @@
 
   const loadingState: LoadingState = $state({ state: 'idle', errorMessage: '' })
   const chatService = new ChatService(window.api, loadingState, settings)
-  const urlTracker = new UrlTracker(() => settings.chat)
   // The context captures one recording and its source-owned caches for this popup's lifetime.
   const sharedData = untrack(() => context.sharedData ?? new SharedSearchDataCache())
+  // Previews loaded here also become searchable in this and other Search popups.
+  const urlTracker = new UrlTracker(() => settings.chat, sharedData.previewTexts)
   const searchRange = untrack(() => capturePopupSearchRange(context))
   const lifetime = new AbortController()
   const preview = untrack(() => ({

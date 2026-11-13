@@ -1,6 +1,6 @@
 import type { TwitchMessage } from '@/core/chat/twitch-msg'
 import { CooperativeWork } from '@/utils/cooperative-work'
-import { SearchTextCache } from './search-messages'
+import { SearchPreviewTexts, SearchTextCache } from './search-messages'
 import type { SharedSearchData } from './search-window'
 
 /** Inputs are timestamp-ordered snapshots. Existing rows win even when a duplicate
@@ -51,7 +51,8 @@ type SnapshotEntry = {
 
 /** Lives in the source renderer. Weak array keys keep old recordings collectible. */
 export class SharedSearchDataCache implements SharedSearchData {
-  readonly textCache = new SearchTextCache()
+  readonly previewTexts = new SearchPreviewTexts()
+  readonly textCache = new SearchTextCache(this.previewTexts)
   private readonly snapshots = new WeakMap<
     readonly TwitchMessage[],
     WeakMap<readonly TwitchMessage[], SnapshotEntry>

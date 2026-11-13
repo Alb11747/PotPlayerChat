@@ -1,6 +1,11 @@
 import { TwitchChatMessage, TwitchSystemMessage } from '@/core/chat/twitch-msg'
 import { describe, expect, it, vi } from 'vitest'
-import { filterSearchMessages, getSearchPattern, SearchTextCache } from './search-messages'
+import {
+  filterSearchMessages,
+  getSearchPattern,
+  SearchPreviewTexts,
+  SearchTextCache
+} from './search-messages'
 
 function message(id: string, username: string, text: string): TwitchChatMessage {
   return new TwitchChatMessage(`raw:${id}`, {}, id, 1000, 'channel', username, text)
@@ -67,6 +72,32 @@ describe('transcript search', () => {
     expect((await filterSearchMessages(source, 'Welcome', true, false, undefined, cache))[0]).toBe(
       system
     )
+  })
+
+  it('matches loaded link preview details, including previews loaded after caching', async () => {
+    const video = 'https://www.youtube.com/watch?v=abc'
+    const linked = message('1', 'Alice', `watch ${video} now`)
+    const unloaded = message('2', 'Bob', 'https://example.com/unloaded')
+    const plain = message('3', 'Carol', 'Never Gonna Give You Up')
+    const source = [linked, unloaded, plain]
+    const previews = new SearchPreviewTexts()
+    const cache = new SearchTextCache(previews)
+    const search = (query: string, caseSensitive = false, regex = false): Promise<unknown> =>
+      filterSearchMessages(source, query, caseSensitive, regex, undefined, cache)
+
+    // Searchable text is cached before the preview loads.
+    expect(await search('never gonna')).toEqual([plain])
+    previews.set(video, 'Never Gonna Give You Up\nChannel: Rick Astley')
+    expect(await search('never gonna')).toEqual([linked, plain])
+    expect(await search('rick astley')).toEqual([linked])
+    expect(await search('Rick Astley', true)).toEqual([linked])
+    expect(await search('rick astley', true)).toEqual([])
+    // Preview details are tested as their own text, so anchors apply to them.
+    expect(await search('^Never Gonna', true, true)).toEqual([linked])
+    // Message and preview texts are separate fields; a match cannot span them.
+    expect(await search('now Never')).toEqual([])
+    previews.set(video, undefined)
+    expect(await search('rick astley')).toEqual([])
   })
 
   it('cancels an obsolete filter at a cooperative boundary', async () => {

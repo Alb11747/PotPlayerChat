@@ -1,7 +1,7 @@
 import type { UsernameClickInfo } from './username-click'
 import type { PotPlayerInfo } from '@/core/chat/twitch-chat'
 import type { TwitchMessage } from '@/core/chat/twitch-msg'
-import type { SearchTextCache } from './search-messages'
+import type { SearchPreviewTexts, SearchTextCache } from './search-messages'
 import { SharedSearchDataCache } from './search-data'
 import type { SearchPreview } from './search-preview'
 import { capturePopupSearchRange } from './popup-search-range'
@@ -23,6 +23,7 @@ export type SearchOptions = {
 }
 
 export interface SharedSearchData {
+  readonly previewTexts: SearchPreviewTexts
   readonly textCache: SearchTextCache
   prepare(
     initial: readonly TwitchMessage[],
