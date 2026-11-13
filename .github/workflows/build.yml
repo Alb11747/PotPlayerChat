@@ -100,7 +100,7 @@ jobs:
       name: stable
       url: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.build.outputs.version }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: windows-installer
           path: dist
