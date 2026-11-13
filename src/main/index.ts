@@ -41,11 +41,12 @@ function createWindow(): void {
   initLinks(conf)
   initPotplayerHandlers(mainWindow, conf)
   initMaintenanceHandlers(conf)
+  // Before the renderer loads, so its first update-state request finds a handler.
+  initAutoUpdater()
 
   mainWindow.on('ready-to-show', () => {
     ensureWindowOnScreen(mainWindow)
     mainWindow.show()
-    initAutoUpdater(conf)
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

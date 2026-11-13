@@ -275,3 +275,54 @@ test('main chat keeps reading mode across media and settings and returns to play
     )
     .toBeLessThanOrEqual(1)
 })
+
+test('the toolbar offers an update, shows its download and restarts to install', async ({
+  page
+}) => {
+  await page.goto('/?main')
+  await expect(page.getByRole('button', { name: 'Search chat', exact: true })).toBeEnabled()
+  const tools = page.locator('.chat-tools')
+  // Development builds and up-to-date installs show no update control.
+  await expect(tools.getByRole('button')).toHaveCount(3)
+
+  await page.evaluate(() =>
+    window.fixtureUpdates!.emit({ status: 'available', availableVersion: '1.0.12' })
+  )
+  const offer = page.getByRole('button', { name: 'Update 1.0.12 is available. Click to download.' })
+  await expect(offer).toHaveText('Update')
+  await offer.click()
+  await expect
+    .poll(() => page.evaluate(() => window.fixtureUpdates!.calls))
+    .toEqual(['downloadUpdate'])
+
+  await page.evaluate(() =>
+    window.fixtureUpdates!.emit({ status: 'downloading', downloadPercent: 41 })
+  )
+  const progress = page.getByRole('button', { name: 'Downloading update 1.0.12 (41%)' })
+  await expect(progress).toHaveText('41%')
+  await expect(progress).toBeDisabled()
+
+  await page.evaluate(() =>
+    window.fixtureUpdates!.emit({
+      status: 'downloaded',
+      downloadedVersion: '1.0.12',
+      downloadPercent: 100
+    })
+  )
+  const restart = page.getByRole('button', { name: /^Update 1\.0\.12 is ready/ })
+  await expect(restart).toHaveText('Restart')
+  // The control must not push the recording tabs out of a narrow window.
+  await page.setViewportSize({ width: 360, height: 640 })
+  await expect(restart).toBeInViewport()
+  await restart.click()
+  await expect
+    .poll(() => page.evaluate(() => window.fixtureUpdates!.calls))
+    .toEqual(['downloadUpdate', 'installUpdate'])
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click()
+  await expect(page.getByText('Version 1.0.0', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Version 1.0.12 is ready. Use Restart in the toolbar to install it.')
+  ).toBeVisible()
+})

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import conf from '../state/config'
+  import { canCheckForUpdates, getUpdateStatusText } from '../core/update-display'
+  import { runUpdateAction, updates, watchUpdates } from '../state/updates.svelte'
   import {
     resetSettings,
     normalizeSettings,
@@ -10,6 +11,8 @@
   } from '../state/settings.svelte'
 
   let { onSessionOffsetChange }: { onSessionOffsetChange?: (offset: number) => void } = $props()
+
+  watchUpdates()
 
   let maintenanceStatus = $state<string | null>(null)
   let clearingCache = $state(false)
@@ -53,17 +56,11 @@
           settingsStatus.error = 'Could not apply polling intervals. Try changing the value again.'
           console.error('Failed to apply polling intervals:', error)
         })
-    if (!event || (target instanceof HTMLElement && target.dataset['setting'] === 'prerelease'))
-      void conf.set('prerelease', settings.general.prerelease).catch((error: unknown) => {
-        settingsStatus.error = 'Could not save the update preference. Try changing it again.'
-        console.error('Failed to save the update preference:', error)
-      })
   }
 
   function resetAllSettings(): void {
     resetSettings()
     void window.api.setPollingIntervals($state.snapshot(settings.intervals))
-    void conf.set('prerelease', settings.general.prerelease)
   }
 
   async function clearCache(): Promise<void> {
@@ -306,15 +303,21 @@
         </fieldset>
 
         <fieldset>
-          <legend>Update Settings</legend>
-          <label>
-            <input
-              type="checkbox"
-              data-setting="prerelease"
-              bind:checked={settings.general.prerelease}
-            />
-            Enable Prerelease Updates (Applies on next restart)
-          </label>
+          <legend>Updates</legend>
+          <p class="update-version">Version {updates.state?.currentVersion ?? '…'}</p>
+          <p class="update-status" role="status" aria-live="polite">
+            {getUpdateStatusText(updates.state)}
+          </p>
+          {#if updates.state?.notAppliedVersion}
+            <p class="update-status">
+              The last attempt to install version {updates.state.notAppliedVersion} did not apply.
+            </p>
+          {/if}
+          <button
+            class="reset-button"
+            disabled={!canCheckForUpdates(updates.state)}
+            onclick={() => runUpdateAction('checkForUpdates')}>Check for Updates</button
+          >
         </fieldset>
       {/if}
       {#if category === 'Maintenance'}
@@ -500,6 +503,14 @@
   .clear-status {
     color: var(--deck-muted);
     margin-top: 12px;
+  }
+  .update-version {
+    margin: 0 0 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .update-status {
+    margin: 0 0 12px;
+    color: var(--deck-muted);
   }
   .settings-error {
     color: var(--color-error);

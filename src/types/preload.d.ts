@@ -9,6 +9,7 @@ import type { getPotplayerExtraInfo } from '@/core/potplayer/potplayer'
 import type { getLinkPreview } from '@/main/links'
 import type { HWND } from '@/types/globals'
 import type { PotPlayerInstance } from '@/types/potplayer'
+import type { UpdateActionResult, UpdateState } from '@/types/update'
 import { IpcRenderer } from 'electron/renderer'
 import type sanitizeHtml from 'sanitize-html'
 
@@ -73,6 +74,12 @@ export interface WindowApi {
   offPotPlayerInstancesChanged: (
     callback: (event: Event, instances: (PotPlayerInstance & { selected?: boolean })[]) => void
   ) => void
+  getUpdateState: () => Promise<UpdateState>
+  checkForUpdates: () => Promise<UpdateActionResult>
+  downloadUpdate: () => Promise<UpdateActionResult>
+  installUpdate: () => Promise<UpdateActionResult>
+  /** For the window's lifetime; renderer/src/state/updates.svelte.ts subscribes once. */
+  onUpdateStateChanged: (callback: (state: UpdateState) => void) => void
 }
 
 export {}

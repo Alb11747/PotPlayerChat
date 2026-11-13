@@ -1,20 +1,138 @@
-name: Build and Deploy
+# Builds the Windows installer for every pull request and push to main. Each push to main is also
+# published as a GitHub release, which installed copies pick up through the in-app updater
+# (src/main/update.ts): it reads latest.yml from the release marked latest. Versions are
+# 1.0.<commit count>; see scripts/app-version.mts.
+name: Build and Release
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
+
+env:
+  NODE_NO_WARNINGS: 1
+  npm_config_audit: false
+  npm_config_fund: false
 
 jobs:
   build:
-    uses: ./.github/workflows/ci.yml
-    with:
-      distribution-channel: ${{ github.ref == 'refs/heads/main' && 'stable' || 'beta' }}
-      prerelease: ${{ github.ref != 'refs/heads/main' }}
-    secrets: inherit 
+    runs-on: windows-latest
+    # A newer push replaces a build still in progress; releases are guarded separately below.
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The version is the commit count, which a shallow clone gets wrong.
+          fetch-depth: 0
+
+      # No Twitch keys are written: anything in resources/ ships inside a public installer, so a
+      # client secret would leak. Releases use the built-in public client id (src/main/storage.ts).
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - id: version
+        shell: bash
+        run: echo "version=$(node scripts/app-version.mts)" >> "$GITHUB_OUTPUT"
+
+      - run: pnpm exec eslint --max-warnings=0 .
+
+      # build:win runs the typecheck before bundling.
+      - run: pnpm run build:win --publish never
+
+      - run: pnpm run test
+
+      - name: Check release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ steps.version.outputs.version }}'
+          test -s "dist/potplayerchat-$version-setup.exe"
+          test -s "dist/potplayerchat-$version-setup.exe.blockmap"
+          grep -qx "version: $version" dist/latest.yml
+
+      - if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/potplayerchat-*-setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            dist/latest.yml
+            dist/potplayerchat-*-setup.exe
+            dist/potplayerchat-*-setup.exe.blockmap
+          if-no-files-found: error
+
+  release:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    # Never cancel an upload midway: a release without latest.yml breaks every update check.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    environment:
+      name: stable
+      url: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: dist
+
+      # Uploads the files to a draft first and publishes it last, so the latest release always has
+      # a complete set of update files.
+      - uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ needs.build.outputs.version }}
+          name: PotPlayerChat ${{ needs.build.outputs.version }}
+          commit: ${{ github.sha }}
+          artifacts: dist/latest.yml,dist/*.exe,dist/*.blockmap
+          draft: true
+          allowUpdates: true
+          updateOnlyUnreleased: true
+          generateReleaseNotes: true
+          makeLatest: false
+
+      # A re-run of an older workflow run publishes its release without taking "latest" from a
+      # newer one, which new installs download.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          latest=$(gh release view --json tagName --jq '.tagName | ltrimstr("v")' 2>/dev/null || true)
+          newest=$(printf '%s\n%s\n' "$VERSION" "$latest" | sort -V | tail -1)
+          if [[ -z $latest || ($newest == "$VERSION" && $latest != "$VERSION") ]]; then
+            gh release edit "v$VERSION" --draft=false --latest
+          else
+            echo "::warning::v$VERSION is not newer than the latest release v$latest; publishing it without marking it latest."
+            gh release edit "v$VERSION" --draft=false --latest=false
+          fi

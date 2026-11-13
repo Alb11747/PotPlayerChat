@@ -24,7 +24,7 @@ It is built with Electron, Svelte 5, and TypeScript.
 
 ## Requirements
 
-- Node.js 20+ (recommended)
+- Node.js 24 (as in CI)
 - pnpm 10.29.3 (see `packageManager`)
 - PotPlayer installed (Windows-focused integration)
 
@@ -45,6 +45,8 @@ pnpm run dev
 - `pnpm run lint` - run ESLint with autofix.
 - `pnpm run format` - run Prettier.
 - `pnpm run typecheck` - run TypeScript + Svelte checks.
+- `pnpm test` - run Vitest unit tests.
+- `pnpm run test:browser` - run Playwright regressions (see `tests/browser/README.md`).
 
 ## Project Layout
 
@@ -92,7 +94,17 @@ When no key is supplied, the app falls back to a built-in public client id.
 - Run lint and format explicitly with `pnpm run lint` and `pnpm run format`; Git hooks are not installed.
 - Before committing, run `pnpm run typecheck` and ensure it passes.
 - Some dependencies are patched via `pnpm.patchedDependencies`.
-- There is currently no dedicated test script wired in `package.json`.
+- Agent and contributor workflow, including worktree setup, is in `AGENTS.md`.
+
+## Releases and Updates
+
+Every push to `main` builds the Windows installer in GitHub Actions and publishes it as a release.
+Versions are `1.0.<commit count>`, so every later commit has a higher version and a local build matches
+the CI release of the same commit.
+
+Installed copies check for a new release 15 seconds after launch and every 4 minutes. An **Update** button
+then appears in the toolbar: click it to download, then **Restart** to install and relaunch. Settings >
+Advanced shows the current version and lets you check now. Development and unpacked builds do not update.
 
 ## Troubleshooting
 

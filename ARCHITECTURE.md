@@ -62,7 +62,9 @@ flowchart LR
 - `src/main/security.ts`
   - Header overrides for descendant windows.
 - `src/main/update.ts`
-  - Auto-update configuration and startup check.
+  - In-app updates: background checks (15 s after launch, then every 4 minutes), user-started download
+    and restart-to-install, and the `getUpdateState`/`checkForUpdates`/`downloadUpdate`/`installUpdate`
+    IPC handlers. State changes are broadcast to renderers as `updateStateChanged`.
 
 ### Preload
 
@@ -117,6 +119,7 @@ IPC characteristics:
   - `updateCurrentVideoTime`
   - `focusMessage`
   - `setOffset`
+  - `updateStateChanged`
 - Promise-style one-shot channels are used for search payload transfer.
 
 ### Primary IPC surface (`window.api`)
@@ -149,9 +152,9 @@ sequenceDiagram
   App->>Main: whenReady()
   Main->>Win: create BrowserWindow
   Main->>Init: initLog/initSecurity/initStorage/initLinks/initPotplayerHandlers
+  Main->>Upd: initAutoUpdater() (IPC handlers; checks start after 15 s)
   Win-->>Main: ready-to-show
   Main->>Win: show()
-  Main->>Upd: initAutoUpdater(conf)
 ```
 
 ### B) PotPlayer synchronization loop

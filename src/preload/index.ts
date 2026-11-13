@@ -80,6 +80,13 @@ const api: WindowApi = {
   },
   offPotPlayerInstancesChanged: (callback) => {
     ipcRenderer.off('potplayerInstancesChanged', callback as never)
+  },
+  getUpdateState: () => ipcRenderer.invoke('getUpdateState'),
+  checkForUpdates: () => ipcRenderer.invoke('checkForUpdates'),
+  downloadUpdate: () => ipcRenderer.invoke('downloadUpdate'),
+  installUpdate: () => ipcRenderer.invoke('installUpdate'),
+  onUpdateStateChanged: (callback) => {
+    ipcRenderer.on('updateStateChanged', (_event, state) => callback(state))
   }
 }
 

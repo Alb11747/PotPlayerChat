@@ -20,6 +20,7 @@
   import type { HWND } from '@/types/globals'
   import LinkPreview from '../components/LinkPreview.svelte'
   import Settings from '../components/Settings.svelte'
+  import UpdateButton from '../components/UpdateButton.svelte'
   import { clearRendererCache, clearRendererSavedUrls } from '../core/maintenance'
   import { UrlTracker } from '../core/url-tracker'
   import {
@@ -685,6 +686,7 @@
       {#if settings.interface.layout === 'comfort'}<span class="channel-name"
           >{selectedPotplayerInfo?.channel ?? 'PotPlayerChat'}</span
         >{/if}
+      <UpdateButton />
       <button
         class="icon-button"
         aria-label="Show timestamps"

@@ -19,7 +19,6 @@ export type {
   Settings,
   InterfaceSettings,
   SearchSettings,
-  GeneralSettings,
   VideoTimestampOffset
 } from './settings-model'
 

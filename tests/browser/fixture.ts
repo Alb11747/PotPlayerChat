@@ -5,6 +5,7 @@ import type { SearchPreview } from '@/renderer/src/core/search-preview'
 import type { AppearancePreferences } from '@/types/appearance'
 import type { PotPlayerInstance } from '@/types/potplayer'
 import type { WindowApi } from '@/types/preload'
+import type { UpdateState } from '@/types/update'
 
 export interface SharedSearchFixtureOptions {
   delayPreparation?: boolean
@@ -68,6 +69,10 @@ declare global {
     fixtureSharedInitialMessages?: TwitchMessage[]
     fixtureSharedCallback?: { id: string; original: boolean; recording: string }
     fixtureAppearance?: (value: Partial<AppearancePreferences>) => void
+    fixtureUpdates?: {
+      emit(value: Partial<UpdateState>): void
+      calls: string[]
+    }
     fixturePlayers?: {
       instances(value: (PotPlayerInstance & { selected?: boolean })[]): void
       holdMetadata(title: string): void
@@ -98,6 +103,30 @@ const clickedUrls = new Set<string>(
 )
 window.fixtureEmitAppCacheCleared = () => {
   for (const listener of cacheClearedListeners) listener()
+}
+// Updates start disabled, as in development builds, until a test emits another state.
+const updateListeners = new Set<(state: UpdateState) => void>()
+let updateState: UpdateState = {
+  status: 'disabled',
+  currentVersion: '1.0.0',
+  availableVersion: null,
+  downloadedVersion: null,
+  downloadPercent: null,
+  checkedAt: null,
+  message: null,
+  errorContext: null,
+  notAppliedVersion: null
+}
+window.fixtureUpdates = {
+  emit(value) {
+    updateState = { ...updateState, ...value }
+    for (const listener of updateListeners) listener(updateState)
+  },
+  calls: []
+}
+const updateAction = (name: string) => async () => {
+  window.fixtureUpdates!.calls.push(name)
+  return { accepted: true, state: updateState }
 }
 const instanceListeners = new Set<Parameters<WindowApi['onPotPlayerInstancesChanged']>[0]>()
 const timeListeners = new Set<Parameters<WindowApi['onSetCurrentTime']>[0]>()
@@ -184,6 +213,11 @@ Object.defineProperty(window, 'api', {
               endTime: 1700001000000
             }
           }
+        if (key === 'getUpdateState') return async () => updateState
+        if (key === 'onUpdateStateChanged')
+          return (listener: (state: UpdateState) => void) => updateListeners.add(listener)
+        if (key === 'checkForUpdates' || key === 'downloadUpdate' || key === 'installUpdate')
+          return updateAction(key)
         if (key === 'getAppearancePreferences') return async () => appearance
         if (key === 'onAppearanceChanged')
           return (listener: (value: AppearancePreferences) => void) =>

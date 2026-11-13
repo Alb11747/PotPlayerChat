@@ -22,10 +22,6 @@ export interface SearchSettings {
   showAllMessages: boolean
 }
 
-export interface GeneralSettings {
-  prerelease: boolean
-}
-
 export interface VideoTimestampOffset {
   title: string
   offset: number
@@ -43,7 +39,6 @@ export interface Settings {
   interface: InterfaceSettings
   search: SearchSettings
   intervals: PollingIntervals
-  general: GeneralSettings
 }
 
 export const defaultSettings: Settings = {
@@ -81,9 +76,6 @@ export const defaultSettings: Settings = {
     videoTime: 0,
     potplayerInstances: 0,
     activeWindow: 0
-  },
-  general: {
-    prerelease: false
   }
 }
 
