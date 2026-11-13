@@ -62,7 +62,7 @@
     "@types/node": "^24.0.15",
     "@types/sanitize-html": "^2.16.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "electron": "^37.2.3",
+    "electron": "^45.2.3",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.0",
     "eslint": "^9.31.0",
