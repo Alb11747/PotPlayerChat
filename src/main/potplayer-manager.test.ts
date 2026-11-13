@@ -166,7 +166,6 @@ describe('PotPlayerInstanceManager', () => {
       harness.readCurrentTime.mockReset()
       await harness.manager.requestVerification('test')
       await vi.advanceTimersByTimeAsync(1_000)
-      const baselineTitleReads = harness.readTitle.mock.calls.length
 
       for (let second = 0; second < 4; second++) {
         harness.setWallTime(second * 1_000)
@@ -174,6 +173,8 @@ describe('PotPlayerInstanceManager', () => {
         await harness.manager.pollCurrentTime()
         await vi.advanceTimersByTimeAsync(1_000)
       }
+      // Starting the timeline and leaving 0 read the title; only jumps count below.
+      const baselineTitleReads = harness.readTitle.mock.calls.length
 
       const previousMediaTime = 3_000 * playbackRate
       const exactAllowance = 120_000 + 2 * playbackRate * 1_000
@@ -193,6 +194,61 @@ describe('PotPlayerInstanceManager', () => {
       expect(harness.readTitle).toHaveBeenCalledTimes(baselineTitleReads + 1)
     }
   )
+
+  it('reads the title when playback leaves 0 without a timeline jump', async () => {
+    const harness = createHarness()
+    harness.readTitle.mockResolvedValue('PotPlayer')
+    await harness.manager.requestVerification('test')
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    // An idle player reports 0 until a file opens and starts playing from its start.
+    harness.readCurrentTime.mockResolvedValue(0)
+    for (let second = 0; second < 3; second++) {
+      harness.setWallTime(second * 1_000)
+      await harness.manager.pollCurrentTime()
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(harness.onInstancesChanged).toHaveBeenLastCalledWith([
+      { pid: 10, hwnd: hwnd(100), title: 'PotPlayer', selected: true }
+    ])
+
+    harness.readTitle.mockResolvedValue('new-video.mp4')
+    harness.readCurrentTime.mockResolvedValue(1_000)
+    harness.setWallTime(3_000)
+    await harness.manager.pollCurrentTime()
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(harness.onInstancesChanged).toHaveBeenLastCalledWith([
+      { pid: 10, hwnd: hwnd(100), title: 'new-video.mp4', selected: true }
+    ])
+  })
+
+  it('reads the title again when a sample follows a failed read during a file load', async () => {
+    const harness = createHarness()
+    harness.readTitle.mockResolvedValue('PotPlayer')
+    await harness.manager.requestVerification('test')
+    await vi.advanceTimersByTimeAsync(1_000)
+    harness.readCurrentTime.mockResolvedValue(0)
+    await harness.manager.pollCurrentTime()
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    // The failed read's verification still sees the idle caption.
+    harness.readCurrentTime.mockRejectedValueOnce(new Error('window is busy'))
+    await expect(harness.manager.pollCurrentTime()).resolves.toBeNull()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(harness.discoverInstances).toHaveBeenCalledTimes(2)
+    expect(harness.manager.getInstanceSnapshot()[0]?.title).toBe('PotPlayer')
+
+    // A bookmark lands deep in the file; there is no timeline left to show a jump.
+    harness.readTitle.mockResolvedValue('bookmarked-video.mp4')
+    harness.readCurrentTime.mockResolvedValue(3_600_000)
+    await harness.manager.pollCurrentTime()
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(harness.onInstancesChanged).toHaveBeenLastCalledWith([
+      { pid: 10, hwnd: hwnd(100), title: 'bookmarked-video.mp4', selected: true }
+    ])
+  })
 
   it('suppresses a failed background sample and queues rate-limited verification', async () => {
     const harness = createHarness()

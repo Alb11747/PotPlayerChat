@@ -365,6 +365,11 @@ export class PotPlayerInstanceManager {
         lastWallTime: wallTime,
         recentRates: []
       })
+      // A missing timeline means continuity with the previous media is unknown: a
+      // failed read (often while PotPlayer is opening a file) or a topology change
+      // reset it, and any title read made then may predate the new caption. The
+      // periodic instance poll is minutes apart, so read the caption now.
+      this.requestTitleSynchronizationBackground([instance.pid], 'timeline-reset')
       return
     }
 
@@ -376,6 +381,12 @@ export class PotPlayerInstanceManager {
         timelineJumpBaseAllowanceMs +
         timelineJumpRateAllowanceMultiplier * Math.abs(stableRate * wallDelta)
       const isJump = Math.abs(mediaDelta) > allowance
+      // An idle player (no media) and a newly opened file both sit at 0, so opening
+      // a file that starts near the beginning, or a bookmark within the jump
+      // allowance, leaves 0 without a jump. Treat leaving 0 as a possible new title.
+      if (!isJump && timeline.lastMediaTime === 0 && mediaTime > 0) {
+        this.requestTitleSynchronizationBackground([instance.pid], 'timeline-left-zero')
+      }
       if (isJump) {
         this.requestTitleSynchronizationBackground([instance.pid], 'timeline-jump')
       } else if (mediaDelta > 0) {
