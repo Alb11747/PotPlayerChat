@@ -32,7 +32,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('Twitch user ID lookup', () => {
+// Each case re-imports the Twitch client module graph after resetModules(). That
+// cold import alone takes seconds when the whole suite runs in parallel.
+describe('Twitch user ID lookup', { timeout: 30000 }, () => {
   it('retries after a transient failure and caches the recovered user ID', async () => {
     getUserByName
       .mockRejectedValueOnce(new Error('Temporary Twitch failure'))
