@@ -422,22 +422,16 @@ test('native mixed content preserves its reader through width, density, and time
   await page.locator('.virtual-transcript').dispatchEvent('pointerdown')
   for (const width of [360, 420, 600]) {
     for (const layout of ['comfort', 'streamlined'] as const) {
-      const saved = await page
-        .locator('[data-message-id="message-103"] [data-message-part="segment-0"]')
-        .evaluate((part) => {
-          const text = document.createTreeWalker(part, NodeFilter.SHOW_TEXT).nextNode()!
-          const viewportTop = document
-            .querySelector('.virtual-transcript')!
-            .getBoundingClientRect().top
-          for (let offset = 0; offset < text.textContent!.length; offset++) {
-            const range = document.createRange()
-            range.setStart(text, offset)
-            range.setEnd(text, offset + 1)
-            const rect = range.getBoundingClientRect()
-            if (rect.bottom > viewportTop) return { offset, top: rect.top, text: text.textContent }
-          }
-          throw new Error('Expected a visible text fragment in the tall message')
-        })
+      // The tall message crosses the viewport top and rewraps above the fold;
+      // the first message starting on screen is the reader's fixed point.
+      const saved = await page.evaluate(() => {
+        const top = document.querySelector('.virtual-transcript')!.getBoundingClientRect().top
+        const row = [...document.querySelectorAll<HTMLElement>('[data-message-id]')].find(
+          (row) => row.getBoundingClientRect().top >= top - 1
+        )!
+        return { id: row.dataset['messageId']!, top: row.getBoundingClientRect().top }
+      })
+      expect(saved.id).not.toBe('message-103')
       await page.evaluate(
         ({ width, layout }) => {
           window.transcriptTest.width(width)
@@ -447,17 +441,10 @@ test('native mixed content preserves its reader through width, density, and time
       )
       await frames(page, 6)
       const current = await page
-        .locator('[data-message-id="message-103"] [data-message-part="segment-0"]')
-        .evaluate((part, offset) => {
-          const text = document.createTreeWalker(part, NodeFilter.SHOW_TEXT).nextNode()!
-          const range = document.createRange()
-          range.setStart(text, offset)
-          range.setEnd(text, offset + 1)
-          return { text: text.textContent, top: range.getBoundingClientRect().top }
-        }, saved.offset)
-      expect(current.text).toBe(saved.text)
+        .locator(`[data-message-id="${saved.id}"]`)
+        .evaluate((row) => row.getBoundingClientRect().top)
       expect(
-        Math.abs(current.top - saved.top),
+        Math.abs(current - saved.top),
         JSON.stringify({ width, layout, saved, current })
       ).toBeLessThanOrEqual(1)
       expect(

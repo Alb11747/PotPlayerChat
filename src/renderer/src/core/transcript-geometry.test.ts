@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { TranscriptGeometry } from './transcript-geometry'
+import { TranscriptGeometry, type TranscriptAnchor } from './transcript-geometry'
+
+/** The scroll offset that puts a saved reading position back, or null when no row survives. */
+function restore(geometry: TranscriptGeometry, anchor: TranscriptAnchor | null): number | null {
+  const located = geometry.locate(anchor)
+  return located && geometry.offsetAt(located.index) + located.offset
+}
 
 describe('transcript geometry', () => {
   it('finds the containing row, including the lower half of a tall final row', () => {
@@ -19,7 +25,7 @@ describe('transcript geometry', () => {
     expect(geometry.total).toBe(0)
     expect(geometry.indexAt(10)).toBe(-1)
     expect(geometry.capture(10)).toBeNull()
-    expect(geometry.restore(null, 100)).toBe(0)
+    expect(geometry.locate(null)).toBeNull()
     expect(geometry.scrollOffset(0, {}, 100)).toBe(0)
     expect(geometry.visibleRange(10, 100)).toEqual({ start: 0, end: 0 })
   })
@@ -39,9 +45,9 @@ describe('transcript geometry', () => {
     const original = new TranscriptGeometry(['a', 'b', 'c'], [100, 150, 200])
     const anchor = original.capture(120)
     const shifted = new TranscriptGeometry(['b', 'c', 'd'], [150, 200, 100])
-    expect(shifted.restore(anchor, 100)).toBe(20)
+    expect(restore(shifted, anchor)).toBe(20)
     const reordered = new TranscriptGeometry(['c', 'b', 'a'], [200, 150, 100])
-    expect(reordered.restore(anchor, 100)).toBe(220)
+    expect(restore(reordered, anchor)).toBe(220)
   })
 
   it('keeps the successor in its former viewport position when the anchor is deleted', () => {
@@ -50,21 +56,20 @@ describe('transcript geometry', () => {
     const replacement = new TranscriptGeometry(['a', 'c', 'd'], [100, 100, 100])
     // c was 80px below the viewport top and must stay there. Both a and c
     // survive at distance one; selecting a would incorrectly restore to 120px.
-    expect(replacement.restore(anchor, 50)).toBe(20)
+    expect(restore(replacement, anchor)).toBe(20)
   })
 
   it('uses the nearest preceding survivor when no successor survives', () => {
     const original = new TranscriptGeometry(['a', 'b', 'c', 'd'], [100, 100, 100, 100])
     const replacement = new TranscriptGeometry(['x', 'a', 'b', 'y'], [200, 100, 100, 300])
-    expect(replacement.restore(original.capture(220), 20)).toBe(420)
+    expect(restore(replacement, original.capture(220))).toBe(420)
   })
 
-  it('clamps restoration after shrinking and retains a bounded offset if all keys disappear', () => {
+  it('keeps the offset on a surviving row and reports no position if all keys disappear', () => {
     const original = new TranscriptGeometry(['a', 'b', 'c'], [100, 100, 100])
     const anchor = original.capture(180)
-    expect(new TranscriptGeometry(['a', 'b'], [100, 100]).restore(anchor, 100)).toBe(100)
-    expect(new TranscriptGeometry(['x'], [50]).restore(anchor, 100)).toBe(0)
-    expect(new TranscriptGeometry(['x'], [500]).restore(anchor, 100)).toBe(180)
+    expect(restore(new TranscriptGeometry(['a', 'b'], [100, 100]), anchor)).toBe(180)
+    expect(restore(new TranscriptGeometry(['x'], [50]), anchor)).toBeNull()
   })
 
   it('captures an immutable snapshot of the caller-provided layout arrays', () => {
@@ -74,7 +79,7 @@ describe('transcript geometry', () => {
     const anchor = original.capture(110)
     keys[1] = 'changed'
     heights[0] = 200
-    expect(new TranscriptGeometry(['b', 'c'], [200, 200]).restore(anchor, 100)).toBe(10)
+    expect(restore(new TranscriptGeometry(['b', 'c'], [200, 200]), anchor)).toBe(10)
   })
 
   it('returns only intersecting rows with an exclusive end and bounded overscan', () => {
@@ -108,7 +113,7 @@ describe('transcript geometry', () => {
     expect(updated.offsetAt(2)).toBe(275.25)
     expect(updated.heightAt(2)).toBe(125.5)
     expect(updated.total).toBe(500.75)
-    expect(new TranscriptGeometry(['a', 'c', 'd'], [100, 100, 100]).restore(anchor, 50)).toBe(20)
+    expect(restore(new TranscriptGeometry(['a', 'c', 'd'], [100, 100, 100]), anchor)).toBe(20)
     expect(updated.withHeights(new Map([[0, 175.25]]))).toBe(updated)
   })
 
@@ -230,4 +235,22 @@ describe('transcript geometry', () => {
       expect(updated.indexAt(updated.total)).toBe(count - 1)
     }
   )
+
+  it('locates a saved position on its own row or the nearest surviving neighbour', () => {
+    const original = new TranscriptGeometry(['a', 'b', 'c', 'd'], [100, 100, 100, 100])
+    const anchor = original.capture(120)
+    expect(original.locate(anchor)).toEqual({ index: 1, offset: 20 })
+    // Rows above may change; the position stays relative to its own row.
+    expect(new TranscriptGeometry(['x', 'b', 'c'], [300, 50, 50]).locate(anchor)).toEqual({
+      index: 1,
+      offset: 20
+    })
+    // With b removed, c stood 80px below the viewport top.
+    expect(new TranscriptGeometry(['a', 'c', 'd'], [100, 100, 100]).locate(anchor)).toEqual({
+      index: 1,
+      offset: -80
+    })
+    expect(new TranscriptGeometry(['x', 'y'], [10, 10]).locate(anchor)).toBeNull()
+    expect(original.locate(null)).toBeNull()
+  })
 })

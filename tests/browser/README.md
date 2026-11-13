@@ -17,11 +17,19 @@ viewport width, density, and timestamps. Popup cases resolve older history
 after the reader moves; the main chat case checks settings restoration and
 Return to playback.
 
-Input-ownership cases replay a stale scroll completion before a new wheel/key
-movement, verify inactivity expiration and continued native movement, and hold
-the scrollbar across the idle interval. A real-wheel case exercises direction
-changes during continuous appends and checks the stopped reader at 0.1px
-precision with known row heights; it does not certify rich-text painted stability.
+Input cases check that wheel and keyboard movement survive appends, that an
+offset changed with no input event is kept instead of reverted, that continued
+native movement stays attributed to the reader, and that a held scrollbar leaves
+follow mode. A jump holds its target through layout changes until the next input.
+
+`scroll-stability.spec.ts` samples the painted position of visible rows on every
+frame under real wheel and scrollbar input, at 1x, 1.25x and 1.5x display scaling.
+Rows differ from their estimates, real messages resolve media and background
+estimates mid-scroll, and messages arrive while following. It fails on content
+moving against the scroll direction, an unpinned or uncovered frame, movement
+after input stops, or any page error (a layout loop surfaces as a Svelte
+update-depth error). Synthetic fixed-height rows are held to 0.5px; real rows
+have fractional heights and are held to 2px during media resolution.
 
 A large MessageTranscript replacement case requests a distant row while preparation
 is pending, then cancels another request with user input during a second replacement.

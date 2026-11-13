@@ -243,13 +243,16 @@ export class TranscriptGeometry {
     }
   }
 
-  restore(anchor: TranscriptAnchor | null, viewport: number): number {
-    if (!anchor || this.keys.length === 0) return 0
+  /**
+   * Find where a saved reading position lives in this geometry, as a row and the
+   * distance its top sits above the viewport top. A rolling window may remove
+   * the anchor; the nearest surviving row then stands in for it, keeping its
+   * former viewport coordinate from the immutable original geometry.
+   */
+  locate(anchor: TranscriptAnchor | null): { index: number; offset: number } | null {
+    if (!anchor || this.keys.length === 0) return null
     const index = this.state.indices.get(anchor.key)
-    if (index !== undefined) return this.clamp(this.offsetAt(index) + anchor.offset, viewport)
-
-    // A rolling window may remove the anchor. Preserve the nearest surviving
-    // row's former viewport coordinate using the immutable original geometry.
+    if (index !== undefined) return { index, offset: anchor.offset }
     const previous = anchor.previousGeometry
     const oldScrollTop = previous.offsetAt(anchor.index) + anchor.offset
     for (let distance = 1; distance < previous.keys.length; distance++) {
@@ -258,13 +261,10 @@ export class TranscriptGeometry {
         if (key === undefined) continue
         const nextIndex = this.state.indices.get(key)
         if (nextIndex === undefined) continue
-        return this.clamp(
-          this.offsetAt(nextIndex) - previous.offsetAt(previousIndex) + oldScrollTop,
-          viewport
-        )
+        return { index: nextIndex, offset: oldScrollTop - previous.offsetAt(previousIndex) }
       }
     }
-    return this.clamp(oldScrollTop, viewport)
+    return null
   }
 
   scrollOffset(index: number, options: TranscriptScrollOptions, viewport: number): number {

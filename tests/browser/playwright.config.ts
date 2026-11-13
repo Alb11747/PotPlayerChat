@@ -15,6 +15,9 @@ export default defineConfig({
     launchOptions: {
       // Keep native scrollbar hit targets available for the mouse-drag regression.
       ignoreDefaultArgs: ['--hide-scrollbars'],
+      // Headless Chrome applies scrolls instantly by default. The app animates
+      // keyboard and wheel scrolling, which is where scroll corrections show.
+      args: ['--enable-smooth-scrolling'],
       ...(process.env['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH']
         ? { executablePath: process.env['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] }
         : {})

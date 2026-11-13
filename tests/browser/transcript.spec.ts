@@ -64,9 +64,7 @@ for (const input of ['wheel', 'keyboard'] as const) {
   })
 }
 
-test('completed wheel input cannot authorize later unsolicited scroll movement', async ({
-  page
-}) => {
+test('a scroll offset changed without input is kept, not reverted', async ({ page }) => {
   await page.evaluate(() => window.transcriptTest.list().scrollToIndex(100))
   await frame(page)
   await page.locator('.virtual-transcript').hover()
@@ -74,16 +72,18 @@ test('completed wheel input cannot authorize later unsolicited scroll movement',
   await expect
     .poll(() => page.evaluate(() => window.transcriptTest.list().getScrollOffset()))
     .toBe(8060)
-  // Leave time for the input session to become idle, independently of scrollend.
   await page.waitForTimeout(500)
   const saved = await anchor(page)
+  // Find-in-page, accessibility tools and autoscroll move the offset with no
+  // wheel, key or pointer event. The transcript never owns the reading position.
   await page.evaluate(() => {
-    const viewport = document.querySelector<HTMLElement>('.virtual-transcript')!
-    viewport.scrollTop += 60
-    viewport.dispatchEvent(new Event('scroll'))
+    document.querySelector<HTMLElement>('.virtual-transcript')!.scrollTop += 60
   })
   await frame(page)
-  await assertAnchor(page, saved)
+  await assertAnchor(page, { ...saved, top: saved.top - 60 })
+  await page.evaluate(() => window.transcriptTest.resize('row-98', 200))
+  await frame(page)
+  await assertAnchor(page, { ...saved, top: saved.top - 60 })
 })
 
 test('continued native movement renews input ownership until scrolling stops', async ({ page }) => {
@@ -299,7 +299,9 @@ test('navigation waits for a large replacement and user input can cancel it', as
   await expect(page.locator('[data-message-id="message-199000"]')).toHaveCount(0)
 })
 
-test('keyboard scrolling cancels pending navigation and bottom following', async ({ page }) => {
+test('keyboard scrolling leaves bottom following and input releases a jump target', async ({
+  page
+}) => {
   await page.evaluate(() => window.transcriptTest.follow(true))
   await frame(page)
   await page.locator('.virtual-transcript').focus()
@@ -312,16 +314,44 @@ test('keyboard scrolling cancels pending navigation and bottom following', async
   expect(
     Math.abs((await page.evaluate(() => window.transcriptTest.list().getScrollOffset())) - offset)
   ).toBeLessThanOrEqual(1)
-  await page.evaluate(() => {
-    window.transcriptTest.list().scrollToIndex(20)
-    document
-      .querySelector('.virtual-transcript')!
-      .dispatchEvent(new WheelEvent('wheel', { deltaY: -10 }))
-  })
+  // A jump holds its target through layout changes only until the next input.
+  await page.evaluate(() => window.transcriptTest.list().scrollToIndex(20))
   await frame(page)
-  expect(await page.evaluate(() => window.transcriptTest.list().getScrollOffset())).toBeGreaterThan(
-    70000
-  )
+  await page.evaluate(() => window.transcriptTest.resize('row-10', 200))
+  await frame(page)
+  expect(
+    await page
+      .locator('[data-message-id="row-20"]')
+      .evaluate(
+        (row) =>
+          row.getBoundingClientRect().top -
+          document.querySelector('.virtual-transcript')!.getBoundingClientRect().top
+      )
+  ).toBeCloseTo(0, 0)
+  await page.locator('.virtual-transcript').hover()
+  await page.mouse.wheel(0, 300)
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-message-id="row-20"]')
+        .evaluate(
+          (row) =>
+            row.getBoundingClientRect().top -
+            document.querySelector('.virtual-transcript')!.getBoundingClientRect().top
+        )
+    )
+    .toBeCloseTo(-300, 0)
+  await page.evaluate(() => window.transcriptTest.resize('row-10', 80))
+  await frame(page)
+  expect(
+    await page
+      .locator('[data-message-id="row-20"]')
+      .evaluate(
+        (row) =>
+          row.getBoundingClientRect().top -
+          document.querySelector('.virtual-transcript')!.getBoundingClientRect().top
+      )
+  ).toBeCloseTo(-300, 0)
 })
 
 test('tall messages remain unclipped and selectable across viewport resizing', async ({ page }) => {

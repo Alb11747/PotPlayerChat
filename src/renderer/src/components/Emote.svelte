@@ -215,9 +215,12 @@
     grid-template-columns: auto;
     grid-template-rows: auto;
   }
+  /* Keep the hidden image in flow: an element entering or leaving normal flow
+     suppresses scroll anchoring for the whole transcript in that layout pass,
+     so every emote finishing its load would let the reader's position slip. */
   .emote-frame.loading img {
-    position: absolute;
-    inset: 0;
+    width: 0;
+    height: 0;
     visibility: hidden;
   }
   .emote-frame > span {
