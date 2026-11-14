@@ -295,11 +295,12 @@ Primary configuration sources:
 
 - `electron-conf` for runtime settings.
 - JSON resources loaded from `resources`.
-- Environment variables for Twitch credentials:
-  - `TWITCH_CLIENT_ID`
-  - `TWITCH_CLIENT_SECRET`
+- Twitch credentials (`src/main/storage.ts`), from the first source with a client id: the
+  `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` environment variables, the bundled
+  `resources/twitch-keys.json` (local builds only), `twitch-keys.json` in the app data folder, then
+  `Config/PotPlayerChat/twitch-keys.json` in `~/Sync` or OneDrive. Release builds carry no keys.
 
-Fallback behavior exists for missing Twitch keys.
+Without any keys the app uses Twitch's public web client id.
 
 ## 12) Architectural Constraints and Tradeoffs
 

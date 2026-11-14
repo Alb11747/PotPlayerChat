@@ -29,7 +29,8 @@ request and push to `main`.
 contain it. From a worktree, run the main checkout's copy against it:
 `& <main checkout>/build-and-install.ps1 -ProjectDir . -SkipInstall`. Builds are cached per checkout.
 `resources/twitch-keys.json` is also local-only; without it the app uses the built-in public Twitch client id,
-which is enough for development and tests.
+which is enough for development and tests. Release builds read personal keys from outside the install
+(the app data folder, or `Config/PotPlayerChat` in `~/Sync` or OneDrive; see `README.md`).
 
 ## Releases and updates
 

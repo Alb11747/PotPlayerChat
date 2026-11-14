@@ -73,12 +73,19 @@ See `ARCHITECTURE.md` for a full breakdown.
 
 ## Configuration and Secrets
 
-Twitch keys are loaded in this order:
+Twitch keys are loaded from the first of these that has a client id:
 
 1. Environment variables:
    - `TWITCH_CLIENT_ID`
    - `TWITCH_CLIENT_SECRET` (optional)
-2. Local file at `resources/twitch-keys.json`:
+2. `resources/twitch-keys.json` in the checkout, which local builds bundle.
+3. `twitch-keys.json` in the app's data folder (`%APPDATA%\potplayerchat`).
+4. `Config\PotPlayerChat\twitch-keys.json` in a synced folder: `%USERPROFILE%\Sync` or OneDrive
+   (`%OneDrive%`, `%OneDriveConsumer%`, `%OneDriveCommercial%`).
+
+Release builds ship without keys because the installer is public, so they use the data folder or a
+synced folder. A key file in a synced folder works on every machine and across updates without setup.
+Each file has this shape:
 
 ```json
 {
@@ -87,7 +94,8 @@ Twitch keys are loaded in this order:
 }
 ```
 
-When no key is supplied, the app falls back to a built-in public client id.
+When no key is found, the app falls back to a built-in public client id. A key file that cannot be read
+or parsed, or has no `clientId`, is skipped with a message in the main-process log naming the file.
 
 ## Development Notes
 
